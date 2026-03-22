@@ -16,6 +16,8 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **One-parameter delta rule** — each variation must change exactly one parameter (dose, water, temp, grind size, or recipe text), keeping the change history clean.
 - **Recommended next change** — when logging a brew, optionally record what to try next time. Surfaces prominently on your next session.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
+- **Full edit/delete UI** — edit or delete beans, bags, brewers, and grinders directly from the Manage page; deletes cascade automatically. Mark a bag as completed when it's finished.
+- **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
 
 ---
 
@@ -68,9 +70,11 @@ Open http://127.0.0.1:8000
 
 ## Usage workflow
 
-1. **Manage** (`/manage`) — add your beans, bags, brewers, and grinders
+1. **Manage** (`/manage`) — add, edit, and delete beans, bags, brewers, and grinders
    - Add a bean first (coffee type), then add one or more bags to it
    - Each bag gets its own roast date and quantity
+   - Mark a bag as "Done" when it's finished — it disappears from the brew picker but stays in the history
+   - Edit any field inline; delete cascades to all linked recipes, brews, and deltas
 2. **Brew** (`/`) — select a bag + brewer + grinder to load the latest recipe
    - If no recipe exists yet, enter a baseline
    - Log a brew with tasting notes after each cup
@@ -111,6 +115,7 @@ app/
 
 scripts/
 ├── export.py        # Export all data to CSV (creates export/ directory)
+├── import.py        # Restore from a CSV snapshot (tables must be empty)
 └── drop_tables.py   # Wipe and recreate all tables (prompts for confirmation)
 
 data/
@@ -130,12 +135,19 @@ The database is a single file at `data/coffee.db`. It can be opened directly wit
 python scripts/export.py
 ```
 
+**Restore from a CSV snapshot:**
+```bash
+python scripts/drop_tables.py   # wipe first
+python scripts/import.py        # reads from export/ by default
+# python scripts/import.py path/to/other/snapshot
+```
+
 **Wipe and reset the database:**
 ```bash
 python scripts/drop_tables.py
 ```
 
-**Schema changes** require recreating the database (there is no migration system). Export your data first if needed.
+**Schema changes** require recreating the database (there is no migration system). Always export first.
 
 **Useful queries:**
 

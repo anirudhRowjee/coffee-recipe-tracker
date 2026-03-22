@@ -140,6 +140,87 @@ def create_bag(
     return RedirectResponse(url="/manage", status_code=303)
 
 
+@app.post("/beans/{bean_id}/edit")
+def edit_bean(bean_id: int, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        crud.update_bean(session, bean_id, name=name, origin=origin or None, roast_level=roast_level or None, flavor_notes=flavor_notes or None, notes=notes or None)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/beans/{bean_id}/delete")
+def delete_bean(bean_id: int):
+    with Session(db.engine) as session:
+        crud.delete_bean(session, bean_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/bags/{bag_id}/edit")
+def edit_bag(
+    bag_id: int,
+    initial_quantity_g: float = Form(...),
+    roast_date: str = Form(None),
+    purchase_date: str = Form(None),
+    low_threshold_g: float = Form(50.0),
+    is_frozen: bool = Form(False),
+    frozen_date: str = Form(None),
+    notes: str = Form(None),
+):
+    with Session(db.engine) as session:
+        crud.update_bag(
+            session, bag_id,
+            initial_quantity_g=initial_quantity_g,
+            roast_date=date_type.fromisoformat(roast_date) if roast_date else None,
+            purchase_date=date_type.fromisoformat(purchase_date) if purchase_date else None,
+            low_threshold_g=low_threshold_g,
+            is_frozen=is_frozen,
+            frozen_date=date_type.fromisoformat(frozen_date) if frozen_date else None,
+            notes=notes or None,
+        )
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/bags/{bag_id}/complete")
+def complete_bag(bag_id: int):
+    with Session(db.engine) as session:
+        crud.complete_bag(session, bag_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/bags/{bag_id}/delete")
+def delete_bag(bag_id: int):
+    with Session(db.engine) as session:
+        crud.delete_bag(session, bag_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/brewers/{brewer_id}/edit")
+def edit_brewer(brewer_id: int, name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        crud.update_brewer(session, brewer_id, name=name, method=method or None, notes=notes or None)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/brewers/{brewer_id}/delete")
+def delete_brewer(brewer_id: int):
+    with Session(db.engine) as session:
+        crud.delete_brewer(session, brewer_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/grinders/{grinder_id}/edit")
+def edit_grinder(grinder_id: int, name: str = Form(...), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        crud.update_grinder(session, grinder_id, name=name, notes=notes or None)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/grinders/{grinder_id}/delete")
+def delete_grinder(grinder_id: int):
+    with Session(db.engine) as session:
+        crud.delete_grinder(session, grinder_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
 @app.post("/brews")
 def create_brew(
     recipe_id: int = Form(...),

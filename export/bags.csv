@@ -1,2 +1,1 @@
-id,bean_id,bean_name,roast_date,purchase_date,initial_quantity_g,remaining_g,low_threshold_g,is_frozen,frozen_date,notes
-1,1,test beans,,,100.0,60.0,50.0,False,,
+id,bean_id,bean_name,roast_date,purchase_date,initial_quantity_g,remaining_g,low_threshold_g,is_frozen,frozen_date,is_completed,notes

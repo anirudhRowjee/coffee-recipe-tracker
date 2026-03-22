@@ -128,10 +128,11 @@ FastAPI's `bool = Form(...)` does not parse HTML checkbox values correctly by de
 | `app/templates/base.html` | Nav bar, page shell, `toggleForm()` JS helper. |
 | `app/templates/index.html` | Brew page. Picker form with htmx (`hx-get="/recipes/latest"`). |
 | `app/templates/partials/latest_recipe.html` | htmx partial. Recipe display, log-a-brew form, variation form, recommendation banner. |
-| `app/templates/manage.html` | Add/view beans+bags, brewers, grinders. Bags use `<details>` per bean. |
+| `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. |
 | `app/templates/browse.html` | Bean overview with bag inventory and collapsible history. |
 | `app/static/styles.css` | All styles. No external CSS framework. |
 | `scripts/export.py` | Exports all tables to CSV in `export/`. |
+| `scripts/import.py` | Restores from a CSV snapshot. Two-pass recipe insert for `previous_recipe_id`. Requires empty tables. |
 | `scripts/drop_tables.py` | Drops and recreates all tables after confirmation prompt. |
 
 ---
@@ -156,10 +157,26 @@ If you add new htmx interactions, keep them similarly self-contained with gracef
 
 ---
 
+## Edit/delete patterns
+
+All entity management (beans, bags, brewers, grinders) follows the same pattern:
+
+**Inline edit forms:** Hidden `<div class="edit-form hidden" id="edit-<entity>-{{ id }}">` inside the row. `toggleForm(id)` in `base.html` flips the `.hidden` class. Edit button calls `toggleForm(...)` with `event.stopPropagation()` when inside a `<summary>` (to prevent `<details>` open/close).
+
+**Delete with cascade:** Deletion order must respect FK constraints: Deltas → Brews → Recipes → (Bags) → Bean. The crud functions handle this explicitly (SQLite does not enforce FK constraints by default). See `crud.delete_bean`, `crud.delete_brewer`, `crud.delete_grinder`.
+
+**Completed bags:** `BeanBag.is_completed = True` hides the bag from the brew-page picker (`index.html` filters `{% if not bag.is_completed %}`). The bag remains in the database and still appears in the manage page (greyed out with `.row-completed`).
+
+**Routes:** All edit/delete/complete routes are `POST` (HTML forms cannot `DELETE`). They all redirect to `/manage` with `status_code=303`.
+
+**Confirm dialogs:** Delete buttons use `onsubmit="return confirm('...')"` to prevent accidental deletion.
+
+---
+
 ## What has been intentionally left out
 
 - **No user accounts.** Single-user personal app. Auth was discussed for public cloud deployment but not implemented.
 - **No CSRF protection.** Safe for local/LAN use. Add `starlette-csrf` middleware before any public deployment.
 - **No migrations.** Use `scripts/export.py` before any schema change.
 - **No tests.** The CRUD functions are pure and easily testable with pytest fixtures if needed.
-- **No edit/delete UI.** You can only add beans, bags, brewers, grinders, recipes, and brews — not modify or remove them. Deletions would need to handle FK constraints carefully (especially brew→recipe→delta chains).
+- **No migrations.** Use `scripts/export.py` before any schema change, then `scripts/drop_tables.py` to wipe, then `scripts/import.py` to restore.

@@ -159,6 +159,7 @@ def main() -> None:
                 low_threshold_g=float(r["low_threshold_g"]),
                 is_frozen=_bool(r["is_frozen"]),
                 frozen_date=_date(r["frozen_date"]),
+                is_completed=_bool(r.get("is_completed", "")),
                 notes=_str(r["notes"]),
             ))
         session.commit()

@@ -27,7 +27,27 @@
                     {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
                     · {{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
                 </span>
+                <span class="summary-actions">
+                    <button type="button" class="btn-action" onclick="event.stopPropagation(); toggleForm('edit-bean-{{ bean.id }}')">Edit</button>
+                    <form method="post" action="/beans/{{ bean.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ bean.name }} and all its bags, recipes, brews and deltas? This cannot be undone.')">
+                        <button type="submit" class="btn-action btn-danger">Delete</button>
+                    </form>
+                </span>
             </summary>
+
+            <div id="edit-bean-{{ bean.id }}" class="hidden edit-form">
+                <form method="post" action="/beans/{{ bean.id }}/edit" class="stacked-form" novalidate>
+                    <label>Name <input name="name" value="{{ bean.name }}" required /></label>
+                    <label>Origin <input name="origin" value="{{ bean.origin or '' }}" /></label>
+                    <label>Roast level <input name="roast_level" value="{{ bean.roast_level or '' }}" /></label>
+                    <label>Flavor notes <input name="flavor_notes" value="{{ bean.flavor_notes or '' }}" /></label>
+                    <label>Notes <input name="notes" value="{{ bean.notes or '' }}" /></label>
+                    <div class="form-row">
+                        <button type="submit">Save</button>
+                        <button type="button" class="btn-secondary" onclick="toggleForm('edit-bean-{{ bean.id }}')">Cancel</button>
+                    </div>
+                </form>
+            </div>
 
             {% if bean.flavor_notes %}
             <p class="bean-flavor">{{ bean.flavor_notes }}</p>
@@ -53,17 +73,57 @@
             {% if bags %}
             <table class="delta-table" style="margin-top:10px">
                 <thead>
-                    <tr><th>ID</th><th>Roast date</th><th>Purchased</th><th>Initial</th><th>Remaining</th><th>Status</th></tr>
+                    <tr><th>ID</th><th>Roast date</th><th>Purchased</th><th>Initial</th><th>Remaining</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                     {% for bag, remaining in bags %}
-                    <tr class="{{ 'low-stock' if remaining <= bag.low_threshold_g else '' }}">
+                    <tr class="{{ 'row-completed' if bag.is_completed else ('low-stock' if remaining <= bag.low_threshold_g else '') }}">
                         <td>{{ bag.id }}</td>
                         <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
                         <td>{{ bag.purchase_date.strftime('%b %d, %Y') if bag.purchase_date else '-' }}</td>
                         <td>{{ bag.initial_quantity_g|int }} g</td>
-                        <td>{{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}</td>
-                        <td>{{ '❄ Frozen' if bag.is_frozen else 'Active' }}</td>
+                        <td>
+                            {% if bag.is_completed %}
+                            Completed
+                            {% else %}
+                            {{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if bag.is_completed %}✓ Done
+                            {% elif bag.is_frozen %}❄ Frozen
+                            {% else %}Active{% endif %}
+                        </td>
+                        <td class="row-actions">
+                            <button type="button" class="btn-action" onclick="toggleForm('edit-bag-{{ bag.id }}')">Edit</button>
+                            {% if not bag.is_completed %}
+                            <form method="post" action="/bags/{{ bag.id }}/complete" style="display:inline">
+                                <button type="submit" class="btn-action btn-complete">Done</button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="/bags/{{ bag.id }}/delete" style="display:inline" onsubmit="return confirm('Delete bag #{{ bag.id }} and all its brew logs?')">
+                                <button type="submit" class="btn-action btn-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr id="edit-bag-{{ bag.id }}" class="hidden">
+                        <td colspan="7">
+                            <form method="post" action="/bags/{{ bag.id }}/edit" class="stacked-form" style="padding:8px 0" novalidate>
+                                <label>Initial quantity (g) <input name="initial_quantity_g" type="number" step="1" value="{{ bag.initial_quantity_g|int }}" required /></label>
+                                <label>Roast date <input name="roast_date" type="date" value="{{ bag.roast_date.isoformat() if bag.roast_date else '' }}" /></label>
+                                <label>Purchase date <input name="purchase_date" type="date" value="{{ bag.purchase_date.isoformat() if bag.purchase_date else '' }}" /></label>
+                                <label>Low stock alert (g) <input name="low_threshold_g" type="number" step="1" value="{{ bag.low_threshold_g|int }}" /></label>
+                                <label style="display:flex;align-items:center;gap:8px">
+                                    <input name="is_frozen" type="checkbox" value="true" style="width:auto" {{ 'checked' if bag.is_frozen else '' }} /> Frozen
+                                </label>
+                                <label>Frozen date <input name="frozen_date" type="date" value="{{ bag.frozen_date.isoformat() if bag.frozen_date else '' }}" /></label>
+                                <label>Notes <input name="notes" value="{{ bag.notes or '' }}" /></label>
+                                <div class="form-row">
+                                    <button type="submit">Save</button>
+                                    <button type="button" class="btn-secondary" onclick="toggleForm('edit-bag-{{ bag.id }}')">Cancel</button>
+                                </div>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -90,10 +150,32 @@
         </div>
         {% if brewers %}
         <table class="delta-table" style="margin-top:12px">
-            <thead><tr><th>Name</th><th>Method</th></tr></thead>
+            <thead><tr><th>Name</th><th>Method</th><th></th></tr></thead>
             <tbody>
                 {% for b in brewers %}
-                <tr><td>{{ b.name }}</td><td>{{ b.method or '-' }}</td></tr>
+                <tr>
+                    <td>{{ b.name }}</td>
+                    <td>{{ b.method or '-' }}</td>
+                    <td class="row-actions">
+                        <button type="button" class="btn-action" onclick="toggleForm('edit-brewer-{{ b.id }}')">Edit</button>
+                        <form method="post" action="/brewers/{{ b.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ b.name }} and all its recipes, brews and deltas?')">
+                            <button type="submit" class="btn-action btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                <tr id="edit-brewer-{{ b.id }}" class="hidden">
+                    <td colspan="3">
+                        <form method="post" action="/brewers/{{ b.id }}/edit" class="stacked-form" style="padding:8px 0" novalidate>
+                            <label>Name <input name="name" value="{{ b.name }}" required /></label>
+                            <label>Method <input name="method" value="{{ b.method or '' }}" /></label>
+                            <label>Notes <input name="notes" value="{{ b.notes or '' }}" /></label>
+                            <div class="form-row">
+                                <button type="submit">Save</button>
+                                <button type="button" class="btn-secondary" onclick="toggleForm('edit-brewer-{{ b.id }}')">Cancel</button>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -112,10 +194,30 @@
         </div>
         {% if grinders %}
         <table class="delta-table" style="margin-top:12px">
-            <thead><tr><th>Name</th></tr></thead>
+            <thead><tr><th>Name</th><th></th></tr></thead>
             <tbody>
                 {% for g in grinders %}
-                <tr><td>{{ g.name }}</td></tr>
+                <tr>
+                    <td>{{ g.name }}</td>
+                    <td class="row-actions">
+                        <button type="button" class="btn-action" onclick="toggleForm('edit-grinder-{{ g.id }}')">Edit</button>
+                        <form method="post" action="/grinders/{{ g.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ g.name }} and all its recipes, brews and deltas?')">
+                            <button type="submit" class="btn-action btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                <tr id="edit-grinder-{{ g.id }}" class="hidden">
+                    <td colspan="2">
+                        <form method="post" action="/grinders/{{ g.id }}/edit" class="stacked-form" style="padding:8px 0" novalidate>
+                            <label>Name <input name="name" value="{{ g.name }}" required /></label>
+                            <label>Notes <input name="notes" value="{{ g.notes or '' }}" /></label>
+                            <div class="form-row">
+                                <button type="submit">Save</button>
+                                <button type="button" class="btn-secondary" onclick="toggleForm('edit-grinder-{{ g.id }}')">Cancel</button>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>

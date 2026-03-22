@@ -32,12 +32,12 @@ with Session(db.engine) as session:
     with open(OUT / "bags.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["id", "bean_id", "bean_name", "roast_date", "purchase_date",
-                    "initial_quantity_g", "remaining_g", "low_threshold_g", "is_frozen", "frozen_date", "notes"])
+                    "initial_quantity_g", "remaining_g", "low_threshold_g", "is_frozen", "frozen_date", "is_completed", "notes"])
         for bag in session.exec(select(BeanBag)).all():
             remaining = crud.get_remaining_quantity(session, bag)
             w.writerow([bag.id, bag.bean_id, bag.bean.name, bag.roast_date, bag.purchase_date,
                         bag.initial_quantity_g, round(remaining, 1), bag.low_threshold_g,
-                        bag.is_frozen, bag.frozen_date, bag.notes])
+                        bag.is_frozen, bag.frozen_date, bag.is_completed, bag.notes])
 
     # Brewers
     with open(OUT / "brewers.csv", "w", newline="") as f:

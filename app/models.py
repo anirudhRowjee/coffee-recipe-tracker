@@ -27,6 +27,7 @@ class BeanBag(SQLModel, table=True):
     is_frozen: bool = False
     frozen_date: Optional[date] = None
     thaw_date: Optional[date] = None
+    is_completed: bool = False
     notes: Optional[str] = None
 
     bean: Optional[Bean] = Relationship(back_populates="bags")

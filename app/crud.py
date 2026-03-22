@@ -121,6 +121,165 @@ def create_grinder(session: Session, name: str, notes: Optional[str] = None) -> 
     return grinder
 
 
+def update_bean(session: Session, bean_id: int, name: str, origin: Optional[str], roast_level: Optional[str], flavor_notes: Optional[str], notes: Optional[str]) -> Optional[models.Bean]:
+    bean = session.get(models.Bean, bean_id)
+    if not bean:
+        return None
+    bean.name = name
+    bean.origin = origin
+    bean.roast_level = roast_level
+    bean.flavor_notes = flavor_notes
+    bean.notes = notes
+    session.commit()
+    return bean
+
+
+def delete_bean(session: Session, bean_id: int) -> None:
+    """Delete a bean and cascade to its recipes (+ their brews/deltas) and bags (+ their brews)."""
+    recipe_ids = [r.id for r in session.exec(
+        select(models.Recipe).where(models.Recipe.bean_id == bean_id)
+    ).all()]
+
+    if recipe_ids:
+        # Deltas referencing these recipes
+        for delta in session.exec(
+            select(models.Delta).where(
+                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
+                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
+            )
+        ).all():
+            session.delete(delta)
+        # Brews referencing these recipes
+        for brew in session.exec(
+            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
+        ).all():
+            session.delete(brew)
+        for recipe in session.exec(
+            select(models.Recipe).where(models.Recipe.bean_id == bean_id)
+        ).all():
+            session.delete(recipe)
+
+    # Bags and any remaining brews linked to them
+    for bag in session.exec(select(models.BeanBag).where(models.BeanBag.bean_id == bean_id)).all():
+        for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag.id)).all():
+            session.delete(brew)
+        session.delete(bag)
+
+    bean = session.get(models.Bean, bean_id)
+    if bean:
+        session.delete(bean)
+    session.commit()
+
+
+def update_bag(session: Session, bag_id: int, initial_quantity_g: float, roast_date, purchase_date, low_threshold_g: float, is_frozen: bool, frozen_date, notes: Optional[str]) -> Optional[models.BeanBag]:
+    bag = session.get(models.BeanBag, bag_id)
+    if not bag:
+        return None
+    bag.initial_quantity_g = initial_quantity_g
+    bag.roast_date = roast_date
+    bag.purchase_date = purchase_date
+    bag.low_threshold_g = low_threshold_g
+    bag.is_frozen = is_frozen
+    bag.frozen_date = frozen_date
+    bag.notes = notes
+    session.commit()
+    return bag
+
+
+def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
+    bag = session.get(models.BeanBag, bag_id)
+    if not bag:
+        return None
+    bag.is_completed = True
+    session.commit()
+    return bag
+
+
+def delete_bag(session: Session, bag_id: int) -> None:
+    """Delete a bag and its brews. Recipes are preserved (they belong to the bean type)."""
+    for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():
+        session.delete(brew)
+    bag = session.get(models.BeanBag, bag_id)
+    if bag:
+        session.delete(bag)
+    session.commit()
+
+
+def update_brewer(session: Session, brewer_id: int, name: str, method: Optional[str], notes: Optional[str]) -> Optional[models.Brewer]:
+    brewer = session.get(models.Brewer, brewer_id)
+    if not brewer:
+        return None
+    brewer.name = name
+    brewer.method = method
+    brewer.notes = notes
+    session.commit()
+    return brewer
+
+
+def delete_brewer(session: Session, brewer_id: int) -> None:
+    """Delete a brewer and cascade to its recipes (+ their brews/deltas)."""
+    recipe_ids = [r.id for r in session.exec(
+        select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
+    ).all()]
+    if recipe_ids:
+        for delta in session.exec(
+            select(models.Delta).where(
+                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
+                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
+            )
+        ).all():
+            session.delete(delta)
+        for brew in session.exec(
+            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
+        ).all():
+            session.delete(brew)
+        for recipe in session.exec(
+            select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
+        ).all():
+            session.delete(recipe)
+    brewer = session.get(models.Brewer, brewer_id)
+    if brewer:
+        session.delete(brewer)
+    session.commit()
+
+
+def update_grinder(session: Session, grinder_id: int, name: str, notes: Optional[str]) -> Optional[models.Grinder]:
+    grinder = session.get(models.Grinder, grinder_id)
+    if not grinder:
+        return None
+    grinder.name = name
+    grinder.notes = notes
+    session.commit()
+    return grinder
+
+
+def delete_grinder(session: Session, grinder_id: int) -> None:
+    """Delete a grinder and cascade to its recipes (+ their brews/deltas)."""
+    recipe_ids = [r.id for r in session.exec(
+        select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
+    ).all()]
+    if recipe_ids:
+        for delta in session.exec(
+            select(models.Delta).where(
+                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
+                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
+            )
+        ).all():
+            session.delete(delta)
+        for brew in session.exec(
+            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
+        ).all():
+            session.delete(brew)
+        for recipe in session.exec(
+            select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
+        ).all():
+            session.delete(recipe)
+    grinder = session.get(models.Grinder, grinder_id)
+    if grinder:
+        session.delete(grinder)
+    session.commit()
+
+
 def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple[bool, List[str]]:
     changed = []
     for f in ["dose_g", "water_ml", "temp_c", "grind_size"]:
