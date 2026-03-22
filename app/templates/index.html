@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>Select bean + brewer + grinder</h2>
+        <form id="picker-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change"
+            class="stacked-form">
+            <div class="form-group">
+                <label>Bean</label>
+                <select id="bean-select" name="bean_id" required>
+                    <option value="" disabled selected>Choose</option>
+                    {% for bean in beans %}
+                    <option value="{{ bean.id }}">{{ bean.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Brewer</label>
+                <select id="brewer-select" name="brewer_id" required>
+                    <option value="" disabled selected>Choose</option>
+                    {% for brewer in brewers %}
+                    <option value="{{ brewer.id }}">{{ brewer.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Grinder</label>
+                <select id="grinder-select" name="grinder_id" required>
+                    <option value="" disabled selected>Choose</option>
+                    {% for grinder in grinders %}
+                    <option value="{{ grinder.id }}">{{ grinder.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </section>
+
+    <section class="card" id="latest-wing">
+        <h2>Latest recipe</h2>
+        <p>Select bean and brewer to load the recipe.</p>
+    </section>
+</div>
+
+{% endblock %}

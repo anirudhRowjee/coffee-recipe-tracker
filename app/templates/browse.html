@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    {% for bean, recipe in bean_recipes %}
+    <section class="card">
+        <h2>{{ bean.name }}</h2>
+        <p style="color:#64748b;font-size:0.85rem;margin:0 0 10px">
+            <span style="color:#94a3b8">ID {{ bean.id }}</span>
+            {% if bean.origin %} · {{ bean.origin }}{% endif %}
+            {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+            {% if bean.roast_date %} · Roasted {{ bean.roast_date.strftime('%b %d, %Y') }}{% endif %}
+        </p>
+        {% if bean.flavor_notes %}
+        <p style="font-size:0.9rem;margin:0 0 10px"><em>{{ bean.flavor_notes }}</em></p>
+        {% endif %}
+        {% if recipe %}
+        <div class="recipe-card">
+            <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
+               <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
+               <strong>Temp:</strong> {{ recipe.temp_c }} °C &nbsp;·&nbsp;
+               <strong>Grind:</strong> {{ recipe.grind_size }}</p>
+            {% if recipe.recipe_text %}
+            <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
+            {% endif %}
+            {% if recipe.notes %}
+            <p style="color:#64748b;font-size:0.9rem;margin-top:6px">{{ recipe.notes }}</p>
+            {% endif %}
+            <p style="color:#94a3b8;font-size:0.8rem;margin-top:6px">
+                Last updated {{ recipe.created_at.strftime('%b %d, %Y') }}
+            </p>
+        </div>
+        {% else %}
+        <p style="color:#94a3b8">No recipes yet.</p>
+        {% endif %}
+    </section>
+    {% else %}
+    <section class="card">
+        <p>No beans added yet. Go to <a href="/manage">Manage</a> to add some.</p>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

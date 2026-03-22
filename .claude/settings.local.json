@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source .venv/bin/activate)",
+      "Bash(python -m app.db)",
+      "Bash(curl -s \"http://localhost:8000/recipes/latest?bean_id=1&brewer_id=1&grinder_id=1\")",
+      "Bash(python -c \":*)",
+      "Bash(source /Users/anirudh/projects/coffee/.venv/bin/activate)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:8000/recipes/latest?bean_id=1&brewer_id=1&grinder_id=1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/manage)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/browse)",
+      "Bash(curl -s http://localhost:8000/manage)"
+    ]
+  }
+}

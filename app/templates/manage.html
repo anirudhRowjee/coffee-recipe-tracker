@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>Beans</h2>
+        <button onclick="toggleForm('bean-form')">+ Add Bean</button>
+        <div id="bean-form" class="hidden" style="margin-top:10px">
+            <form method="post" action="/beans" class="stacked-form" novalidate>
+                <label>Name <input name="name" placeholder="Bean name" required /></label>
+                <label>Origin <input name="origin" placeholder="Origin" /></label>
+                <label>Roast level <input name="roast_level" placeholder="e.g. Light, Medium, Dark" /></label>
+                <label>Roast date <input name="roast_date" type="date" /></label>
+                <label>Flavor notes <input name="flavor_notes" placeholder="e.g. Blueberry, chocolate, citrus" /></label>
+                <label>Notes <input name="notes" /></label>
+                <button type="submit">Add Bean</button>
+            </form>
+        </div>
+        {% if beans %}
+        <table class="delta-table" style="margin-top:12px">
+            <thead><tr><th>ID</th><th>Name</th><th>Origin</th><th>Roast</th><th>Roast date</th><th>Flavor notes</th></tr></thead>
+            <tbody>
+                {% for b in beans %}
+                <tr>
+                    <td>{{ b.id }}</td>
+                    <td>{{ b.name }}</td>
+                    <td>{{ b.origin or '-' }}</td>
+                    <td>{{ b.roast_level or '-' }}</td>
+                    <td>{{ b.roast_date.strftime('%b %d, %Y') if b.roast_date else '-' }}</td>
+                    <td>{{ b.flavor_notes or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Brewers</h2>
+        <button onclick="toggleForm('brewer-form')">+ Add Brewer</button>
+        <div id="brewer-form" class="hidden" style="margin-top:10px">
+            <form method="post" action="/brewers" class="stacked-form" novalidate>
+                <label>Name <input name="name" placeholder="Brewer" required /></label>
+                <label>Method <input name="method" placeholder="e.g. Pour over, Espresso" /></label>
+                <label>Notes <input name="notes" /></label>
+                <button type="submit">Add Brewer</button>
+            </form>
+        </div>
+        {% if brewers %}
+        <table class="delta-table" style="margin-top:12px">
+            <thead><tr><th>Name</th><th>Method</th></tr></thead>
+            <tbody>
+                {% for b in brewers %}
+                <tr><td>{{ b.name }}</td><td>{{ b.method or '-' }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+
+    <section class="card">
+        <h2>Grinders</h2>
+        <button onclick="toggleForm('grinder-form')">+ Add Grinder</button>
+        <div id="grinder-form" class="hidden" style="margin-top:10px">
+            <form method="post" action="/grinders" class="stacked-form" novalidate>
+                <label>Name <input name="name" placeholder="Grinder" required /></label>
+                <label>Notes <input name="notes" /></label>
+                <button type="submit">Add Grinder</button>
+            </form>
+        </div>
+        {% if grinders %}
+        <table class="delta-table" style="margin-top:12px">
+            <thead><tr><th>Name</th></tr></thead>
+            <tbody>
+                {% for g in grinders %}
+                <tr><td>{{ g.name }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
