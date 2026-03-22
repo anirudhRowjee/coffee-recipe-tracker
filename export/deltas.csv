@@ -1,0 +1,3 @@
+id,from_recipe_id,to_recipe_id,bean_name,changed_param,delta_amount,rationale,created_at
+1,1,2,test beans,grind_size,-1.0,increase extraction,2026-03-22 09:37:08.440259
+2,2,3,test beans,temp_c,1.0,more extraction,2026-03-22 09:40:13.761111

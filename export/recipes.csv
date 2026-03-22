@@ -1,0 +1,13 @@
+id,bean_id,bean_name,brewer_id,brewer_name,grinder_id,grinder_name,dose_g,water_ml,temp_c,grind_size,recipe_text,previous_recipe_id,created_at
+1,1,test beans,1,Aeropress with Flow Control Cap,1,Timemore Chestnut C2s,10.0,150.0,94.0,16,"add all water
+stir NSNSEWEW
+Swirl every minute
+brew until 2:45, and then slow plunge over 30s",,2026-03-22 09:31:28.388448
+2,1,test beans,1,Aeropress with Flow Control Cap,1,Timemore Chestnut C2s,10.0,150.0,94.0,15,"add all water
+stir NSNSEWEW
+Swirl every minute
+brew until 2:45, and then slow plunge over 30s",1,2026-03-22 09:37:08.436218
+3,1,test beans,1,Aeropress with Flow Control Cap,1,Timemore Chestnut C2s,10.0,150.0,95.0,15,"add all water
+stir NSNSEWEW
+Swirl every minute
+brew until 2:45, and then slow plunge over 30s",2,2026-03-22 09:40:13.757633

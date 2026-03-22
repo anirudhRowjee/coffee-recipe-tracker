@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/anirudh/projects/coffee log --oneline)"
+    ]
+  }
+}

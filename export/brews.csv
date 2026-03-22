@@ -1,0 +1,5 @@
+id,recipe_id,bean_name,bag_id,brewed_at,notes,recommended_param,recommended_delta,recommended_rationale
+1,1,test beans,1,2026-03-22 09:32:01.693475,fantastic,grind_size,-1.0,make it more extracted
+2,2,test beans,1,2026-03-22 09:37:08.445775,this tasted pretty good actually. I really liked it.,,,
+3,2,test beans,1,2026-03-22 09:38:15.441709,"nice, needs one more degree of temp",temp_c,1.0,more extraction
+4,3,test beans,1,2026-03-22 09:40:13.764476,"very nice, better than the previous brew",,,
