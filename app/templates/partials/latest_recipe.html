@@ -3,6 +3,7 @@
 {% endif %}
 
 {% if latest %}
+{% set rec = recent_brews[0] if recent_brews and recent_brews[0].recommended_param else none %}
 <div class="recipe-card">
     <p><strong>Dose:</strong> {{ latest.dose_g }} g &nbsp;·&nbsp;
        <strong>Water:</strong> {{ latest.water_ml }} ml &nbsp;·&nbsp;
@@ -82,7 +83,19 @@
 <details class="history-block" style="margin-top:8px">
     <summary class="history-summary">Create variation</summary>
     <div style="margin-top:10px">
-        <form method="post" action="/recipes" class="stacked-form">
+        {% if rec %}
+        <div id="rec-data" hidden
+            data-param="{{ rec.recommended_param }}"
+            data-delta="{{ rec.recommended_delta if rec.recommended_delta is not none else '' }}"
+            data-rationale="{{ rec.recommended_rationale or '' }}">
+        </div>
+        <button type="button" class="btn-apply-rec" onclick="applyRecommendation()">
+            Apply: {{ rec.recommended_param.replace('_', ' ') }}
+            {%- if rec.recommended_delta is not none %} {{ '%+g' % rec.recommended_delta }}{%- endif %}
+            {%- if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{%- endif %}
+        </button>
+        {% endif %}
+        <form id="variation-form" method="post" action="/recipes" class="stacked-form" style="margin-top:10px">
             <input type="hidden" name="bean_id" value="{{ bean_id }}" />
             <input type="hidden" name="bag_id" value="{{ bag_id }}" />
             <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
@@ -127,6 +140,34 @@
             function toggleDeltaAmount(sel) {
                 document.getElementById('delta-amount-row').style.display =
                     sel.value === 'recipe_text' ? 'none' : '';
+            }
+
+            function applyRecommendation() {
+                const recEl = document.getElementById('rec-data');
+                if (!recEl) return;
+                const param = recEl.dataset.param;
+                const delta = recEl.dataset.delta !== '' ? parseFloat(recEl.dataset.delta) : null;
+                const rationale = recEl.dataset.rationale || null;
+
+                const form = document.getElementById('variation-form');
+                const paramSel = form.querySelector('[name="changed_param"]');
+                const deltaInput = form.querySelector('[name="delta_amount"]');
+                const rationaleInput = form.querySelector('[name="rationale"]');
+
+                paramSel.value = param;
+                toggleDeltaAmount(paramSel);
+
+                const numericFields = { dose_g: true, water_ml: true, temp_c: true };
+                if (delta !== null && param in numericFields) {
+                    const fieldInput = form.querySelector('[name="' + param + '"]');
+                    fieldInput.value = (parseFloat(fieldInput.value) + delta).toFixed(1);
+                    deltaInput.value = delta;
+                } else {
+                    const target = form.querySelector('[name="' + param + '"]');
+                    if (target) target.focus();
+                }
+
+                if (rationale) rationaleInput.value = rationale;
             }
         </script>
 
