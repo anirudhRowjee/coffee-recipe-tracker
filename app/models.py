@@ -76,6 +76,9 @@ class Brew(SQLModel, table=True):
     recipe_id: int = Field(foreign_key="recipe.id")
     bag_id: int = Field(foreign_key="beanbag.id")
     notes: Optional[str] = None
+    recommended_param: Optional[str] = None
+    recommended_delta: Optional[float] = None
+    recommended_rationale: Optional[str] = None
     brewed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     recipe: Optional[Recipe] = Relationship(back_populates="brews")

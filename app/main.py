@@ -141,9 +141,30 @@ def create_bag(
 
 
 @app.post("/brews")
-def create_brew(recipe_id: int = Form(...), bag_id: int = Form(...), notes: str = Form(None)):
+def create_brew(
+    recipe_id: int = Form(...),
+    bag_id: int = Form(...),
+    notes: str = Form(None),
+    recommended_param: str = Form(None),
+    recommended_delta: str = Form(None),
+    recommended_rationale: str = Form(None),
+):
+    rec_delta: Optional[float] = None
+    if recommended_delta and recommended_delta.strip():
+        try:
+            rec_delta = float(recommended_delta)
+        except ValueError:
+            pass
     with Session(db.engine) as session:
-        crud.create_brew(session, recipe_id=recipe_id, bag_id=bag_id, notes=notes)
+        crud.create_brew(
+            session,
+            recipe_id=recipe_id,
+            bag_id=bag_id,
+            notes=notes,
+            recommended_param=recommended_param or None,
+            recommended_delta=rec_delta,
+            recommended_rationale=recommended_rationale or None,
+        )
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -173,9 +194,18 @@ def create_recipe(
     recipe_text: str = Form(None),
     previous_recipe_id: int = Form(None),
     changed_param: str = Form(None),
-    delta_amount: float = Form(None),
+    delta_amount: str = Form(None),
     rationale: str = Form(None),
+    bag_id: int = Form(None),
+    brew_notes: str = Form(None),
 ):
+    delta_amount_f: Optional[float] = None
+    if delta_amount and delta_amount.strip():
+        try:
+            delta_amount_f = float(delta_amount)
+        except ValueError:
+            pass
+
     with Session(db.engine) as session:
         if previous_recipe_id:
             prev = session.get(models.Recipe, previous_recipe_id)
@@ -184,6 +214,7 @@ def create_recipe(
             valid, changed = crud.validate_one_parameter_delta(prev, {
                 "dose_g": dose_g, "water_ml": water_ml,
                 "temp_c": temp_c, "grind_size": grind_size,
+                "recipe_text": recipe_text,
             })
             if not valid:
                 raise HTTPException(status_code=400, detail=f"Must change exactly one parameter. Changed: {changed}")
@@ -201,14 +232,17 @@ def create_recipe(
             previous_recipe_id=previous_recipe_id,
         )
 
-        if previous_recipe_id and changed_param and delta_amount is not None and recipe.id is not None:
+        if previous_recipe_id and changed_param and recipe.id is not None:
             crud.create_delta(
                 session,
                 from_recipe_id=previous_recipe_id,
                 to_recipe_id=recipe.id,
                 changed_param=changed_param,
-                delta_amount=delta_amount,
+                delta_amount=delta_amount_f if delta_amount_f is not None else 0.0,
                 rationale=rationale,
             )
+
+        if bag_id and recipe.id is not None:
+            crud.create_brew(session, recipe_id=recipe.id, bag_id=bag_id, notes=brew_notes or None)
 
     return RedirectResponse(url="/", status_code=303)

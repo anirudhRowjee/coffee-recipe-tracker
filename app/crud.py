@@ -97,8 +97,8 @@ def create_bag(session: Session, bean_id: int, initial_quantity_g: float, roast_
     return bag
 
 
-def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[str] = None) -> models.Brew:
-    brew = models.Brew(recipe_id=recipe_id, bag_id=bag_id, notes=notes)
+def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[str] = None, recommended_param: Optional[str] = None, recommended_delta: Optional[float] = None, recommended_rationale: Optional[str] = None) -> models.Brew:
+    brew = models.Brew(recipe_id=recipe_id, bag_id=bag_id, notes=notes, recommended_param=recommended_param, recommended_delta=recommended_delta, recommended_rationale=recommended_rationale)
     session.add(brew)
     session.commit()
     session.refresh(brew)
@@ -122,9 +122,8 @@ def create_grinder(session: Session, name: str, notes: Optional[str] = None) -> 
 
 
 def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple[bool, List[str]]:
-    fields = ["dose_g", "water_ml", "temp_c", "grind_size"]
     changed = []
-    for f in fields:
+    for f in ["dose_g", "water_ml", "temp_c", "grind_size"]:
         old_value = getattr(base, f)
         new_value = new_values.get(f, old_value)
         if f == "grind_size":
@@ -137,6 +136,11 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
             except (TypeError, ValueError):
                 if old_value != new_value:
                     changed.append(f)
+    # recipe_text is a string comparison
+    old_text = base.recipe_text or ""
+    new_text = new_values.get("recipe_text") or ""
+    if old_text != new_text:
+        changed.append("recipe_text")
     return (len(changed) == 1, changed)
 
 

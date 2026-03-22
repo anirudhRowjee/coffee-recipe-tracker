@@ -14,6 +14,18 @@
     {% endif %}
 </div>
 
+{% if recent_brews and recent_brews[0].recommended_param %}
+{% set rec = recent_brews[0] %}
+<div class="recommendation-banner">
+    <span class="rec-label">Recommended next</span>
+    <span class="rec-body">
+        Change <strong>{{ rec.recommended_param.replace('_', ' ') }}</strong>
+        {% if rec.recommended_delta is not none %} by <strong>{{ rec.recommended_delta }}</strong>{% endif %}
+        {% if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{% endif %}
+    </span>
+</div>
+{% endif %}
+
 <details class="history-block" style="margin-top:12px">
     <summary class="history-summary">Log a brew</summary>
     <div style="margin-top:10px">
@@ -21,9 +33,32 @@
             <input type="hidden" name="recipe_id" value="{{ latest.id }}" />
             <input type="hidden" name="bag_id" value="{{ bag_id }}" />
             <label>Tasting notes</label>
-            <textarea name="notes" rows="3" placeholder="How did it taste? What would you change?"></textarea>
+            <textarea name="notes" rows="3" placeholder="How did it taste?"></textarea>
+            <label style="margin-top:8px">Recommend next change</label>
+            <select name="recommended_param" onchange="toggleRecDelta(this)">
+                <option value="">— no recommendation —</option>
+                <option value="dose_g">Dose</option>
+                <option value="water_ml">Water</option>
+                <option value="temp_c">Temp</option>
+                <option value="grind_size">Grind size</option>
+                <option value="recipe_text">Recipe text</option>
+            </select>
+            <div id="rec-delta-row" style="display:none">
+                <label style="margin-top:6px">By how much
+                    <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
+                </label>
+            </div>
+            <label>Why
+                <input name="recommended_rationale" placeholder="e.g. slightly bitter, try less" />
+            </label>
             <button type="submit" style="margin-top:8px">Log brew</button>
         </form>
+        <script>
+            function toggleRecDelta(sel) {
+                document.getElementById('rec-delta-row').style.display =
+                    (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
+            }
+        </script>
 
         {% if recent_brews %}
         <div class="brew-log" style="margin-top:12px">
@@ -31,6 +66,12 @@
             <div class="brew-entry">
                 <span class="brew-date">{{ brew.brewed_at.strftime('%b %d, %Y') }}</span>
                 <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
+                {% if brew.recommended_param %}
+                <p class="brew-rec">→ Try: {{ brew.recommended_param.replace('_', ' ') }}
+                    {% if brew.recommended_delta is not none %} {{ '%+g' % brew.recommended_delta }}{% endif %}
+                    {% if brew.recommended_rationale %} — {{ brew.recommended_rationale }}{% endif %}
+                </p>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -43,6 +84,7 @@
     <div style="margin-top:10px">
         <form method="post" action="/recipes" class="stacked-form">
             <input type="hidden" name="bean_id" value="{{ bean_id }}" />
+            <input type="hidden" name="bag_id" value="{{ bag_id }}" />
             <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
             <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
             <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
@@ -61,21 +103,32 @@
             <label>Recipe text</label>
             <textarea name="recipe_text" rows="4" placeholder="Long-form recipe instructions">{{ latest.recipe_text or '' }}</textarea>
             <label>What changed
-                <select name="changed_param" required>
+                <select name="changed_param" required onchange="toggleDeltaAmount(this)">
                     <option value="dose_g">Dose</option>
                     <option value="water_ml">Water</option>
                     <option value="temp_c">Temp</option>
-                    <option value="grind_size">Grind</option>
+                    <option value="grind_size">Grind size</option>
+                    <option value="recipe_text">Recipe text</option>
                 </select>
             </label>
-            <label>Delta amount
-                <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" required />
-            </label>
+            <div id="delta-amount-row">
+                <label>Delta amount
+                    <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" />
+                </label>
+            </div>
             <label>Rationale
                 <input name="rationale" placeholder="e.g. too bitter → reduce dose" />
             </label>
+            <label>Tasting notes for this brew</label>
+            <textarea name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
             <button type="submit" style="margin-top:4px">Save variation</button>
         </form>
+        <script>
+            function toggleDeltaAmount(sel) {
+                document.getElementById('delta-amount-row').style.display =
+                    sel.value === 'recipe_text' ? 'none' : '';
+            }
+        </script>
 
         {% if recent_deltas %}
         <h4 style="margin-top:14px">Change history</h4>

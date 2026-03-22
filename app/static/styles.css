@@ -211,6 +211,37 @@ details[open] > .history-summary::before {
     transform: rotate(90deg);
 }
 
+.recommendation-banner {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.rec-label {
+    font-weight: 600;
+    color: #15803d;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.rec-body {
+    color: #166534;
+}
+
+.brew-rec {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: #15803d;
+}
+
 .brew-log {
     display: grid;
     gap: 6px;
