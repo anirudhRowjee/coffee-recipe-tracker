@@ -3,15 +3,21 @@
 {% block content %}
 <div class="grid">
     <section class="card">
-        <h2>Select bean + brewer + grinder</h2>
+        <h2>Select bag + brewer + grinder</h2>
         <form id="picker-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change"
             class="stacked-form">
             <div class="form-group">
-                <label>Bean</label>
-                <select id="bean-select" name="bean_id" required>
-                    <option value="" disabled selected>Choose</option>
-                    {% for bean in beans %}
-                    <option value="{{ bean.id }}">{{ bean.name }}</option>
+                <label>Bag</label>
+                <select id="bag-select" name="bag_id" required>
+                    <option value="" disabled selected>Choose a bag</option>
+                    {% for bag, remaining in bags_with_remaining %}
+                    <option value="{{ bag.id }}">
+                        {{ bag.bean.name }}
+                        {% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %}
+                        · {{ remaining|int }}g remaining
+                        {% if bag.is_frozen %} ❄{% endif %}
+                        {% if remaining <= bag.low_threshold_g %} ⚠{% endif %}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
@@ -38,8 +44,7 @@
 
     <section class="card" id="latest-wing">
         <h2>Latest recipe</h2>
-        <p>Select bean and brewer to load the recipe.</p>
+        <p>Select a bag, brewer, and grinder to load the recipe.</p>
     </section>
 </div>
-
 {% endblock %}

@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from . import models
@@ -13,23 +14,95 @@ def get_brewers(session: Session) -> List[models.Brewer]:
     return session.exec(select(models.Brewer).order_by(models.Brewer.name)).all()
 
 
+def get_grinders(session: Session) -> List[models.Grinder]:
+    return session.exec(select(models.Grinder).order_by(models.Grinder.name)).all()
+
+
+def get_bags_for_bean(session: Session, bean_id: int) -> List[models.BeanBag]:
+    return session.exec(
+        select(models.BeanBag)
+        .where(models.BeanBag.bean_id == bean_id)
+        .order_by(models.BeanBag.purchase_date.desc())  # type: ignore[union-attr]
+    ).all()
+
+
+def get_all_bags(session: Session) -> List[models.BeanBag]:
+    return session.exec(
+        select(models.BeanBag).order_by(models.BeanBag.purchase_date.desc())  # type: ignore[union-attr]
+    ).all()
+
+
+def get_remaining_quantity(session: Session, bag: models.BeanBag) -> float:
+    used = session.exec(
+        select(func.sum(models.Recipe.dose_g))
+        .join(models.Brew, models.Brew.recipe_id == models.Recipe.id)  # type: ignore[arg-type]
+        .where(models.Brew.bag_id == bag.id)
+    ).first()
+    return bag.initial_quantity_g - (used or 0.0)
+
+
 def get_latest_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int) -> Optional[models.Recipe]:
-    statement = (
+    return session.exec(
         select(models.Recipe)
         .where(models.Recipe.bean_id == bean_id)
         .where(models.Recipe.brewer_id == brewer_id)
         .where(models.Recipe.grinder_id == grinder_id)
-        .order_by(models.Recipe.created_at.desc())
-    )
-    return session.exec(statement).first()
+        .order_by(models.Recipe.created_at.desc())  # type: ignore[union-attr]
+    ).first()
 
 
-def create_bean(session: Session, name: str, origin: Optional[str] = None, roast_level: Optional[str] = None, roast_date=None, flavor_notes: Optional[str] = None, notes: Optional[str] = None) -> models.Bean:
-    bean = models.Bean(name=name, origin=origin, roast_level=roast_level, roast_date=roast_date, flavor_notes=flavor_notes, notes=notes)
+def get_recent_brews(session: Session, recipe_id: int, limit: int = 5) -> List[models.Brew]:
+    return session.exec(
+        select(models.Brew)
+        .where(models.Brew.recipe_id == recipe_id)
+        .order_by(models.Brew.brewed_at.desc())  # type: ignore[union-attr]
+        .limit(limit)
+    ).all()
+
+
+def get_recent_deltas(session: Session, bean_id: int, brewer_id: int, grinder_id: int, limit: int = 10) -> List[models.Delta]:
+    return session.exec(
+        select(models.Delta)
+        .join(models.Recipe, models.Recipe.id == models.Delta.to_recipe_id)  # type: ignore[arg-type]
+        .where(models.Recipe.bean_id == bean_id)
+        .where(models.Recipe.brewer_id == brewer_id)
+        .where(models.Recipe.grinder_id == grinder_id)
+        .order_by(models.Delta.created_at.desc())  # type: ignore[union-attr]
+        .limit(limit)
+    ).all()
+
+
+def create_bean(session: Session, name: str, origin: Optional[str] = None, roast_level: Optional[str] = None, flavor_notes: Optional[str] = None, notes: Optional[str] = None) -> models.Bean:
+    bean = models.Bean(name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)
     session.add(bean)
     session.commit()
     session.refresh(bean)
     return bean
+
+
+def create_bag(session: Session, bean_id: int, initial_quantity_g: float, roast_date=None, purchase_date=None, low_threshold_g: float = 50.0, is_frozen: bool = False, frozen_date=None, notes: Optional[str] = None) -> models.BeanBag:
+    bag = models.BeanBag(
+        bean_id=bean_id,
+        initial_quantity_g=initial_quantity_g,
+        roast_date=roast_date,
+        purchase_date=purchase_date,
+        low_threshold_g=low_threshold_g,
+        is_frozen=is_frozen,
+        frozen_date=frozen_date,
+        notes=notes,
+    )
+    session.add(bag)
+    session.commit()
+    session.refresh(bag)
+    return bag
+
+
+def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[str] = None) -> models.Brew:
+    brew = models.Brew(recipe_id=recipe_id, bag_id=bag_id, notes=notes)
+    session.add(brew)
+    session.commit()
+    session.refresh(brew)
+    return brew
 
 
 def create_brewer(session: Session, name: str, method: Optional[str] = None, notes: Optional[str] = None) -> models.Brewer:
@@ -38,10 +111,6 @@ def create_brewer(session: Session, name: str, method: Optional[str] = None, not
     session.commit()
     session.refresh(brewer)
     return brewer
-
-
-def get_grinders(session: Session) -> List[models.Grinder]:
-    return session.exec(select(models.Grinder).order_by(models.Grinder.name)).all()
 
 
 def create_grinder(session: Session, name: str, notes: Optional[str] = None) -> models.Grinder:
@@ -55,11 +124,9 @@ def create_grinder(session: Session, name: str, notes: Optional[str] = None) -> 
 def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple[bool, List[str]]:
     fields = ["dose_g", "water_ml", "temp_c", "grind_size"]
     changed = []
-
     for f in fields:
         old_value = getattr(base, f)
         new_value = new_values.get(f, old_value)
-
         if f == "grind_size":
             if (old_value or "") != (new_value or ""):
                 changed.append(f)
@@ -70,11 +137,10 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
             except (TypeError, ValueError):
                 if old_value != new_value:
                     changed.append(f)
-
     return (len(changed) == 1, changed)
 
 
-def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, notes: Optional[str] = None, previous_recipe_id: Optional[int] = None) -> models.Recipe:
+def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, previous_recipe_id: Optional[int] = None) -> models.Recipe:
     recipe = models.Recipe(
         bean_id=bean_id,
         brewer_id=brewer_id,
@@ -84,7 +150,6 @@ def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: in
         temp_c=temp_c,
         grind_size=grind_size,
         recipe_text=recipe_text,
-        notes=notes,
         previous_recipe_id=previous_recipe_id,
     )
     session.add(recipe)
@@ -107,28 +172,38 @@ def create_delta(session: Session, from_recipe_id: int, to_recipe_id: int, chang
     return delta
 
 
+def get_brews_for_bean(session: Session, bean_id: int, limit: int = 30) -> List[models.Brew]:
+    return session.exec(
+        select(models.Brew)
+        .join(models.Recipe, models.Recipe.id == models.Brew.recipe_id)  # type: ignore[arg-type]
+        .where(models.Recipe.bean_id == bean_id)
+        .order_by(models.Brew.brewed_at.desc())  # type: ignore[union-attr]
+        .limit(limit)
+    ).all()
+
+
+def get_deltas_for_bean(session: Session, bean_id: int, limit: int = 30) -> List[models.Delta]:
+    return session.exec(
+        select(models.Delta)
+        .join(models.Recipe, models.Recipe.id == models.Delta.to_recipe_id)  # type: ignore[arg-type]
+        .where(models.Recipe.bean_id == bean_id)
+        .order_by(models.Delta.created_at.desc())  # type: ignore[union-attr]
+        .limit(limit)
+    ).all()
+
+
 def get_latest_recipe_per_bean(session: Session):
     beans = session.exec(select(models.Bean).order_by(models.Bean.name)).all()
     result = []
     for bean in beans:
-        stmt = (
+        latest = session.exec(
             select(models.Recipe)
             .where(models.Recipe.bean_id == bean.id)
             .order_by(models.Recipe.created_at.desc())  # type: ignore[union-attr]
-        )
-        latest = session.exec(stmt).first()
-        result.append((bean, latest))
+        ).first()
+        bags = get_bags_for_bean(session, bean.id)  # type: ignore[arg-type]
+        bags_with_remaining = [(bag, get_remaining_quantity(session, bag)) for bag in bags]
+        brews = get_brews_for_bean(session, bean.id)  # type: ignore[arg-type]
+        deltas = get_deltas_for_bean(session, bean.id)  # type: ignore[arg-type]
+        result.append((bean, latest, bags_with_remaining, brews, deltas))
     return result
-
-
-def get_recent_deltas(session: Session, bean_id: int, brewer_id: int, grinder_id: int, limit: int = 10) -> List[models.Delta]:
-    statement = (
-        select(models.Delta)
-        .join(models.Recipe, models.Recipe.id == models.Delta.to_recipe_id)
-        .where(models.Recipe.bean_id == bean_id)
-        .where(models.Recipe.brewer_id == brewer_id)
-        .where(models.Recipe.grinder_id == grinder_id)
-        .order_by(models.Delta.created_at.desc())
-        .limit(limit)
-    )
-    return session.exec(statement).all()

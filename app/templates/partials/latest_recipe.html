@@ -1,101 +1,115 @@
-<h3>Latest recipe</h3>
 {% if message %}
 <p class="help">{{ message }}</p>
 {% endif %}
+
 {% if latest %}
 <div class="recipe-card">
-    <p><strong>Dose:</strong> {{ latest.dose_g }} g</p>
-    <p><strong>Water:</strong> {{ latest.water_ml }} ml</p>
-    <p><strong>Temp:</strong> {{ latest.temp_c }} °C</p>
-    <p><strong>Grind:</strong> {{ latest.grind_size }} ({{ latest.grinder.name }})</p>
+    <p><strong>Dose:</strong> {{ latest.dose_g }} g &nbsp;·&nbsp;
+       <strong>Water:</strong> {{ latest.water_ml }} ml &nbsp;·&nbsp;
+       <strong>Temp:</strong> {{ latest.temp_c }} °C &nbsp;·&nbsp;
+       <strong>Grind:</strong> {{ latest.grind_size }}</p>
     {% if latest.recipe_text %}
     <p><strong>Recipe:</strong></p>
     <pre class="recipe-text">{{ latest.recipe_text }}</pre>
     {% endif %}
-    <p><strong>Notes:</strong> {{ latest.notes or '-' }}</p>
 </div>
-<h4>Create variation</h4>
+
+<details class="history-block" style="margin-top:12px">
+    <summary class="history-summary">Log a brew</summary>
+    <div style="margin-top:10px">
+        <form method="post" action="/brews" class="stacked-form">
+            <input type="hidden" name="recipe_id" value="{{ latest.id }}" />
+            <input type="hidden" name="bag_id" value="{{ bag_id }}" />
+            <label>Tasting notes</label>
+            <textarea name="notes" rows="3" placeholder="How did it taste? What would you change?"></textarea>
+            <button type="submit" style="margin-top:8px">Log brew</button>
+        </form>
+
+        {% if recent_brews %}
+        <div class="brew-log" style="margin-top:12px">
+            {% for brew in recent_brews %}
+            <div class="brew-entry">
+                <span class="brew-date">{{ brew.brewed_at.strftime('%b %d, %Y') }}</span>
+                <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</details>
+
+<details class="history-block" style="margin-top:8px">
+    <summary class="history-summary">Create variation</summary>
+    <div style="margin-top:10px">
+        <form method="post" action="/recipes" class="stacked-form">
+            <input type="hidden" name="bean_id" value="{{ bean_id }}" />
+            <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
+            <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+            <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
+            <label>Dose (g)
+                <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required />
+            </label>
+            <label>Water (ml)
+                <input name="water_ml" type="number" step="0.1" value="{{ latest.water_ml }}" required />
+            </label>
+            <label>Temp (°C)
+                <input name="temp_c" type="number" step="0.1" value="{{ latest.temp_c }}" required />
+            </label>
+            <label>Grind size
+                <input name="grind_size" value="{{ latest.grind_size }}" required />
+            </label>
+            <label>Recipe text</label>
+            <textarea name="recipe_text" rows="4" placeholder="Long-form recipe instructions">{{ latest.recipe_text or '' }}</textarea>
+            <label>What changed
+                <select name="changed_param" required>
+                    <option value="dose_g">Dose</option>
+                    <option value="water_ml">Water</option>
+                    <option value="temp_c">Temp</option>
+                    <option value="grind_size">Grind</option>
+                </select>
+            </label>
+            <label>Delta amount
+                <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" required />
+            </label>
+            <label>Rationale
+                <input name="rationale" placeholder="e.g. too bitter → reduce dose" />
+            </label>
+            <button type="submit" style="margin-top:4px">Save variation</button>
+        </form>
+
+        {% if recent_deltas %}
+        <h4 style="margin-top:14px">Change history</h4>
+        <table class="delta-table">
+            <thead>
+                <tr><th>Param</th><th>Change</th><th>Rationale</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+                {% for delta in recent_deltas %}
+                <tr>
+                    <td>{{ delta.changed_param }}</td>
+                    <td>{{ delta.delta_amount }}</td>
+                    <td>{{ delta.rationale or '-' }}</td>
+                    <td>{{ delta.created_at.strftime('%m/%d') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</details>
+
+{% else %}
+<p class="muted">No recipe yet for this combination. Add a baseline below.</p>
 <form method="post" action="/recipes" class="stacked-form">
     <input type="hidden" name="bean_id" value="{{ bean_id }}" />
     <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
     <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
-    <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
-
-    <label>Dose (g)
-        <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required />
-    </label>
-    <label>Water (ml)
-        <input name="water_ml" type="number" step="0.1" value="{{ latest.water_ml }}" required />
-    </label>
-    <label>Temp (°C)
-        <input name="temp_c" type="number" step="0.1" value="{{ latest.temp_c }}" required />
-    </label>
-    <label>Grind size
-        <input name="grind_size" value="{{ latest.grind_size }}" required />
-    </label>
-    <label>Recipe text
-        <textarea name="recipe_text" rows="3"
-            placeholder="Long-form recipe instructions">{{ latest.recipe_text or '' }}</textarea>
-    </label>
-    <label>Delta param changed
-        <select name="changed_param" required>
-            <option value="dose_g">Dose</option>
-            <option value="water_ml">Water</option>
-            <option value="temp_c">Temp</option>
-            <option value="grind_size">Grind</option>
-        </select>
-    </label>
-    <label>Delta amount
-        <input name="delta_amount" type="number" step="0.1" required />
-    </label>
-    <label>Rationale
-        <input name="rationale" placeholder="e.g. brighter, less bitter" />
-    </label>
-    <label>Notes for this recipe
-        <input name="notes" placeholder="Your tasting notes" />
-    </label>
-    <button type="submit">Save variation</button>
-</form>
-
-<h4>Change history</h4>
-{% if recent_deltas %}
-<table class="delta-table">
-    <thead>
-        <tr>
-            <th>Param</th>
-            <th>Change</th>
-            <th>Rationale</th>
-            <th>Date</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for delta in recent_deltas %}
-        <tr>
-            <td>{{ delta.changed_param }}</td>
-            <td>{{ delta.delta_amount }}</td>
-            <td>{{ delta.rationale or '-' }}</td>
-            <td>{{ delta.created_at.strftime('%m/%d') }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No delta history yet.</p>
-{% endif %}
-
-{% else %}
-<p>No recipe exists yet for this bean/brewer. Add a new recipe instead.</p>
-<form method="post" action="/recipes" class="stacked-form">
-    <input type="hidden" name="bean_id" value="{{ bean_id }}" />
-    <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
-    <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
-    <label>Dose (g)<input name="dose_g" type="number" step="0.1" required /></label>
-    <label>Water (ml)<input name="water_ml" type="number" step="0.1" required /></label>
-    <label>Temp (°C)<input name="temp_c" type="number" step="0.1" required /></label>
-    <label>Grind size<input name="grind_size" required /></label>
-    <label>Recipe text<textarea name="recipe_text" rows="3"
-            placeholder="Long-form recipe instructions"></textarea></label>
-    <label>Notes<input name="notes" /></label>
-    <button type="submit">Save baseline recipe</button>
+    <label>Dose (g) <input name="dose_g" type="number" step="0.1" required /></label>
+    <label>Water (ml) <input name="water_ml" type="number" step="0.1" required /></label>
+    <label>Temp (°C) <input name="temp_c" type="number" step="0.1" required /></label>
+    <label>Grind size <input name="grind_size" required /></label>
+    <label>Recipe text</label>
+    <textarea name="recipe_text" rows="4" placeholder="Long-form recipe instructions"></textarea>
+    <button type="submit" style="margin-top:4px">Save baseline recipe</button>
 </form>
 {% endif %}

@@ -82,12 +82,21 @@ label {
 
 input,
 select,
+textarea,
 button {
     width: 100%;
     padding: 8px;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     background: #fff;
+    box-sizing: border-box;
+}
+
+textarea {
+    display: block;
+    resize: vertical;
+    font-family: inherit;
+    font-size: inherit;
 }
 
 button {
@@ -122,6 +131,134 @@ footer {
 
 .hidden {
     display: none;
+}
+
+.muted {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.bean-block {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 10px;
+}
+
+.bean-block[open] {
+    padding-bottom: 14px;
+}
+
+.bean-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.bean-summary::-webkit-details-marker { display: none; }
+
+.bean-summary::before {
+    content: '▶';
+    font-size: 0.65rem;
+    color: #94a3b8;
+    transition: transform 0.15s;
+}
+
+details[open] > .bean-summary::before {
+    transform: rotate(90deg);
+}
+
+.bean-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.bean-meta {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.history-block {
+    margin-top: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.history-summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    list-style: none;
+    user-select: none;
+}
+
+.history-summary::-webkit-details-marker { display: none; }
+
+.history-summary::before {
+    content: '▶';
+    font-size: 0.65rem;
+    color: #94a3b8;
+    margin-right: 6px;
+    transition: transform 0.15s;
+}
+
+details[open] > .history-summary::before {
+    transform: rotate(90deg);
+}
+
+.brew-log {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.brew-entry {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.brew-date {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.brew-notes {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.bean-flavor {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-style: italic;
+    margin: 0 0 8px;
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    width: auto;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.low-stock {
+    background: #fff7ed;
+    color: #c2410c;
 }
 
 .recipe-text {

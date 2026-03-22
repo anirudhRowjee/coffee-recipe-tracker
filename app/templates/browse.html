@@ -2,37 +2,101 @@
 
 {% block content %}
 <div class="grid">
-    {% for bean, recipe in bean_recipes %}
+    {% for bean, recipe, bags_with_remaining, brews, deltas in bean_recipes %}
     <section class="card">
         <h2>{{ bean.name }}</h2>
-        <p style="color:#64748b;font-size:0.85rem;margin:0 0 10px">
-            <span style="color:#94a3b8">ID {{ bean.id }}</span>
+        <p class="bean-meta">
+            <span class="muted">ID {{ bean.id }}</span>
             {% if bean.origin %} · {{ bean.origin }}{% endif %}
             {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
-            {% if bean.roast_date %} · Roasted {{ bean.roast_date.strftime('%b %d, %Y') }}{% endif %}
         </p>
         {% if bean.flavor_notes %}
-        <p style="font-size:0.9rem;margin:0 0 10px"><em>{{ bean.flavor_notes }}</em></p>
+        <p class="bean-flavor">{{ bean.flavor_notes }}</p>
         {% endif %}
+
+        {% if bags_with_remaining %}
+        <table class="delta-table" style="margin:10px 0">
+            <thead>
+                <tr><th>Bag</th><th>Roast date</th><th>Remaining</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% for bag, remaining in bags_with_remaining %}
+                <tr class="{{ 'low-stock' if remaining <= bag.low_threshold_g else '' }}">
+                    <td>#{{ bag.id }}</td>
+                    <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
+                    <td>{{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}</td>
+                    <td>{{ '❄ Frozen' if bag.is_frozen else 'Active' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No bags added yet.</p>
+        {% endif %}
+
         {% if recipe %}
+        <h4>Latest recipe</h4>
         <div class="recipe-card">
             <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
                <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
                <strong>Temp:</strong> {{ recipe.temp_c }} °C &nbsp;·&nbsp;
-               <strong>Grind:</strong> {{ recipe.grind_size }}</p>
+               <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
+               <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
             {% if recipe.recipe_text %}
             <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
             {% endif %}
-            {% if recipe.notes %}
-            <p style="color:#64748b;font-size:0.9rem;margin-top:6px">{{ recipe.notes }}</p>
-            {% endif %}
-            <p style="color:#94a3b8;font-size:0.8rem;margin-top:6px">
-                Last updated {{ recipe.created_at.strftime('%b %d, %Y') }}
-            </p>
+            <p class="muted" style="margin-top:6px">Last brewed {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
         </div>
         {% else %}
-        <p style="color:#94a3b8">No recipes yet.</p>
+        <p class="muted">No recipes yet.</p>
         {% endif %}
+
+        {% if brews or deltas %}
+        <details class="history-block">
+            <summary class="history-summary">
+                History
+                <span class="muted" style="font-weight:normal">
+                    · {{ brews|length }} brew{{ 's' if brews|length != 1 else '' }},
+                      {{ deltas|length }} change{{ 's' if deltas|length != 1 else '' }}
+                </span>
+            </summary>
+
+            {% if brews %}
+            <h4 style="margin-top:12px">Brew log</h4>
+            <div class="brew-log">
+                {% for brew in brews %}
+                <div class="brew-entry">
+                    <span class="brew-date">
+                        {{ brew.brewed_at.strftime('%b %d, %Y') }}
+                        · {{ brew.recipe.dose_g }}g dose · grind {{ brew.recipe.grind_size }}
+                    </span>
+                    <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if deltas %}
+            <h4 style="margin-top:12px">Change history</h4>
+            <table class="delta-table">
+                <thead>
+                    <tr><th>Param</th><th>Change</th><th>Rationale</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                    {% for delta in deltas %}
+                    <tr>
+                        <td>{{ delta.changed_param }}</td>
+                        <td>{{ delta.delta_amount }}</td>
+                        <td>{{ delta.rationale or '-' }}</td>
+                        <td>{{ delta.created_at.strftime('%b %d') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </details>
+        {% endif %}
+
     </section>
     {% else %}
     <section class="card">

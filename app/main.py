@@ -1,4 +1,6 @@
-from fastapi import Depends, FastAPI, Form, Request, HTTPException
+from datetime import date as date_type
+
+from fastapi import FastAPI, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,110 +24,145 @@ def on_startup():
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     with Session(db.engine) as session:
-        beans = crud.get_beans(session)
+        bags = crud.get_all_bags(session)
+        bags_with_remaining = [(bag, crud.get_remaining_quantity(session, bag)) for bag in bags]
         brewers = crud.get_brewers(session)
         grinders = crud.get_grinders(session)
-        return templates.TemplateResponse(
-            "index.html",
-            {
-                "request": request,
-                "beans": beans,
-                "brewers": brewers,
-                "grinders": grinders,
-                "latest_recipe": None,
-                "recent_deltas": [],
-                "message": "",
-            },
-        )
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "bags_with_remaining": bags_with_remaining,
+            "brewers": brewers,
+            "grinders": grinders,
+        })
 
 
 @app.get("/recipes/latest", response_class=HTMLResponse)
-def latest_recipe_partial(request: Request, bean_id: Optional[str] = None, brewer_id: Optional[str] = None, grinder_id: Optional[str] = None):
-    bean_id_int = int(bean_id) if bean_id and bean_id.isdigit() else None
+def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[str] = None, grinder_id: Optional[str] = None):
+    bag_id_int = int(bag_id) if bag_id and bag_id.isdigit() else None
     brewer_id_int = int(brewer_id) if brewer_id and brewer_id.isdigit() else None
     grinder_id_int = int(grinder_id) if grinder_id and grinder_id.isdigit() else None
 
-    if not bean_id_int or not brewer_id_int or not grinder_id_int:
-        return templates.TemplateResponse(
-            "partials/latest_recipe.html",
-            {
-                "request": request,
-                "latest": None,
-                "recent_deltas": [],
-                "bean_id": bean_id_int,
-                "brewer_id": brewer_id_int,
-                "grinder_id": grinder_id_int,
-                "message": "Select bean, brewer, and grinder to show recipes.",
-            },
-        )
+    if not bag_id_int or not brewer_id_int or not grinder_id_int:
+        return templates.TemplateResponse("partials/latest_recipe.html", {
+            "request": request,
+            "latest": None,
+            "recent_brews": [],
+            "recent_deltas": [],
+            "bag": None,
+            "bag_id": bag_id_int,
+            "bean_id": None,
+            "brewer_id": brewer_id_int,
+            "grinder_id": grinder_id_int,
+            "message": "Select a bag, brewer, and grinder to show recipes.",
+        })
 
     with Session(db.engine) as session:
-        latest = crud.get_latest_recipe(session, bean_id_int, brewer_id_int, grinder_id_int)
-        recents = crud.get_recent_deltas(session, bean_id_int, brewer_id_int, grinder_id_int)
-        return templates.TemplateResponse(
-            "partials/latest_recipe.html",
-            {
-                "request": request,
-                "latest": latest,
-                "recent_deltas": recents,
-                "bean_id": bean_id_int,
-                "brewer_id": brewer_id_int,
-                "grinder_id": grinder_id_int,
-                "message": "",
-            },
-        )
+        bag = session.get(models.BeanBag, bag_id_int)
+        if not bag:
+            raise HTTPException(status_code=404, detail="Bag not found")
+
+        bean_id = bag.bean_id
+        latest = crud.get_latest_recipe(session, bean_id, brewer_id_int, grinder_id_int)
+        recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
+        recent_deltas = crud.get_recent_deltas(session, bean_id, brewer_id_int, grinder_id_int)
+        return templates.TemplateResponse("partials/latest_recipe.html", {
+        "request": request,
+        "latest": latest,
+        "recent_brews": recent_brews,
+        "recent_deltas": recent_deltas,
+        "bag": bag,
+        "bag_id": bag_id_int,
+        "bean_id": bean_id,
+        "brewer_id": brewer_id_int,
+        "grinder_id": grinder_id_int,
+        "message": "",
+    })
 
 
 @app.get("/manage", response_class=HTMLResponse)
 def manage(request: Request):
     with Session(db.engine) as session:
-        return templates.TemplateResponse(
-            "manage.html",
-            {
-                "request": request,
-                "beans": crud.get_beans(session),
-                "brewers": crud.get_brewers(session),
-                "grinders": crud.get_grinders(session),
-            },
-        )
+        beans = crud.get_beans(session)
+        beans_with_bags = [
+            (bean, [(bag, crud.get_remaining_quantity(session, bag)) for bag in crud.get_bags_for_bean(session, bean.id)])  # type: ignore[arg-type]
+            for bean in beans
+        ]
+        brewers = crud.get_brewers(session)
+        grinders = crud.get_grinders(session)
+        return templates.TemplateResponse("manage.html", {
+            "request": request,
+            "beans_with_bags": beans_with_bags,
+            "brewers": brewers,
+            "grinders": grinders,
+        })
 
 
 @app.get("/browse", response_class=HTMLResponse)
 def browse(request: Request):
     with Session(db.engine) as session:
         bean_recipes = crud.get_latest_recipe_per_bean(session)
-    return templates.TemplateResponse(
-        "browse.html",
-        {"request": request, "bean_recipes": bean_recipes},
-    )
+        return templates.TemplateResponse("browse.html", {
+            "request": request,
+            "bean_recipes": bean_recipes,
+        })
 
 
 @app.post("/beans")
-def create_bean(name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), roast_date: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
-    from datetime import date as date_type
-    parsed_date = date_type.fromisoformat(roast_date) if roast_date else None
+def create_bean(name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
     with Session(db.engine) as session:
-        bean = crud.create_bean(session, name=name, origin=origin, roast_level=roast_level, roast_date=parsed_date, flavor_notes=flavor_notes, notes=notes)
+        crud.create_bean(session, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)
     return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/bags")
+def create_bag(
+    bean_id: int = Form(...),
+    initial_quantity_g: float = Form(...),
+    roast_date: str = Form(None),
+    purchase_date: str = Form(None),
+    low_threshold_g: float = Form(50.0),
+    is_frozen: bool = Form(False),
+    frozen_date: str = Form(None),
+    notes: str = Form(None),
+):
+    with Session(db.engine) as session:
+        crud.create_bag(
+            session,
+            bean_id=bean_id,
+            initial_quantity_g=initial_quantity_g,
+            roast_date=date_type.fromisoformat(roast_date) if roast_date else None,
+            purchase_date=date_type.fromisoformat(purchase_date) if purchase_date else None,
+            low_threshold_g=low_threshold_g,
+            is_frozen=is_frozen,
+            frozen_date=date_type.fromisoformat(frozen_date) if frozen_date else None,
+            notes=notes,
+        )
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/brews")
+def create_brew(recipe_id: int = Form(...), bag_id: int = Form(...), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        crud.create_brew(session, recipe_id=recipe_id, bag_id=bag_id, notes=notes)
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/brewers")
 def create_brewer(name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
     with Session(db.engine) as session:
-        brewer = crud.create_brewer(session, name=name, method=method, notes=notes)
+        crud.create_brewer(session, name=name, method=method, notes=notes)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/grinders")
 def create_grinder(name: str = Form(...), notes: str = Form(None)):
     with Session(db.engine) as session:
-        grinder = crud.create_grinder(session, name=name, notes=notes)
+        crud.create_grinder(session, name=name, notes=notes)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/recipes")
 def create_recipe(
-    request: Request,
     bean_id: int = Form(...),
     brewer_id: int = Form(...),
     grinder_id: int = Form(...),
@@ -134,28 +171,20 @@ def create_recipe(
     temp_c: float = Form(...),
     grind_size: str = Form(...),
     recipe_text: str = Form(None),
-    notes: str = Form(None),
     previous_recipe_id: int = Form(None),
     changed_param: str = Form(None),
     delta_amount: float = Form(None),
     rationale: str = Form(None),
 ):
     with Session(db.engine) as session:
-        latest = None
         if previous_recipe_id:
-            latest = session.get(models.Recipe, previous_recipe_id)
-            if not latest:
+            prev = session.get(models.Recipe, previous_recipe_id)
+            if not prev:
                 raise HTTPException(status_code=400, detail="Previous recipe not found")
-
-            valid, changed = crud.validate_one_parameter_delta(
-                latest,
-                {
-                    "dose_g": dose_g,
-                    "water_ml": water_ml,
-                    "temp_c": temp_c,
-                    "grind_size": grind_size,
-                },
-            )
+            valid, changed = crud.validate_one_parameter_delta(prev, {
+                "dose_g": dose_g, "water_ml": water_ml,
+                "temp_c": temp_c, "grind_size": grind_size,
+            })
             if not valid:
                 raise HTTPException(status_code=400, detail=f"Must change exactly one parameter. Changed: {changed}")
 
@@ -169,11 +198,10 @@ def create_recipe(
             temp_c=temp_c,
             grind_size=grind_size,
             recipe_text=recipe_text,
-            notes=notes,
             previous_recipe_id=previous_recipe_id,
         )
 
-        if previous_recipe_id and changed_param and delta_amount is not None:
+        if previous_recipe_id and changed_param and delta_amount is not None and recipe.id is not None:
             crud.create_delta(
                 session,
                 from_recipe_id=previous_recipe_id,
@@ -183,4 +211,4 @@ def create_recipe(
                 rationale=rationale,
             )
 
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/", status_code=303)

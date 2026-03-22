@@ -2,6 +2,7 @@
 
 {% block content %}
 <div class="grid">
+
     <section class="card">
         <h2>Beans</h2>
         <button onclick="toggleForm('bean-form')">+ Add Bean</button>
@@ -10,29 +11,70 @@
                 <label>Name <input name="name" placeholder="Bean name" required /></label>
                 <label>Origin <input name="origin" placeholder="Origin" /></label>
                 <label>Roast level <input name="roast_level" placeholder="e.g. Light, Medium, Dark" /></label>
-                <label>Roast date <input name="roast_date" type="date" /></label>
                 <label>Flavor notes <input name="flavor_notes" placeholder="e.g. Blueberry, chocolate, citrus" /></label>
                 <label>Notes <input name="notes" /></label>
                 <button type="submit">Add Bean</button>
             </form>
         </div>
-        {% if beans %}
-        <table class="delta-table" style="margin-top:12px">
-            <thead><tr><th>ID</th><th>Name</th><th>Origin</th><th>Roast</th><th>Roast date</th><th>Flavor notes</th></tr></thead>
-            <tbody>
-                {% for b in beans %}
-                <tr>
-                    <td>{{ b.id }}</td>
-                    <td>{{ b.name }}</td>
-                    <td>{{ b.origin or '-' }}</td>
-                    <td>{{ b.roast_level or '-' }}</td>
-                    <td>{{ b.roast_date.strftime('%b %d, %Y') if b.roast_date else '-' }}</td>
-                    <td>{{ b.flavor_notes or '-' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
+
+        {% for bean, bags in beans_with_bags %}
+        <details class="bean-block">
+            <summary class="bean-summary">
+                <span class="bean-title">{{ bean.name }}</span>
+                <span class="bean-meta">
+                    ID {{ bean.id }}
+                    {% if bean.origin %} · {{ bean.origin }}{% endif %}
+                    {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+                    · {{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
+                </span>
+            </summary>
+
+            {% if bean.flavor_notes %}
+            <p class="bean-flavor">{{ bean.flavor_notes }}</p>
+            {% endif %}
+
+            <button onclick="toggleForm('bag-form-{{ bean.id }}')" class="btn-secondary" style="margin-top:8px">+ Add Bag</button>
+            <div id="bag-form-{{ bean.id }}" class="hidden" style="margin-top:8px">
+                <form method="post" action="/bags" class="stacked-form" novalidate>
+                    <input type="hidden" name="bean_id" value="{{ bean.id }}" />
+                    <label>Initial quantity (g) <input name="initial_quantity_g" type="number" step="1" required /></label>
+                    <label>Roast date <input name="roast_date" type="date" /></label>
+                    <label>Purchase date <input name="purchase_date" type="date" /></label>
+                    <label>Low stock alert (g) <input name="low_threshold_g" type="number" step="1" value="50" /></label>
+                    <label style="display:flex;align-items:center;gap:8px">
+                        <input name="is_frozen" type="checkbox" value="true" style="width:auto" /> Frozen bag
+                    </label>
+                    <label>Frozen date <input name="frozen_date" type="date" /></label>
+                    <label>Notes <input name="notes" /></label>
+                    <button type="submit">Add Bag</button>
+                </form>
+            </div>
+
+            {% if bags %}
+            <table class="delta-table" style="margin-top:10px">
+                <thead>
+                    <tr><th>ID</th><th>Roast date</th><th>Purchased</th><th>Initial</th><th>Remaining</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    {% for bag, remaining in bags %}
+                    <tr class="{{ 'low-stock' if remaining <= bag.low_threshold_g else '' }}">
+                        <td>{{ bag.id }}</td>
+                        <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
+                        <td>{{ bag.purchase_date.strftime('%b %d, %Y') if bag.purchase_date else '-' }}</td>
+                        <td>{{ bag.initial_quantity_g|int }} g</td>
+                        <td>{{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}</td>
+                        <td>{{ '❄ Frozen' if bag.is_frozen else 'Active' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="muted" style="margin-top:8px">No bags yet.</p>
+            {% endif %}
+        </details>
+        {% else %}
+        <p class="muted" style="margin-top:12px">No beans yet.</p>
+        {% endfor %}
     </section>
 
     <section class="card">
@@ -79,5 +121,6 @@
         </table>
         {% endif %}
     </section>
+
 </div>
 {% endblock %}

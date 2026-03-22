@@ -10,7 +10,13 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/manage)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/browse)",
-      "Bash(curl -s http://localhost:8000/manage)"
+      "Bash(curl -s http://localhost:8000/manage)",
+      "Bash(curl -s http://localhost:8000/)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"/ %{http_code}\\\\n\" http://localhost:8000/)",
+      "Bash(curl -s -o /dev/null -w \"/manage %{http_code}\\\\n\" http://localhost:8000/manage)",
+      "Bash(curl -s -o /dev/null -w \"/browse %{http_code}\\\\n\" http://localhost:8000/browse)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:8000/recipes/latest\")"
     ]
   }
 }
