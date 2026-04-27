@@ -83,15 +83,25 @@ def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer
 def manage(request: Request):
     with Session(db.engine) as session:
         beans = crud.get_beans(session)
-        beans_with_bags = [
+        all_beans_with_bags = [
             (bean, [(bag, crud.get_remaining_quantity(session, bag)) for bag in crud.get_bags_for_bean(session, bean.id)])  # type: ignore[arg-type]
             for bean in beans
+        ]
+        # Split into active (has at least one non-completed bag, or no bags) and archived (all bags done)
+        beans_with_bags = [
+            item for item in all_beans_with_bags
+            if not (item[1] and all(bag.is_completed for bag, _ in item[1]))
+        ]
+        archived_beans_with_bags = [
+            item for item in all_beans_with_bags
+            if item[1] and all(bag.is_completed for bag, _ in item[1])
         ]
         brewers = crud.get_brewers(session)
         grinders = crud.get_grinders(session)
         return templates.TemplateResponse("manage.html", {
             "request": request,
             "beans_with_bags": beans_with_bags,
+            "archived_beans_with_bags": archived_beans_with_bags,
             "brewers": brewers,
             "grinders": grinders,
         })
@@ -101,9 +111,18 @@ def manage(request: Request):
 def browse(request: Request):
     with Session(db.engine) as session:
         bean_recipes = crud.get_latest_recipe_per_bean(session)
+        active_bean_recipes = [
+            item for item in bean_recipes
+            if not (item[2] and all(bag.is_completed for bag, _ in item[2]))
+        ]
+        archived_bean_recipes = [
+            item for item in bean_recipes
+            if item[2] and all(bag.is_completed for bag, _ in item[2])
+        ]
         return templates.TemplateResponse("browse.html", {
             "request": request,
-            "bean_recipes": bean_recipes,
+            "bean_recipes": active_bean_recipes,
+            "archived_bean_recipes": archived_bean_recipes,
         })
 
 
@@ -183,6 +202,13 @@ def edit_bag(
 def complete_bag(bag_id: int):
     with Session(db.engine) as session:
         crud.complete_bag(session, bag_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/bags/{bag_id}/unfreeze")
+def unfreeze_bag(bag_id: int):
+    with Session(db.engine) as session:
+        crud.unfreeze_bag(session, bag_id)
     return RedirectResponse(url="/manage", status_code=303)
 
 
@@ -279,11 +305,21 @@ def create_recipe(
     rationale: str = Form(None),
     bag_id: int = Form(None),
     brew_notes: str = Form(None),
+    brew_recommended_param: str = Form(None),
+    brew_recommended_delta: str = Form(None),
+    brew_recommended_rationale: str = Form(None),
 ):
     delta_amount_f: Optional[float] = None
     if delta_amount and delta_amount.strip():
         try:
             delta_amount_f = float(delta_amount)
+        except ValueError:
+            pass
+
+    brew_rec_delta_f: Optional[float] = None
+    if brew_recommended_delta and brew_recommended_delta.strip():
+        try:
+            brew_rec_delta_f = float(brew_recommended_delta)
         except ValueError:
             pass
 
@@ -324,6 +360,14 @@ def create_recipe(
             )
 
         if bag_id and recipe.id is not None:
-            crud.create_brew(session, recipe_id=recipe.id, bag_id=bag_id, notes=brew_notes or None)
+            crud.create_brew(
+                session,
+                recipe_id=recipe.id,
+                bag_id=bag_id,
+                notes=brew_notes or None,
+                recommended_param=brew_recommended_param or None,
+                recommended_delta=brew_rec_delta_f,
+                recommended_rationale=brew_recommended_rationale or None,
+            )
 
     return RedirectResponse(url="/", status_code=303)

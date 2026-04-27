@@ -25,7 +25,7 @@
                     <td>#{{ bag.id }}</td>
                     <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
                     <td>{{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}</td>
-                    <td>{{ '❄ Frozen' if bag.is_frozen else 'Active' }}</td>
+                    <td>{% if bag.is_completed %}✓ Done{% elif bag.is_frozen %}❄ Frozen{% else %}Active{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -103,5 +103,53 @@
         <p>No beans added yet. Go to <a href="/manage">Manage</a> to add some.</p>
     </section>
     {% endfor %}
+
+    {% if archived_bean_recipes %}
+    <section class="card">
+        <details>
+            <summary class="muted" style="cursor:pointer">Archived ({{ archived_bean_recipes|length }} coffee{{ 's' if archived_bean_recipes|length != 1 else '' }} — all bags done)</summary>
+            {% for bean, recipe, bags_with_remaining, brews, deltas in archived_bean_recipes %}
+            <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border,#eee)">
+                <h3 class="muted" style="margin:0 0 4px">{{ bean.name }}</h3>
+                <p class="bean-meta">
+                    <span class="muted">ID {{ bean.id }}</span>
+                    {% if bean.origin %} · {{ bean.origin }}{% endif %}
+                    {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+                </p>
+                {% if bags_with_remaining %}
+                <table class="delta-table" style="margin:8px 0">
+                    <thead>
+                        <tr><th>Bag</th><th>Roast date</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for bag, remaining in bags_with_remaining %}
+                        <tr>
+                            <td>#{{ bag.id }}</td>
+                            <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
+                            <td>✓ Done</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+                {% if recipe %}
+                <h4>Latest recipe</h4>
+                <div class="recipe-card">
+                    <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
+                       <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
+                       <strong>Temp:</strong> {{ recipe.temp_c }} °C &nbsp;·&nbsp;
+                       <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
+                       <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
+                    {% if recipe.recipe_text %}
+                    <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
+                    {% endif %}
+                    <p class="muted" style="margin-top:6px">Last brewed {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </details>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}

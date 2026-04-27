@@ -195,6 +195,16 @@ def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
     return bag
 
 
+def unfreeze_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
+    bag = session.get(models.BeanBag, bag_id)
+    if not bag:
+        return None
+    bag.is_frozen = False
+    bag.frozen_date = None
+    session.commit()
+    return bag
+
+
 def delete_bag(session: Session, bag_id: int) -> None:
     """Delete a bag and its brews. Recipes are preserved (they belong to the bean type)."""
     for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():

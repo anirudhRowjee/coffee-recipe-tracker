@@ -101,6 +101,11 @@
                                 <button type="submit" class="btn-action btn-complete">Done</button>
                             </form>
                             {% endif %}
+                            {% if bag.is_frozen and not bag.is_completed %}
+                            <form method="post" action="/bags/{{ bag.id }}/unfreeze" style="display:inline">
+                                <button type="submit" class="btn-action">Unfreeze</button>
+                            </form>
+                            {% endif %}
                             <form method="post" action="/bags/{{ bag.id }}/delete" style="display:inline" onsubmit="return confirm('Delete bag #{{ bag.id }} and all its brew logs?')">
                                 <button type="submit" class="btn-action btn-danger">Delete</button>
                             </form>
@@ -135,6 +140,87 @@
         {% else %}
         <p class="muted" style="margin-top:12px">No beans yet.</p>
         {% endfor %}
+
+        {% if archived_beans_with_bags %}
+        <details style="margin-top:16px">
+            <summary class="muted" style="cursor:pointer">Archived ({{ archived_beans_with_bags|length }} coffee{{ 's' if archived_beans_with_bags|length != 1 else '' }} — all bags done)</summary>
+            {% for bean, bags in archived_beans_with_bags %}
+            <details class="bean-block">
+                <summary class="bean-summary">
+                    <span class="bean-title muted">{{ bean.name }}</span>
+                    <span class="bean-meta">
+                        ID {{ bean.id }}
+                        {% if bean.origin %} · {{ bean.origin }}{% endif %}
+                        {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+                        · {{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
+                    </span>
+                    <span class="summary-actions">
+                        <button type="button" class="btn-action" onclick="event.stopPropagation(); toggleForm('edit-bean-{{ bean.id }}')">Edit</button>
+                        <form method="post" action="/beans/{{ bean.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ bean.name }} and all its bags, recipes, brews and deltas? This cannot be undone.')">
+                            <button type="submit" class="btn-action btn-danger">Delete</button>
+                        </form>
+                    </span>
+                </summary>
+
+                <div id="edit-bean-{{ bean.id }}" class="hidden edit-form">
+                    <form method="post" action="/beans/{{ bean.id }}/edit" class="stacked-form" novalidate>
+                        <label>Name <input name="name" value="{{ bean.name }}" required /></label>
+                        <label>Origin <input name="origin" value="{{ bean.origin or '' }}" /></label>
+                        <label>Roast level <input name="roast_level" value="{{ bean.roast_level or '' }}" /></label>
+                        <label>Flavor notes <input name="flavor_notes" value="{{ bean.flavor_notes or '' }}" /></label>
+                        <label>Notes <input name="notes" value="{{ bean.notes or '' }}" /></label>
+                        <div class="form-row">
+                            <button type="submit">Save</button>
+                            <button type="button" class="btn-secondary" onclick="toggleForm('edit-bean-{{ bean.id }}')">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+
+                <button onclick="toggleForm('bag-form-archived-{{ bean.id }}')" class="btn-secondary" style="margin-top:8px">+ Add Bag</button>
+                <div id="bag-form-archived-{{ bean.id }}" class="hidden" style="margin-top:8px">
+                    <form method="post" action="/bags" class="stacked-form" novalidate>
+                        <input type="hidden" name="bean_id" value="{{ bean.id }}" />
+                        <label>Initial quantity (g) <input name="initial_quantity_g" type="number" step="1" required /></label>
+                        <label>Roast date <input name="roast_date" type="date" /></label>
+                        <label>Purchase date <input name="purchase_date" type="date" /></label>
+                        <label>Low stock alert (g) <input name="low_threshold_g" type="number" step="1" value="50" /></label>
+                        <label style="display:flex;align-items:center;gap:8px">
+                            <input name="is_frozen" type="checkbox" value="true" style="width:auto" /> Frozen bag
+                        </label>
+                        <label>Frozen date <input name="frozen_date" type="date" /></label>
+                        <label>Notes <input name="notes" /></label>
+                        <button type="submit">Add Bag</button>
+                    </form>
+                </div>
+
+                {% if bags %}
+                <table class="delta-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>ID</th><th>Roast date</th><th>Purchased</th><th>Initial</th><th>Remaining</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for bag, remaining in bags %}
+                        <tr class="row-completed">
+                            <td>{{ bag.id }}</td>
+                            <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
+                            <td>{{ bag.purchase_date.strftime('%b %d, %Y') if bag.purchase_date else '-' }}</td>
+                            <td>{{ bag.initial_quantity_g|int }} g</td>
+                            <td>Completed</td>
+                            <td>✓ Done</td>
+                            <td class="row-actions">
+                                <form method="post" action="/bags/{{ bag.id }}/delete" style="display:inline" onsubmit="return confirm('Delete bag #{{ bag.id }} and all its brew logs?')">
+                                    <button type="submit" class="btn-action btn-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </details>
+            {% endfor %}
+        </details>
+        {% endif %}
     </section>
 
     <section class="card">

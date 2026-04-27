@@ -134,12 +134,42 @@
             </label>
             <label>Tasting notes for this brew</label>
             <textarea name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
-            <button type="submit" style="margin-top:4px">Save variation</button>
+            {% if rec %}
+            <div class="muted" style="font-size:0.85em;margin-top:10px;padding:6px 8px;border-left:3px solid var(--border,#ccc)">
+                Previous recommendation:
+                <strong>{{ rec.recommended_param.replace('_', ' ') }}</strong>
+                {%- if rec.recommended_delta is not none %} {{ '%+g' % rec.recommended_delta }}{%- endif %}
+                {%- if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{%- endif %}
+            </div>
+            {% endif %}
+            <label style="margin-top:10px">Recommend next change</label>
+            <select name="brew_recommended_param" onchange="toggleVarRecDelta(this)">
+                <option value="">— no recommendation —</option>
+                <option value="dose_g">Dose</option>
+                <option value="water_ml">Water</option>
+                <option value="temp_c">Temp</option>
+                <option value="grind_size">Grind size</option>
+                <option value="recipe_text">Recipe text</option>
+            </select>
+            <div id="var-rec-delta-row" style="display:none">
+                <label style="margin-top:6px">By how much
+                    <input name="brew_recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1" />
+                </label>
+            </div>
+            <label>Why
+                <input name="brew_recommended_rationale" placeholder="e.g. still underextracted, try less" />
+            </label>
+            <button type="submit" style="margin-top:8px">Save variation</button>
         </form>
         <script>
             function toggleDeltaAmount(sel) {
                 document.getElementById('delta-amount-row').style.display =
                     sel.value === 'recipe_text' ? 'none' : '';
+            }
+
+            function toggleVarRecDelta(sel) {
+                document.getElementById('var-rec-delta-row').style.display =
+                    (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
             }
 
             function applyRecommendation() {
@@ -162,6 +192,15 @@
                     const fieldInput = form.querySelector('[name="' + param + '"]');
                     fieldInput.value = (parseFloat(fieldInput.value) + delta).toFixed(1);
                     deltaInput.value = delta;
+                } else if (param === 'grind_size' && delta !== null && delta % 1 === 0) {
+                    const fieldInput = form.querySelector('[name="grind_size"]');
+                    const currentVal = fieldInput.value.trim();
+                    if (/^\d+$/.test(currentVal)) {
+                        fieldInput.value = String(parseInt(currentVal, 10) + delta);
+                        deltaInput.value = delta;
+                    } else {
+                        fieldInput.focus();
+                    }
                 } else {
                     const target = form.querySelector('[name="' + param + '"]');
                     if (target) target.focus();
