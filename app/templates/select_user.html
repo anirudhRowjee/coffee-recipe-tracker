@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>Who are you?</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:16px">
+            {% for user in users %}
+            <form method="post" action="/set-user">
+                <input type="hidden" name="user_id" value="{{ user.id }}" />
+                <button type="submit" class="btn-secondary" style="font-size:1.1em;padding:12px 24px">{{ user.name }}</button>
+            </form>
+            {% else %}
+            <p class="muted">No users yet. Add one below.</p>
+            {% endfor %}
+        </div>
+
+        <div style="margin-top:24px;border-top:1px solid var(--border,#eee);padding-top:16px">
+            <button onclick="toggleForm('new-user-form')" class="btn-secondary">+ Add user</button>
+            <div id="new-user-form" class="hidden" style="margin-top:10px">
+                <form method="post" action="/users" class="stacked-form" novalidate>
+                    <label>Name <input name="name" placeholder="Name" required /></label>
+                    <button type="submit">Add</button>
+                </form>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

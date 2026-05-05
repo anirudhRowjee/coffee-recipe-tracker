@@ -19,20 +19,91 @@ templates = Jinja2Templates(directory="app/templates")
 @app.on_event("startup")
 def on_startup():
     db.create_db_and_tables()
+    db.run_migrations()
+
+
+def _get_current_user(request: Request, session: Session) -> Optional[models.User]:
+    uid = request.cookies.get("user_id")
+    if not uid or not uid.isdigit():
+        return None
+    return session.get(models.User, int(uid))
+
+
+def _require_user(request: Request, session: Session):
+    user = _get_current_user(request, session)
+    if not user:
+        raise _redirect_to_select()
+    return user
+
+
+class _redirect_to_select(Exception):
+    pass
+
+
+@app.middleware("http")
+async def user_redirect_middleware(request, call_next):
+    try:
+        return await call_next(request)
+    except _redirect_to_select:
+        r = RedirectResponse(url="/select-user", status_code=302)
+        r.delete_cookie("user_id")
+        return r
+
+
+@app.get("/select-user", response_class=HTMLResponse)
+def select_user(request: Request):
+    with Session(db.engine) as session:
+        users = crud.get_users(session)
+        return templates.TemplateResponse("select_user.html", {
+            "request": request,
+            "users": users,
+            "current_user": None,
+        })
+
+
+@app.post("/set-user")
+def set_user(user_id: int = Form(...)):
+    r = RedirectResponse(url="/", status_code=303)
+    r.set_cookie("user_id", str(user_id), max_age=60 * 60 * 24 * 365)
+    return r
+
+
+@app.post("/users")
+def create_user(request: Request, name: str = Form(...)):
+    with Session(db.engine) as session:
+        user = _get_current_user(request, session)
+        if not user:
+            return RedirectResponse(url="/select-user", status_code=303)
+        crud.create_user(session, name=name)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/users/{target_user_id}/delete")
+def delete_user(target_user_id: int, request: Request):
+    current_uid = request.cookies.get("user_id")
+    with Session(db.engine) as session:
+        crud.delete_user(session, target_user_id)
+    if current_uid and current_uid.isdigit() and int(current_uid) == target_user_id:
+        r = RedirectResponse(url="/select-user", status_code=303)
+        r.delete_cookie("user_id")
+        return r
+    return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     with Session(db.engine) as session:
-        bags = crud.get_all_bags(session)
+        user = _require_user(request, session)
+        bags = crud.get_active_bags_for_user(session, user.id)  # type: ignore[arg-type]
         bags_with_remaining = [(bag, crud.get_remaining_quantity(session, bag)) for bag in bags]
-        brewers = crud.get_brewers(session)
-        grinders = crud.get_grinders(session)
+        brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
+        grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
         return templates.TemplateResponse("index.html", {
             "request": request,
             "bags_with_remaining": bags_with_remaining,
             "brewers": brewers,
             "grinders": grinders,
+            "current_user": user,
         })
 
 
@@ -66,70 +137,76 @@ def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer
         recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
         recent_deltas = crud.get_recent_deltas(session, bean_id, brewer_id_int, grinder_id_int)
         return templates.TemplateResponse("partials/latest_recipe.html", {
-        "request": request,
-        "latest": latest,
-        "recent_brews": recent_brews,
-        "recent_deltas": recent_deltas,
-        "bag": bag,
-        "bag_id": bag_id_int,
-        "bean_id": bean_id,
-        "brewer_id": brewer_id_int,
-        "grinder_id": grinder_id_int,
-        "message": "",
-    })
+            "request": request,
+            "latest": latest,
+            "recent_brews": recent_brews,
+            "recent_deltas": recent_deltas,
+            "bag": bag,
+            "bag_id": bag_id_int,
+            "bean_id": bean_id,
+            "brewer_id": brewer_id_int,
+            "grinder_id": grinder_id_int,
+            "message": "",
+        })
 
 
 @app.get("/manage", response_class=HTMLResponse)
 def manage(request: Request):
     with Session(db.engine) as session:
-        beans = crud.get_beans(session)
+        user = _require_user(request, session)
+        beans = crud.get_beans(session, user.id)  # type: ignore[arg-type]
         all_beans_with_bags = [
             (bean, [(bag, crud.get_remaining_quantity(session, bag)) for bag in crud.get_bags_for_bean(session, bean.id)])  # type: ignore[arg-type]
             for bean in beans
         ]
-        # Split into active (has at least one non-completed bag, or no bags) and archived (all bags done)
-        beans_with_bags = [
-            item for item in all_beans_with_bags
-            if not (item[1] and all(bag.is_completed for bag, _ in item[1]))
+        active_beans_with_bags = [
+            (bean, bags) for bean, bags in all_beans_with_bags
+            if not bags or any(not bag.is_completed for bag, _ in bags)
         ]
         archived_beans_with_bags = [
-            item for item in all_beans_with_bags
-            if item[1] and all(bag.is_completed for bag, _ in item[1])
+            (bean, bags) for bean, bags in all_beans_with_bags
+            if bags and all(bag.is_completed for bag, _ in bags)
         ]
-        brewers = crud.get_brewers(session)
-        grinders = crud.get_grinders(session)
+        brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
+        grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
+        all_users = crud.get_users(session)
         return templates.TemplateResponse("manage.html", {
             "request": request,
-            "beans_with_bags": beans_with_bags,
+            "beans_with_bags": active_beans_with_bags,
             "archived_beans_with_bags": archived_beans_with_bags,
             "brewers": brewers,
             "grinders": grinders,
+            "current_user": user,
+            "all_users": all_users,
         })
 
 
 @app.get("/browse", response_class=HTMLResponse)
 def browse(request: Request):
     with Session(db.engine) as session:
-        bean_recipes = crud.get_latest_recipe_per_bean(session)
-        active_bean_recipes = [
-            item for item in bean_recipes
-            if not (item[2] and all(bag.is_completed for bag, _ in item[2]))
+        user = _require_user(request, session)
+        all_bean_recipes = crud.get_latest_recipe_per_bean(session, user.id)  # type: ignore[arg-type]
+        bean_recipes = [
+            entry for entry in all_bean_recipes
+            if not entry[2] or any(not bag.is_completed for bag, _ in entry[2])
         ]
         archived_bean_recipes = [
-            item for item in bean_recipes
-            if item[2] and all(bag.is_completed for bag, _ in item[2])
+            entry for entry in all_bean_recipes
+            if entry[2] and all(bag.is_completed for bag, _ in entry[2])
         ]
         return templates.TemplateResponse("browse.html", {
             "request": request,
-            "bean_recipes": active_bean_recipes,
+            "bean_recipes": bean_recipes,
             "archived_bean_recipes": archived_bean_recipes,
+            "current_user": user,
         })
 
 
 @app.post("/beans")
-def create_bean(name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
+def create_bean(request: Request, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
     with Session(db.engine) as session:
-        crud.create_bean(session, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)
+        user = _require_user(request, session)
+        crud.create_bean(session, user_id=user.id, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)  # type: ignore[arg-type]
     return RedirectResponse(url="/manage", status_code=303)
 
 
@@ -205,13 +282,6 @@ def complete_bag(bag_id: int):
     return RedirectResponse(url="/manage", status_code=303)
 
 
-@app.post("/bags/{bag_id}/unfreeze")
-def unfreeze_bag(bag_id: int):
-    with Session(db.engine) as session:
-        crud.unfreeze_bag(session, bag_id)
-    return RedirectResponse(url="/manage", status_code=303)
-
-
 @app.post("/bags/{bag_id}/delete")
 def delete_bag(bag_id: int):
     with Session(db.engine) as session:
@@ -247,6 +317,22 @@ def delete_grinder(grinder_id: int):
     return RedirectResponse(url="/manage", status_code=303)
 
 
+@app.post("/brewers")
+def create_brewer(request: Request, name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        crud.create_brewer(session, user_id=user.id, name=name, method=method, notes=notes)  # type: ignore[arg-type]
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/grinders")
+def create_grinder(request: Request, name: str = Form(...), notes: str = Form(None)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        crud.create_grinder(session, user_id=user.id, name=name, notes=notes)  # type: ignore[arg-type]
+    return RedirectResponse(url="/manage", status_code=303)
+
+
 @app.post("/brews")
 def create_brew(
     recipe_id: int = Form(...),
@@ -273,20 +359,6 @@ def create_brew(
             recommended_rationale=recommended_rationale or None,
         )
     return RedirectResponse(url="/", status_code=303)
-
-
-@app.post("/brewers")
-def create_brewer(name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
-    with Session(db.engine) as session:
-        crud.create_brewer(session, name=name, method=method, notes=notes)
-    return RedirectResponse(url="/manage", status_code=303)
-
-
-@app.post("/grinders")
-def create_grinder(name: str = Form(...), notes: str = Form(None)):
-    with Session(db.engine) as session:
-        crud.create_grinder(session, name=name, notes=notes)
-    return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/recipes")
@@ -316,10 +388,10 @@ def create_recipe(
         except ValueError:
             pass
 
-    brew_rec_delta_f: Optional[float] = None
+    brew_rec_delta: Optional[float] = None
     if brew_recommended_delta and brew_recommended_delta.strip():
         try:
-            brew_rec_delta_f = float(brew_recommended_delta)
+            brew_rec_delta = float(brew_recommended_delta)
         except ValueError:
             pass
 
@@ -366,7 +438,7 @@ def create_recipe(
                 bag_id=bag_id,
                 notes=brew_notes or None,
                 recommended_param=brew_recommended_param or None,
-                recommended_delta=brew_rec_delta_f,
+                recommended_delta=brew_rec_delta,
                 recommended_rationale=brew_recommended_rationale or None,
             )
 

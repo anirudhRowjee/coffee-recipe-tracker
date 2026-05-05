@@ -6,16 +6,53 @@ from sqlmodel import Session, select
 from . import models
 
 
-def get_beans(session: Session) -> List[models.Bean]:
-    return session.exec(select(models.Bean).order_by(models.Bean.name)).all()
+def get_users(session: Session) -> List[models.User]:
+    return list(session.exec(select(models.User).order_by(models.User.name)).all())
 
 
-def get_brewers(session: Session) -> List[models.Brewer]:
-    return session.exec(select(models.Brewer).order_by(models.Brewer.name)).all()
+def create_user(session: Session, name: str) -> models.User:
+    user = models.User(name=name)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
-def get_grinders(session: Session) -> List[models.Grinder]:
-    return session.exec(select(models.Grinder).order_by(models.Grinder.name)).all()
+def delete_user(session: Session, user_id: int) -> None:
+    for bean in session.exec(select(models.Bean).where(models.Bean.user_id == user_id)).all():
+        delete_bean(session, bean.id)  # type: ignore[arg-type]
+    for brewer in session.exec(select(models.Brewer).where(models.Brewer.user_id == user_id)).all():
+        delete_brewer(session, brewer.id)  # type: ignore[arg-type]
+    for grinder in session.exec(select(models.Grinder).where(models.Grinder.user_id == user_id)).all():
+        delete_grinder(session, grinder.id)  # type: ignore[arg-type]
+    user = session.get(models.User, user_id)
+    if user:
+        session.delete(user)
+    session.commit()
+
+
+def get_beans(session: Session, user_id: int) -> List[models.Bean]:
+    return list(session.exec(
+        select(models.Bean)
+        .where(models.Bean.user_id == user_id)
+        .order_by(models.Bean.name)
+    ).all())
+
+
+def get_brewers(session: Session, user_id: int) -> List[models.Brewer]:
+    return list(session.exec(
+        select(models.Brewer)
+        .where(models.Brewer.user_id == user_id)
+        .order_by(models.Brewer.name)
+    ).all())
+
+
+def get_grinders(session: Session, user_id: int) -> List[models.Grinder]:
+    return list(session.exec(
+        select(models.Grinder)
+        .where(models.Grinder.user_id == user_id)
+        .order_by(models.Grinder.name)
+    ).all())
 
 
 def get_bags_for_bean(session: Session, bean_id: int) -> List[models.BeanBag]:
@@ -26,9 +63,13 @@ def get_bags_for_bean(session: Session, bean_id: int) -> List[models.BeanBag]:
     ).all()
 
 
-def get_all_bags(session: Session) -> List[models.BeanBag]:
+def get_active_bags_for_user(session: Session, user_id: int) -> List[models.BeanBag]:
     return session.exec(
-        select(models.BeanBag).order_by(models.BeanBag.purchase_date.desc())  # type: ignore[union-attr]
+        select(models.BeanBag)
+        .join(models.Bean, models.Bean.id == models.BeanBag.bean_id)  # type: ignore[arg-type]
+        .where(models.Bean.user_id == user_id)
+        .where(models.BeanBag.is_completed == False)  # noqa: E712
+        .order_by(models.BeanBag.purchase_date.desc())  # type: ignore[union-attr]
     ).all()
 
 
@@ -72,8 +113,8 @@ def get_recent_deltas(session: Session, bean_id: int, brewer_id: int, grinder_id
     ).all()
 
 
-def create_bean(session: Session, name: str, origin: Optional[str] = None, roast_level: Optional[str] = None, flavor_notes: Optional[str] = None, notes: Optional[str] = None) -> models.Bean:
-    bean = models.Bean(name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)
+def create_bean(session: Session, user_id: int, name: str, origin: Optional[str] = None, roast_level: Optional[str] = None, flavor_notes: Optional[str] = None, notes: Optional[str] = None) -> models.Bean:
+    bean = models.Bean(user_id=user_id, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)
     session.add(bean)
     session.commit()
     session.refresh(bean)
@@ -105,16 +146,16 @@ def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[s
     return brew
 
 
-def create_brewer(session: Session, name: str, method: Optional[str] = None, notes: Optional[str] = None) -> models.Brewer:
-    brewer = models.Brewer(name=name, method=method, notes=notes)
+def create_brewer(session: Session, user_id: int, name: str, method: Optional[str] = None, notes: Optional[str] = None) -> models.Brewer:
+    brewer = models.Brewer(user_id=user_id, name=name, method=method, notes=notes)
     session.add(brewer)
     session.commit()
     session.refresh(brewer)
     return brewer
 
 
-def create_grinder(session: Session, name: str, notes: Optional[str] = None) -> models.Grinder:
-    grinder = models.Grinder(name=name, notes=notes)
+def create_grinder(session: Session, user_id: int, name: str, notes: Optional[str] = None) -> models.Grinder:
+    grinder = models.Grinder(user_id=user_id, name=name, notes=notes)
     session.add(grinder)
     session.commit()
     session.refresh(grinder)
@@ -135,13 +176,11 @@ def update_bean(session: Session, bean_id: int, name: str, origin: Optional[str]
 
 
 def delete_bean(session: Session, bean_id: int) -> None:
-    """Delete a bean and cascade to its recipes (+ their brews/deltas) and bags (+ their brews)."""
     recipe_ids = [r.id for r in session.exec(
         select(models.Recipe).where(models.Recipe.bean_id == bean_id)
     ).all()]
 
     if recipe_ids:
-        # Deltas referencing these recipes
         for delta in session.exec(
             select(models.Delta).where(
                 (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
@@ -149,7 +188,6 @@ def delete_bean(session: Session, bean_id: int) -> None:
             )
         ).all():
             session.delete(delta)
-        # Brews referencing these recipes
         for brew in session.exec(
             select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
         ).all():
@@ -159,7 +197,6 @@ def delete_bean(session: Session, bean_id: int) -> None:
         ).all():
             session.delete(recipe)
 
-    # Bags and any remaining brews linked to them
     for bag in session.exec(select(models.BeanBag).where(models.BeanBag.bean_id == bean_id)).all():
         for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag.id)).all():
             session.delete(brew)
@@ -195,18 +232,7 @@ def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
     return bag
 
 
-def unfreeze_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
-    bag = session.get(models.BeanBag, bag_id)
-    if not bag:
-        return None
-    bag.is_frozen = False
-    bag.frozen_date = None
-    session.commit()
-    return bag
-
-
 def delete_bag(session: Session, bag_id: int) -> None:
-    """Delete a bag and its brews. Recipes are preserved (they belong to the bean type)."""
     for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():
         session.delete(brew)
     bag = session.get(models.BeanBag, bag_id)
@@ -227,7 +253,6 @@ def update_brewer(session: Session, brewer_id: int, name: str, method: Optional[
 
 
 def delete_brewer(session: Session, brewer_id: int) -> None:
-    """Delete a brewer and cascade to its recipes (+ their brews/deltas)."""
     recipe_ids = [r.id for r in session.exec(
         select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
     ).all()]
@@ -264,7 +289,6 @@ def update_grinder(session: Session, grinder_id: int, name: str, notes: Optional
 
 
 def delete_grinder(session: Session, grinder_id: int) -> None:
-    """Delete a grinder and cascade to its recipes (+ their brews/deltas)."""
     recipe_ids = [r.id for r in session.exec(
         select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
     ).all()]
@@ -305,7 +329,6 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
             except (TypeError, ValueError):
                 if old_value != new_value:
                     changed.append(f)
-    # recipe_text is a string comparison
     old_text = base.recipe_text or ""
     new_text = new_values.get("recipe_text") or ""
     if old_text != new_text:
@@ -365,8 +388,12 @@ def get_deltas_for_bean(session: Session, bean_id: int, limit: int = 30) -> List
     ).all()
 
 
-def get_latest_recipe_per_bean(session: Session):
-    beans = session.exec(select(models.Bean).order_by(models.Bean.name)).all()
+def get_latest_recipe_per_bean(session: Session, user_id: int):
+    beans = session.exec(
+        select(models.Bean)
+        .where(models.Bean.user_id == user_id)
+        .order_by(models.Bean.name)
+    ).all()
     result = []
     for bean in beans:
         latest = session.exec(

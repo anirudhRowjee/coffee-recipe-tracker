@@ -23,6 +23,9 @@
                 <a href="/">Brew</a>
                 <a href="/browse">Browse</a>
                 <a href="/manage">Manage</a>
+                {% if current_user %}
+                <a href="/select-user" style="margin-left:auto;font-weight:600">{{ current_user.name }}</a>
+                {% endif %}
             </nav>
         </header>
         <main>

@@ -269,6 +269,38 @@
     </section>
 
     <section class="card">
+        <h2>Users</h2>
+        <button onclick="toggleForm('user-form')">+ Add User</button>
+        <div id="user-form" class="hidden" style="margin-top:10px">
+            <form method="post" action="/users" class="stacked-form" novalidate>
+                <label>Name <input name="name" placeholder="Name" required /></label>
+                <button type="submit">Add User</button>
+            </form>
+        </div>
+        {% if all_users %}
+        <table class="delta-table" style="margin-top:12px">
+            <thead><tr><th>Name</th><th></th></tr></thead>
+            <tbody>
+                {% for u in all_users %}
+                <tr>
+                    <td>
+                        {{ u.name }}
+                        {% if u.id == current_user.id %}<span class="muted"> (you)</span>{% endif %}
+                    </td>
+                    <td class="row-actions">
+                        <form method="post" action="/users/{{ u.id }}/delete" style="display:inline"
+                            onsubmit="return confirm('Delete {{ u.name }} and all their beans, brewers, grinders, recipes and brews? This cannot be undone.')">
+                            <button type="submit" class="btn-action btn-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+
+    <section class="card">
         <h2>Grinders</h2>
         <button onclick="toggleForm('grinder-form')">+ Add Grinder</button>
         <div id="grinder-form" class="hidden" style="margin-top:10px">

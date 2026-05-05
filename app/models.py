@@ -4,6 +4,15 @@ from typing import List, Optional
 from sqlmodel import Field, Relationship, SQLModel
 
 
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+    beans: List["Bean"] = Relationship(back_populates="user")
+    brewers: List["Brewer"] = Relationship(back_populates="user")
+    grinders: List["Grinder"] = Relationship(back_populates="user")
+
+
 class Bean(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -11,7 +20,9 @@ class Bean(SQLModel, table=True):
     roast_level: Optional[str] = None
     flavor_notes: Optional[str] = None
     notes: Optional[str] = None
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
+    user: Optional["User"] = Relationship(back_populates="beans")
     bags: List["BeanBag"] = Relationship(back_populates="bean")
     recipes: List["Recipe"] = Relationship(back_populates="bean")
 
@@ -39,7 +50,9 @@ class Brewer(SQLModel, table=True):
     name: str
     method: Optional[str] = None
     notes: Optional[str] = None
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
+    user: Optional["User"] = Relationship(back_populates="brewers")
     recipes: List["Recipe"] = Relationship(back_populates="brewer")
 
 
@@ -47,7 +60,9 @@ class Grinder(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     notes: Optional[str] = None
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
+    user: Optional["User"] = Relationship(back_populates="grinders")
     recipes: List["Recipe"] = Relationship(back_populates="grinder")
 
 
