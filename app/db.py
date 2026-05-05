@@ -23,6 +23,12 @@ def run_migrations():
             except Exception:
                 pass  # column already exists
 
+        try:
+            conn.execute(text("ALTER TABLE beanbag ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
         result = conn.execute(text("SELECT COUNT(*) FROM user")).scalar()
         if result == 0:
             conn.execute(text("INSERT INTO user (id, name) VALUES (1, 'Anirudh')"))
