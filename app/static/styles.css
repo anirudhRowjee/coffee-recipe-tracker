@@ -451,6 +451,135 @@ details[open] > .history-summary::before {
     font-size: 0.85rem;
 }
 
+.bag-picker-btn {
+    background: #fffdf9;
+    color: #8c6a4f;
+    border: 1px dashed #d4b896;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border-radius: 8px;
+    width: 100%;
+}
+
+.bag-picker-btn--selected {
+    color: #2c1810;
+    border-style: solid;
+    border-color: #a0622a;
+    background: #faf4ec;
+}
+
+.bag-picker-btn:hover {
+    background: #f5ebe0;
+    border-color: #a0622a;
+}
+
+.bag-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(44, 24, 16, 0.4);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.bag-modal-overlay.hidden {
+    display: none;
+}
+
+.bag-modal {
+    background: #fffcf7;
+    border: 1px solid #e0c9b0;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 40px rgba(44, 24, 16, 0.18);
+}
+
+.bag-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 10px;
+    border-bottom: 1px solid #e0c9b0;
+}
+
+.bag-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #3b1f0e;
+}
+
+.bag-modal-close {
+    background: none;
+    border: none;
+    color: #a08060;
+    font-size: 1rem;
+    cursor: pointer;
+    width: auto;
+    padding: 2px 6px;
+}
+
+.bag-modal-close:hover {
+    color: #3b1f0e;
+    background: #f0e4d4;
+    border-radius: 4px;
+}
+
+.bag-modal input[type="text"] {
+    margin: 10px 14px;
+    width: calc(100% - 28px);
+    border-radius: 8px;
+}
+
+.bag-modal-list {
+    overflow-y: auto;
+    padding: 4px 14px 14px;
+    display: grid;
+    gap: 8px;
+}
+
+.bag-card {
+    background: #faf4ec;
+    border: 1px solid #e0c9b0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.bag-card:hover {
+    background: #f5ebe0;
+    border-color: #a0622a;
+}
+
+.bag-card-title {
+    font-weight: 600;
+    color: #3b1f0e;
+    font-size: 0.95rem;
+}
+
+.bag-card-flavor {
+    color: #6b3d2e;
+    font-size: 0.9rem;
+    font-style: italic;
+    font-family: Georgia, serif;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.bag-card-meta {
+    color: #a08060;
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
 @media (min-width: 700px) {
     .grid {
         grid-template-columns: 1fr;

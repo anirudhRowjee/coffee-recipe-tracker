@@ -95,7 +95,10 @@ def index(request: Request):
     with Session(db.engine) as session:
         user = _require_user(request, session)
         bags = crud.get_active_bags_for_user(session, user.id)  # type: ignore[arg-type]
-        bags_with_remaining = [(bag, crud.get_remaining_quantity(session, bag)) for bag in bags]
+        bags_with_remaining = [
+            (bag, rem) for bag in bags
+            if (rem := crud.get_remaining_quantity(session, bag)) > 0
+        ]
         brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
         grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
         return templates.TemplateResponse("index.html", {

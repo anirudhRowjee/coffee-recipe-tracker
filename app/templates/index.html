@@ -6,23 +6,15 @@
         <h2>Select bag + brewer + grinder</h2>
         <form id="picker-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change"
             class="stacked-form">
+
             <div class="form-group">
                 <label>Bag</label>
-                <select id="bag-select" name="bag_id" required>
-                    <option value="" disabled selected>Choose a bag</option>
-                    {% for bag, remaining in bags_with_remaining %}
-                    {% if not bag.is_completed %}
-                    <option value="{{ bag.id }}">
-                        {{ bag.bean.name }}
-                        {% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %}
-                        · {{ remaining|int }}g remaining
-                        {% if bag.is_frozen %} ❄{% endif %}
-                        {% if remaining <= bag.low_threshold_g %} ⚠{% endif %}
-                    </option>
-                    {% endif %}
-                    {% endfor %}
-                </select>
+                <input type="hidden" name="bag_id" id="bag_id_input" value="" />
+                <button type="button" class="bag-picker-btn" id="bag-picker-btn" onclick="openBagModal()">
+                    Choose a bag
+                </button>
             </div>
+
             <div class="form-group">
                 <label>Brewer</label>
                 <select id="brewer-select" name="brewer_id" required>
@@ -32,6 +24,7 @@
                     {% endfor %}
                 </select>
             </div>
+
             <div class="form-group">
                 <label>Grinder</label>
                 <select id="grinder-select" name="grinder_id" required>
@@ -49,4 +42,77 @@
         <p>Select a bag, brewer, and grinder to load the recipe.</p>
     </section>
 </div>
+
+{# Bag picker modal #}
+<div id="bag-modal-overlay" class="bag-modal-overlay hidden" onclick="closeBagModalOnOverlay(event)">
+    <div class="bag-modal">
+        <div class="bag-modal-header">
+            <h3>Pick a bag</h3>
+            <button type="button" class="bag-modal-close" onclick="closeBagModal()">✕</button>
+        </div>
+        <input type="text" id="bag-search" placeholder="Search by bean name or flavor notes…"
+            oninput="filterBags(this.value)" autocomplete="off" />
+        <div class="bag-modal-list" id="bag-modal-list">
+            {% for bag, remaining in bags_with_remaining %}
+            {% set bag_label %}{{ bag.bean.name }}{% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %} · {{ remaining|int }}g{% endset %}
+            <div class="bag-card"
+                data-name="{{ bag.bean.name | lower }}"
+                data-flavor="{{ (bag.bean.flavor_notes or '') | lower }}"
+                data-id="{{ bag.id }}"
+                data-label="{{ bag_label }}"
+                onclick="selectBag(this.dataset.id, this.dataset.label)">
+                <div class="bag-card-title">{{ bag.bean.name }}</div>
+                {% if bag.bean.flavor_notes %}
+                <div class="bag-card-flavor">{{ bag.bean.flavor_notes }}</div>
+                {% endif %}
+                <div class="bag-card-meta">
+                    {% if bag.roast_date %}{{ bag.roast_date.strftime('%b %d, %Y') }} · {% endif %}
+                    {{ remaining|int }}g remaining
+                    {% if bag.is_frozen %} · ❄ Frozen{% endif %}
+                    {% if remaining <= bag.low_threshold_g %} · ⚠ Low{% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p class="muted" style="padding:12px">No active bags.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function openBagModal() {
+        document.getElementById('bag-modal-overlay').classList.remove('hidden');
+        setTimeout(() => document.getElementById('bag-search').focus(), 50);
+    }
+
+    function closeBagModal() {
+        document.getElementById('bag-modal-overlay').classList.add('hidden');
+        document.getElementById('bag-search').value = '';
+        filterBags('');
+    }
+
+    function closeBagModalOnOverlay(e) {
+        if (e.target === document.getElementById('bag-modal-overlay')) closeBagModal();
+    }
+
+    function filterBags(query) {
+        const q = query.toLowerCase();
+        document.querySelectorAll('.bag-card').forEach(card => {
+            const matches = card.dataset.name.includes(q) || card.dataset.flavor.includes(q);
+            card.style.display = matches ? '' : 'none';
+        });
+    }
+
+    function selectBag(id, label) {
+        document.getElementById('bag_id_input').value = id;
+        document.getElementById('bag-picker-btn').textContent = label;
+        document.getElementById('bag-picker-btn').classList.add('bag-picker-btn--selected');
+        closeBagModal();
+        document.getElementById('bag_id_input').dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeBagModal();
+    });
+</script>
 {% endblock %}
