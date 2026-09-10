@@ -101,6 +101,16 @@ class Brew(SQLModel, table=True):
     bag: Optional[BeanBag] = Relationship(back_populates="brews")
 
 
+class PlannedBrew(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    bag_id: int = Field(foreign_key="beanbag.id")
+    brewer_id: int = Field(foreign_key="brewer.id")
+    grinder_id: int = Field(foreign_key="grinder.id")
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Delta(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     from_recipe_id: int = Field(foreign_key="recipe.id")

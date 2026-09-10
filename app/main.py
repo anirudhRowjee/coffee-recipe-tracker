@@ -1,3 +1,4 @@
+import random
 from datetime import date as date_type
 
 from fastapi import FastAPI, Form, Request, HTTPException
@@ -14,6 +15,76 @@ app = FastAPI(title="Coffee Recipe Tracker")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
+
+PIXEL_ART_COLORS = [
+    # coffee browns
+    "#f5ebe0", "#e0c9b0", "#d4b896", "#c4956a", "#a08060", "#8c6a4f", "#7a4f32", "#5c3520", "#4a2a1e", "#3b1f0e",
+    # caramel / amber
+    "#fcd9a0", "#f5c87a", "#e0a458", "#c68a3d", "#92400e", "#8a5a2b",
+    # matcha greens
+    "#c9d97a", "#a8b545", "#7c9a3d", "#4d6b2f",
+]
+
+QUOTES = [
+    # Coffee-flavored
+    "Good things happen slowly, one cup at a time.",
+    "Small adjustments, better mornings.",
+    "The best brew is the one you paid attention to.",
+    "Patience tastes like a well-timed pour.",
+    "Every recipe is a rough draft until proven right.",
+    "Today's grind is tomorrow's dial-in.",
+    "Consistency is the secret ingredient.",
+    "One variable at a time, one cup at a time.",
+    "The perfect cup doesn't exist — the next one does.",
+    "Slow down. The coffee isn't going anywhere.",
+    "Taste first, tweak second.",
+    "A quiet morning starts with a careful pour.",
+    "Brew with intention, sip with attention.",
+    "Great mornings are brewed, not found.",
+    "Today's cup is data for tomorrow's cup.",
+    # General
+    "Start before you feel ready.",
+    "Progress hides inside repetition.",
+    "Curiosity is a renewable resource.",
+    "The quiet hours are often the most productive.",
+    "Focus is saying no to almost everything.",
+    "Discipline looks like freedom from the outside.",
+    "Small steps, repeated, become momentum.",
+    "Done is a decision, not an accident.",
+    "Attention is the rarest form of generosity.",
+    "You don't need permission to begin.",
+    "Clarity comes from doing, not thinking.",
+    "The work reveals itself once you start.",
+    "Habits are just decisions you've already made.",
+    "Rest is part of the process, not a break from it.",
+    "Every expert was once a beginner who didn't quit.",
+    "Momentum is easier to keep than to build.",
+    "Simplicity is the reward of hard editing.",
+    "Precision is a form of care.",
+    "Notice everything. Change one thing.",
+    "The best time to start was earlier. The next best time is now.",
+]
+
+
+def _generate_pixel_art_svg(grid: int = 12, cell: int = 7, fill_chance: float = 0.62, asymmetry_chance: float = 0.4) -> str:
+    half = grid // 2
+    size = grid * cell
+
+    def _pixel() -> Optional[str]:
+        return random.choice(PIXEL_ART_COLORS) if random.random() < fill_chance else None
+
+    rows: list = []
+    for _y in range(grid):
+        row = [_pixel() for _ in range(half)]
+        mirrored = [row[i] if random.random() >= asymmetry_chance else _pixel() for i in range(half)]
+        rows.append(row + mirrored[::-1])
+
+    rects = []
+    for y, row in enumerate(rows):
+        for x, color in enumerate(row):
+            if color:
+                rects.append(f'<rect x="{x * cell}" y="{y * cell}" width="{cell}" height="{cell}" fill="{color}" />')
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}" role="img" aria-label="Generative pixel art">{"".join(rects)}</svg>'
 
 
 @app.on_event("startup")
@@ -90,6 +161,45 @@ def delete_user(target_user_id: int, request: Request):
     return RedirectResponse(url="/manage", status_code=303)
 
 
+def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_id_int: Optional[int], grinder_id_int: Optional[int], user_id: Optional[int]) -> dict:
+    pending_plan = crud.get_pending_plan(session, user_id) if user_id else None
+
+    if not bag_id_int or not brewer_id_int or not grinder_id_int:
+        return {
+            "latest": None,
+            "recent_brews": [],
+            "recent_deltas": [],
+            "bag": None,
+            "bag_id": bag_id_int,
+            "bean_id": None,
+            "brewer_id": brewer_id_int,
+            "grinder_id": grinder_id_int,
+            "message": "Select a bag, brewer, and grinder to show recipes.",
+            "pending_plan": pending_plan,
+        }
+
+    bag = session.get(models.BeanBag, bag_id_int)
+    if not bag:
+        raise HTTPException(status_code=404, detail="Bag not found")
+
+    bean_id = bag.bean_id
+    latest = crud.get_latest_recipe(session, bean_id, brewer_id_int, grinder_id_int)
+    recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
+    recent_deltas = crud.get_recent_deltas(session, bean_id, brewer_id_int, grinder_id_int)
+    return {
+        "latest": latest,
+        "recent_brews": recent_brews,
+        "recent_deltas": recent_deltas,
+        "bag": bag,
+        "bag_id": bag_id_int,
+        "bean_id": bean_id,
+        "brewer_id": brewer_id_int,
+        "grinder_id": grinder_id_int,
+        "message": "",
+        "pending_plan": pending_plan,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     with Session(db.engine) as session:
@@ -101,13 +211,23 @@ def index(request: Request):
         ]
         brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
         grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
-        return templates.TemplateResponse("index.html", {
+
+        pending_plan = crud.get_pending_plan(session, user.id)  # type: ignore[arg-type]
+        context = {
             "request": request,
             "bags_with_remaining": bags_with_remaining,
             "brewers": brewers,
             "grinders": grinders,
             "current_user": user,
-        })
+            "pending_plan": pending_plan,
+            "pixel_art_svg": _generate_pixel_art_svg(),
+            "morning_quote": random.choice(QUOTES),
+        }
+        if pending_plan:
+            context.update(_latest_recipe_context(session, pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, user.id))  # type: ignore[arg-type]
+            if context.get("bag"):
+                context["planned_bag_remaining"] = crud.get_remaining_quantity(session, context["bag"])
+        return templates.TemplateResponse("index.html", context)
 
 
 @app.get("/recipes/latest", response_class=HTMLResponse)
@@ -116,41 +236,11 @@ def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer
     brewer_id_int = int(brewer_id) if brewer_id and brewer_id.isdigit() else None
     grinder_id_int = int(grinder_id) if grinder_id and grinder_id.isdigit() else None
 
-    if not bag_id_int or not brewer_id_int or not grinder_id_int:
-        return templates.TemplateResponse("partials/latest_recipe.html", {
-            "request": request,
-            "latest": None,
-            "recent_brews": [],
-            "recent_deltas": [],
-            "bag": None,
-            "bag_id": bag_id_int,
-            "bean_id": None,
-            "brewer_id": brewer_id_int,
-            "grinder_id": grinder_id_int,
-            "message": "Select a bag, brewer, and grinder to show recipes.",
-        })
-
     with Session(db.engine) as session:
-        bag = session.get(models.BeanBag, bag_id_int)
-        if not bag:
-            raise HTTPException(status_code=404, detail="Bag not found")
-
-        bean_id = bag.bean_id
-        latest = crud.get_latest_recipe(session, bean_id, brewer_id_int, grinder_id_int)
-        recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
-        recent_deltas = crud.get_recent_deltas(session, bean_id, brewer_id_int, grinder_id_int)
-        return templates.TemplateResponse("partials/latest_recipe.html", {
-            "request": request,
-            "latest": latest,
-            "recent_brews": recent_brews,
-            "recent_deltas": recent_deltas,
-            "bag": bag,
-            "bag_id": bag_id_int,
-            "bean_id": bean_id,
-            "brewer_id": brewer_id_int,
-            "grinder_id": grinder_id_int,
-            "message": "",
-        })
+        user = _get_current_user(request, session)
+        context = _latest_recipe_context(session, bag_id_int, brewer_id_int, grinder_id_int, user.id if user else None)  # type: ignore[arg-type]
+        context["request"] = request
+        return templates.TemplateResponse("partials/latest_recipe.html", context)
 
 
 @app.get("/manage", response_class=HTMLResponse)
@@ -197,10 +287,19 @@ def browse(request: Request):
             entry for entry in all_bean_recipes
             if entry[2] and all(bag.is_completed for bag, _ in entry[2])
         ]
+        brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
+        grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
+        active_bags_by_bean = {
+            bean.id: [(bag, rem) for bag, rem in bags_with_remaining if not bag.is_completed]
+            for bean, _, bags_with_remaining, _, _ in bean_recipes
+        }
         return templates.TemplateResponse("browse.html", {
             "request": request,
             "bean_recipes": bean_recipes,
             "archived_bean_recipes": archived_bean_recipes,
+            "brewers": brewers,
+            "grinders": grinders,
+            "active_bags_by_bean": active_bags_by_bean,
             "current_user": user,
         })
 
@@ -336,6 +435,28 @@ def create_grinder(request: Request, name: str = Form(...), notes: str = Form(No
     return RedirectResponse(url="/manage", status_code=303)
 
 
+@app.post("/plan")
+def create_plan(
+    request: Request,
+    bag_id: int = Form(...),
+    brewer_id: int = Form(...),
+    grinder_id: int = Form(...),
+    notes: str = Form(None),
+):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None)  # type: ignore[arg-type]
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/plan/{plan_id}/cancel")
+def cancel_plan(plan_id: int, request: Request):
+    with Session(db.engine) as session:
+        _require_user(request, session)
+        crud.delete_plan(session, plan_id)
+    return RedirectResponse(url="/", status_code=303)
+
+
 @app.post("/brews")
 def create_brew(
     recipe_id: int = Form(...),
@@ -344,6 +465,7 @@ def create_brew(
     recommended_param: str = Form(None),
     recommended_delta: str = Form(None),
     recommended_rationale: str = Form(None),
+    planned_brew_id: int = Form(None),
 ):
     rec_delta: Optional[float] = None
     if recommended_delta and recommended_delta.strip():
@@ -361,6 +483,8 @@ def create_brew(
             recommended_delta=rec_delta,
             recommended_rationale=recommended_rationale or None,
         )
+        if planned_brew_id:
+            crud.delete_plan(session, planned_brew_id)
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -383,6 +507,7 @@ def create_recipe(
     brew_recommended_param: str = Form(None),
     brew_recommended_delta: str = Form(None),
     brew_recommended_rationale: str = Form(None),
+    planned_brew_id: int = Form(None),
 ):
     delta_amount_f: Optional[float] = None
     if delta_amount and delta_amount.strip():
@@ -444,5 +569,8 @@ def create_recipe(
                 recommended_delta=brew_rec_delta,
                 recommended_rationale=brew_recommended_rationale or None,
             )
+
+        if planned_brew_id:
+            crud.delete_plan(session, planned_brew_id)
 
     return RedirectResponse(url="/", status_code=303)

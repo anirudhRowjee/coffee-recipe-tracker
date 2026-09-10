@@ -4,6 +4,7 @@
 
 {% if latest %}
 {% set rec = recent_brews[0] if recent_brews and recent_brews[0].recommended_param else none %}
+{% set is_current_plan = pending_plan and pending_plan.bag_id == bag_id and pending_plan.brewer_id == brewer_id and pending_plan.grinder_id == grinder_id %}
 <div class="recipe-card">
     <p><strong>Dose:</strong> {{ latest.dose_g }} g &nbsp;·&nbsp;
        <strong>Water:</strong> {{ latest.water_ml }} ml &nbsp;·&nbsp;
@@ -14,6 +15,23 @@
     <pre class="recipe-text">{{ latest.recipe_text }}</pre>
     {% endif %}
 </div>
+
+{% if is_current_plan %}
+<div class="plan-status">
+    <span>📅 Planned for next time{% if pending_plan.notes %} — "{{ pending_plan.notes }}"{% endif %}</span>
+    <form method="post" action="/plan/{{ pending_plan.id }}/cancel" style="display:inline">
+        <button type="submit" class="btn-action">Cancel</button>
+    </form>
+</div>
+{% else %}
+<form method="post" action="/plan" class="plan-form">
+    <input type="hidden" name="bag_id" value="{{ bag_id }}" />
+    <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
+    <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+    <input type="text" name="notes" placeholder="Optional note (e.g. want it stronger)" />
+    <button type="submit">📅 Plan for next time</button>
+</form>
+{% endif %}
 
 {% if recent_brews and recent_brews[0].recommended_param %}
 {% set rec = recent_brews[0] %}
@@ -27,12 +45,13 @@
 </div>
 {% endif %}
 
-<details class="history-block" style="margin-top:12px">
+<details class="history-block" style="margin-top:12px" {% if is_current_plan %}open{% endif %}>
     <summary class="history-summary">Log a brew</summary>
     <div style="margin-top:10px">
         <form method="post" action="/brews" class="stacked-form">
             <input type="hidden" name="recipe_id" value="{{ latest.id }}" />
             <input type="hidden" name="bag_id" value="{{ bag_id }}" />
+            {% if is_current_plan %}<input type="hidden" name="planned_brew_id" value="{{ pending_plan.id }}" />{% endif %}
             <label>Tasting notes</label>
             <textarea name="notes" rows="3" placeholder="How did it taste?"></textarea>
             <label style="margin-top:8px">Recommend next change</label>
@@ -101,6 +120,7 @@
             <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
             <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
             <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
+            {% if is_current_plan %}<input type="hidden" name="planned_brew_id" value="{{ pending_plan.id }}" />{% endif %}
             <label>Dose (g)
                 <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required />
             </label>

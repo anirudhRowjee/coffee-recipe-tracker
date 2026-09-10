@@ -21,6 +21,47 @@ h1, h2, h3, h4 {
     margin: 0 auto;
 }
 
+.morning-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.pixel-art {
+    flex-shrink: 0;
+    line-height: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0c9b0;
+    background: #faf6f0;
+}
+
+.pixel-art svg {
+    display: block;
+}
+
+.greeting {
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    font-size: 1.8rem;
+    font-weight: normal;
+    color: #3b1f0e;
+    letter-spacing: -0.01em;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.quote {
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    font-style: italic;
+    font-size: 1.15rem;
+    color: #5c3520;
+    margin: 0;
+    padding-left: 16px;
+    border-left: 2px solid #d4b896;
+}
+
 header h1 {
     margin: 0 0 8px;
     font-size: 1.8rem;
@@ -181,6 +222,19 @@ footer {
     padding-bottom: 14px;
 }
 
+.card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 10px;
+}
+
+.card-header h2 {
+    margin: 0;
+    min-width: 0;
+}
+
 .bean-summary {
     display: flex;
     align-items: baseline;
@@ -243,6 +297,36 @@ details[open] > .bean-summary::before {
 
 details[open] > .history-summary::before {
     transform: rotate(90deg);
+}
+
+.plan-status {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    background: #eef3e2;
+    border: 1px solid #b7cf9e;
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: #365314;
+}
+
+.plan-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.plan-form input {
+    flex: 1;
+    width: auto;
+}
+
+.plan-form button {
+    width: auto;
+    white-space: nowrap;
 }
 
 .recommendation-banner {

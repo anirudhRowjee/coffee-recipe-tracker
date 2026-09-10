@@ -3,8 +3,14 @@
 {% block content %}
 <div class="grid">
     {% for bean, recipe, bags_with_remaining, brews, deltas in bean_recipes %}
+    {% set active_bags = active_bags_by_bean.get(bean.id, []) %}
     <section class="card">
-        <h2>{{ bean.name }}</h2>
+        <div class="card-header">
+            <h2>{{ bean.name }}</h2>
+            {% if active_bags and brewers and grinders %}
+            <button type="button" class="btn-action" onclick="toggleForm('schedule-form-{{ bean.id }}')">📅 Schedule next brew</button>
+            {% endif %}
+        </div>
         <p class="bean-meta">
             <span class="muted">ID {{ bean.id }}</span>
             {% if bean.origin %} · {{ bean.origin }}{% endif %}
@@ -12,6 +18,38 @@
         </p>
         {% if bean.flavor_notes %}
         <p class="bean-flavor">{{ bean.flavor_notes }}</p>
+        {% endif %}
+
+        {% if active_bags and brewers and grinders %}
+        <div id="schedule-form-{{ bean.id }}" class="hidden edit-form">
+            <form method="post" action="/plan" class="stacked-form">
+                <label>Bag
+                    <select name="bag_id" required>
+                        {% for bag, remaining in active_bags %}
+                        <option value="{{ bag.id }}">#{{ bag.id }}{% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %} · {{ remaining|int }}g</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Brewer
+                    <select name="brewer_id" required>
+                        <option value="" disabled selected>Choose</option>
+                        {% for brewer in brewers %}
+                        <option value="{{ brewer.id }}">{{ brewer.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Grinder
+                    <select name="grinder_id" required>
+                        <option value="" disabled selected>Choose</option>
+                        {% for grinder in grinders %}
+                        <option value="{{ grinder.id }}">{{ grinder.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Note <input name="notes" placeholder="Optional note (e.g. want it stronger)" /></label>
+                <button type="submit" style="margin-top:8px">📅 Schedule this brew</button>
+            </form>
+        </div>
         {% endif %}
 
         {% if bags_with_remaining %}

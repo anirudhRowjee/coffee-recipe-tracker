@@ -200,6 +200,7 @@ def delete_bean(session: Session, bean_id: int) -> None:
     for bag in session.exec(select(models.BeanBag).where(models.BeanBag.bean_id == bean_id)).all():
         for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag.id)).all():
             session.delete(brew)
+        _delete_plans_for_bag(session, bag.id)  # type: ignore[arg-type]
         session.delete(bag)
 
     bean = session.get(models.Bean, bean_id)
@@ -235,6 +236,7 @@ def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
 def delete_bag(session: Session, bag_id: int) -> None:
     for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():
         session.delete(brew)
+    _delete_plans_for_bag(session, bag_id)
     bag = session.get(models.BeanBag, bag_id)
     if bag:
         session.delete(bag)
@@ -272,6 +274,8 @@ def delete_brewer(session: Session, brewer_id: int) -> None:
             select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
         ).all():
             session.delete(recipe)
+    for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.brewer_id == brewer_id)).all():
+        session.delete(plan)
     brewer = session.get(models.Brewer, brewer_id)
     if brewer:
         session.delete(brewer)
@@ -308,6 +312,8 @@ def delete_grinder(session: Session, grinder_id: int) -> None:
             select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
         ).all():
             session.delete(recipe)
+    for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.grinder_id == grinder_id)).all():
+        session.delete(plan)
     grinder = session.get(models.Grinder, grinder_id)
     if grinder:
         session.delete(grinder)
@@ -386,6 +392,38 @@ def get_deltas_for_bean(session: Session, bean_id: int, limit: int = 30) -> List
         .order_by(models.Delta.created_at.desc())  # type: ignore[union-attr]
         .limit(limit)
     ).all()
+
+
+def get_pending_plan(session: Session, user_id: int) -> Optional[models.PlannedBrew]:
+    return session.exec(
+        select(models.PlannedBrew)
+        .where(models.PlannedBrew.user_id == user_id)
+        .order_by(models.PlannedBrew.created_at.desc())  # type: ignore[union-attr]
+    ).first()
+
+
+def create_plan(session: Session, user_id: int, bag_id: int, brewer_id: int, grinder_id: int, notes: Optional[str] = None) -> models.PlannedBrew:
+    for existing in session.exec(
+        select(models.PlannedBrew).where(models.PlannedBrew.user_id == user_id)
+    ).all():
+        session.delete(existing)
+    plan = models.PlannedBrew(user_id=user_id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes)
+    session.add(plan)
+    session.commit()
+    session.refresh(plan)
+    return plan
+
+
+def delete_plan(session: Session, plan_id: int) -> None:
+    plan = session.get(models.PlannedBrew, plan_id)
+    if plan:
+        session.delete(plan)
+    session.commit()
+
+
+def _delete_plans_for_bag(session: Session, bag_id: int) -> None:
+    for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.bag_id == bag_id)).all():
+        session.delete(plan)
 
 
 def get_latest_recipe_per_bean(session: Session, user_id: int):
