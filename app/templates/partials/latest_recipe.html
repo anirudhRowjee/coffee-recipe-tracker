@@ -6,6 +6,9 @@
 {% set rec = recent_brews[0] if recent_brews and recent_brews[0].recommended_param else none %}
 {% set is_current_plan = pending_plan and pending_plan.bag_id == bag_id and pending_plan.brewer_id == brewer_id and pending_plan.grinder_id == grinder_id %}
 <div class="recipe-card">
+    {% if bag %}
+    <p class="recipe-bean-name">{{ bag.bean.name }}</p>
+    {% endif %}
     <p><strong>Dose:</strong> {{ latest.dose_g }} g &nbsp;·&nbsp;
        <strong>Water:</strong> {{ latest.water_ml }} ml &nbsp;·&nbsp;
        <strong>Temp:</strong> {{ latest.temp_c }} °C &nbsp;·&nbsp;

@@ -402,6 +402,14 @@ details[open] > .history-summary::before {
     margin-top: 8px;
 }
 
+.recipe-bean-name {
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #3b1f0e;
+    margin: 0 0 6px;
+}
+
 .btn-secondary {
     background: #f0e4d4;
     color: #5c3520;
