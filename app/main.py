@@ -111,14 +111,14 @@ class _redirect_to_select(Exception):
     pass
 
 
-@app.middleware("http")
-async def user_redirect_middleware(request, call_next):
-    try:
-        return await call_next(request)
-    except _redirect_to_select:
-        r = RedirectResponse(url="/select-user", status_code=302)
-        r.delete_cookie("user_id")
-        return r
+# An exception handler, not an HTTP middleware: with some starlette versions
+# (prod's 0.46) a middleware that catches this still sends the redirect but
+# then re-raises the exception, logging a traceback on every redirect.
+@app.exception_handler(_redirect_to_select)
+def _redirect_to_select_handler(request: Request, exc: _redirect_to_select):
+    r = RedirectResponse(url="/select-user", status_code=302)
+    r.delete_cookie("user_id")
+    return r
 
 
 @app.get("/select-user", response_class=HTMLResponse)

@@ -152,7 +152,9 @@ Scripts that run as their own process (like `scripts/migrate.py`) only see the m
 
 ### 9. Routes that need a user call `_require_user`
 
-`_require_user(request, session)` raises `_redirect_to_select`, which the `user_redirect_middleware` turns into a redirect to `/select-user` (and clears a stale cookie). Use it in any page or create route that needs the current user; list queries in `crud` take `user_id` and filter on it.
+`_require_user(request, session)` raises `_redirect_to_select`, which the `_redirect_to_select_handler` exception handler turns into a redirect to `/select-user` (and clears a stale cookie). Use it in any page or create route that needs the current user; list queries in `crud` take `user_id` and filter on it.
+
+Keep it an `@app.exception_handler`. It used to be an `@app.middleware("http")` that caught the exception; under prod's starlette 0.46 that still sent the redirect but then re-raised, logging a traceback on every redirect (and failing the first deploy's on-VPS tests). Avoid `BaseHTTPMiddleware` for control flow in general.
 
 ---
 

@@ -51,7 +51,7 @@ $(git status --short --untracked-files=no)"
 git fetch -q origin
 SHA=$(git rev-parse HEAD)
 [ "$SHA" = "$(git rev-parse origin/main)" ] || die "main is not pushed (origin/main is $(git rev-parse --short origin/main))"
-.venv/bin/pytest -q -p no:warnings tests/ | tail -1
+.venv/bin/pytest -q -p no:warnings tests/
 
 PREV=$(on_vps "git -C $APP rev-parse HEAD" < /dev/null)
 [ "$PREV" = "$SHA" ] && die "prod is already at $(git log --oneline -1 "$SHA")"
@@ -64,10 +64,10 @@ fetch "$BACKUPS/coffee-$STAMP-predeploy.db" "$LOCAL_BACKUP"
 echo "copied to $LOCAL_BACKUP"
 
 step "Rehearsing on the prod backup (locally)"
-COFFEE_REFERENCE_DB="$LOCAL_BACKUP" .venv/bin/pytest -q -p no:warnings tests/ | tail -1
+COFFEE_REFERENCE_DB="$LOCAL_BACKUP" .venv/bin/pytest -q -p no:warnings tests/
 
 step "Ready to deploy to $HOST"
-git log --oneline "$PREV..$SHA"
+git --no-pager log --oneline "$PREV..$SHA"
 if [ "$YES" != --yes ]; then
     read -r -p "Deploy these commits? [y/N] " answer
     [ "$answer" = y ] || die "aborted; prod untouched"

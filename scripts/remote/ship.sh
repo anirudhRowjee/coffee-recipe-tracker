@@ -71,7 +71,13 @@ if ! git diff --quiet "$PREV" "$SHA" -- requirements.txt; then
 fi
 
 say "running tests with prod's packages against the backup"
-COFFEE_REFERENCE_DB="$BACKUP" .venv/bin/python -m pytest -q -p no:warnings -p no:cacheprovider tests/ | tail -1
+TEST_LOG=$BACKUPS/pytest-$STAMP.log
+if ! COFFEE_REFERENCE_DB="$BACKUP" .venv/bin/python -m pytest -q -p no:warnings -p no:cacheprovider tests/ > "$TEST_LOG" 2>&1; then
+    grep -E '^(FAILED|ERROR) ' "$TEST_LOG" | sed 's/^/  [vps]   /' || true
+    say "$(tail -1 "$TEST_LOG") — full output in $TEST_LOG"
+    false
+fi
+say "$(tail -1 "$TEST_LOG")"
 
 say "migrating"
 .venv/bin/python scripts/migrate.py | sed 's/^/  [vps]   /'

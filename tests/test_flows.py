@@ -56,6 +56,13 @@ def test_no_user_cookie_redirects_to_select_user(app_on):
     assert r.status_code == 302 and r.headers["location"] == "/select-user"
 
 
+def test_stale_user_cookie_redirects_and_is_cleared(app_on):
+    a = app_on(user_id=999)
+    r = a.client.get("/browse", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == "/select-user"
+    assert 'user_id=""' in r.headers["set-cookie"] and "Max-Age=0" in r.headers["set-cookie"]
+
+
 def test_incomplete_selection_prompts(app):
     r = app.client.get("/recipes/latest", params={"bag_id": 1})
     assert "Select a bag, brewer, and grinder" in r.text
