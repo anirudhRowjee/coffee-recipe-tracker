@@ -161,6 +161,9 @@ def test_every_named_recipe_exports(app_on, reference_db):
         r = app.client.get(f"/lines/{line['id']}/export.md")
         assert r.status_code == 200, line
         assert f"\n- Grind: {line['grind']} on " in r.text, line
+        r = app.client.get(f"/lines/{line['id']}/brew")
+        assert r.status_code == 200, line
+        assert f"<dt>Grind</dt>\n            <dd>{line['grind']}</dd>" in r.text, line
 
 
 def test_startup_keeps_existing_rows_intact(app_on, reference_db, original):

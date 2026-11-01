@@ -30,6 +30,7 @@
     <pre class="recipe-text">{{ latest.recipe_text }}</pre>
     {% endif %}
     {% if line %}
+    <a class="btn-brew" href="/lines/{{ line.id }}/brew?bag_id={{ bag_id }}{% if is_current_plan %}&amp;plan_id={{ pending_plan.id }}{% endif %}">▶ Brew</a>
     <p class="share-links">
         <a href="/lines/{{ line.id }}/export.md" target="_blank" rel="noopener">Share as text</a>
         · <a href="/lines/{{ line.id }}/export.md?download=1">Download .md</a>
@@ -70,40 +71,9 @@
 <details class="history-block" style="margin-top:12px" {% if is_current_plan %}open{% endif %}>
     <summary class="history-summary">Log a brew</summary>
     <div style="margin-top:10px">
-        <form method="post" action="/brews" class="stacked-form">
-            <input type="hidden" name="recipe_id" value="{{ latest.id }}" />
-            <input type="hidden" name="bag_id" value="{{ bag_id }}" />
-            {% if is_current_plan %}<input type="hidden" name="planned_brew_id" value="{{ pending_plan.id }}" />{% endif %}
-            <label>Tasting notes</label>
-            <textarea name="notes" rows="3" placeholder="How did it taste?"></textarea>
-            <label style="margin-top:8px">Recommend next change</label>
-            <select name="recommended_param" onchange="toggleRecDelta(this)">
-                <option value="">— no recommendation —</option>
-                <option value="dose_g">Dose</option>
-                <option value="water_ml">Water</option>
-                <option value="temp_c">Temp</option>
-                <option value="grind_size">Grind size</option>
-                <option value="recipe_text">Recipe text</option>
-            </select>
-            <div id="rec-delta-row" style="display:none">
-                <label style="margin-top:6px">By how much
-                    <span class="signed-input">
-                        <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
-                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
-                    </span>
-                </label>
-            </div>
-            <label>Why
-                <input name="recommended_rationale" placeholder="e.g. slightly bitter, try less" />
-            </label>
-            <button type="submit" style="margin-top:8px">Log brew</button>
-        </form>
-        <script>
-            function toggleRecDelta(sel) {
-                document.getElementById('rec-delta-row').style.display =
-                    (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
-            }
-        </script>
+        {% with log_recipe_id=latest.id, log_bag_id=bag_id, log_plan_id=(pending_plan.id if is_current_plan else none) %}
+        {% include 'partials/log_brew_form.html' %}
+        {% endwith %}
 
         {% if recent_brews %}
         <div class="brew-log" style="margin-top:12px">

@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 from typing import Optional
 
-from . import crud, db, export, models
+from . import brew, crud, db, export, models
 
 app = FastAPI(title="Coffee Recipe Tracker")
 
@@ -487,6 +487,44 @@ def rename_line(line_id: int, name: str = Form(...)):
             raise HTTPException(status_code=400, detail=f'There is already a recipe called "{name}" for this combination')
         crud.rename_line(session, line_id, name)
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/lines/{line_id}/brew", response_class=HTMLResponse)
+def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan_id: Optional[int] = None):
+    """Brew mode: the named recipe's current version in large type, with a
+    timer that follows the times written in the method, and the log form."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = session.get(models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id) if line else None
+        if not line or not latest or not latest.bean or not latest.grinder:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        # Logging needs a bag of this bean; a stale or foreign one just hides the form
+        bag = session.get(models.BeanBag, bag_id) if bag_id else None
+        if bag and bag.bean_id != line.bean_id:
+            bag = None
+        plan = session.get(models.PlannedBrew, plan_id) if plan_id else None
+        if not (plan and bag and plan.user_id == user.id and plan.bag_id == bag.id
+                and (plan.brewer_id, plan.grinder_id) == (line.brewer_id, line.grinder_id)
+                and plan.line_id in (None, line.id)):
+            plan = None
+        return templates.TemplateResponse("brew.html", {
+            "request": request,
+            "current_user": user,
+            "line": line,
+            "latest": latest,
+            "title": export.title(line, latest.bean),
+            "params": [
+                ("Dose", f"{latest.dose_g:g} g"),
+                ("Water", f"{latest.water_ml:g} ml"),
+                ("Ratio", export.ratio(latest)),
+                ("Temp", f"{latest.temp_c:g} °C"),
+                ("Grind", latest.grind_size),
+            ],
+            "steps": brew.parse_steps(latest.recipe_text),
+            "bag": bag,
+            "plan_id": plan.id if plan else None,
+        })
 
 
 @app.get("/lines/{line_id}/export.md")

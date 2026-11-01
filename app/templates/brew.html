@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="card brew-mode">
+    <p class="brew-back"><a href="/">← Back</a></p>
+    <h2 class="brew-title">{{ title }}</h2>
+    <p class="muted brew-gear">{{ latest.brewer.name }} · {{ latest.grinder.name }}</p>
+
+    <dl class="brew-params">
+        {% for label, value in params %}
+        <div>
+            <dt>{{ label }}</dt>
+            <dd>{{ value }}</dd>
+        </div>
+        {% endfor %}
+    </dl>
+
+    {# Shown by the script below; without JavaScript the page is just the recipe #}
+    <div class="brew-timer" id="brew-timer" hidden>
+        <div class="brew-clock" id="brew-clock">0:00</div>
+        <p class="brew-next" id="brew-next"></p>
+        <div class="brew-controls">
+            <button type="button" id="brew-start">Start</button>
+            <button type="button" id="brew-reset" class="btn-secondary" hidden>Reset</button>
+        </div>
+    </div>
+
+    {% if steps %}
+    {# not an <ol>: methods usually carry their own bullets or numbers #}
+    <ul class="brew-steps">
+        {% for step in steps %}
+        <li data-times="{{ step.times|join(',') }}">{{ step.text }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+
+{% if bag %}
+<section class="card">
+    <h3>Log this brew</h3>
+    {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id %}
+    {% include 'partials/log_brew_form.html' %}
+    {% endwith %}
+</section>
+{% endif %}
+
+<script>
+    // ES5 on purpose: the Kindle's browser is old. Times come from data-times
+    // on each step (seconds, parsed server-side by app/brew.py).
+    (function () {
+        var timer = document.getElementById('brew-timer');
+        if (!timer || !Date.now || !document.querySelectorAll) return;
+        timer.hidden = false;
+
+        var clock = document.getElementById('brew-clock');
+        var next = document.getElementById('brew-next');
+        var startBtn = document.getElementById('brew-start');
+        var resetBtn = document.getElementById('brew-reset');
+        var steps = Array.prototype.slice.call(document.querySelectorAll('.brew-steps li'));
+
+        var events = [];  // {t: seconds, i: step index}, in time order
+        steps.forEach(function (li, i) {
+            (li.getAttribute('data-times') || '').split(',').forEach(function (t) {
+                if (t !== '') events.push({ t: parseInt(t, 10), i: i });
+            });
+        });
+        events.sort(function (a, b) { return a.t - b.t; });
+
+        var startedAt = null;   // Date.now() at start, so backgrounding can't drift it
+        var stoppedAt = 0;      // elapsed seconds while stopped
+        var tick = null, lastEvent = -1, audio = null, wakeLock = null;
+
+        function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+        function elapsed() { return startedAt === null ? stoppedAt : Math.floor((Date.now() - startedAt) / 1000); }
+
+        function beep() {
+            if (!audio) return;
+            try {
+                var osc = audio.createOscillator(), gain = audio.createGain();
+                osc.frequency.value = 880;
+                gain.gain.value = 0.2;
+                osc.connect(gain);
+                gain.connect(audio.destination);
+                osc.start();
+                osc.stop(audio.currentTime + 0.3);
+            } catch (e) { /* no sound is fine */ }
+        }
+
+        function keepAwake() {
+            if (!('wakeLock' in navigator)) return;
+            navigator.wakeLock.request('screen').then(function (lock) { wakeLock = lock; })['catch'](function () {});
+        }
+        function letSleep() {
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        }
+
+        function render() {
+            var s = elapsed(), current = -1, upcoming = null;
+            clock.textContent = fmt(s);
+            for (var k = 0; k < events.length; k++) {
+                if (events[k].t <= s) { current = k; } else { upcoming = events[k]; break; }
+            }
+            if (startedAt !== null && current > lastEvent && events[current].t > 0) beep();
+            lastEvent = current;
+            steps.forEach(function (li) { li.className = ''; });
+            if (current >= 0) steps[events[current].i].className = 'brew-step-now';
+            if (upcoming) {
+                next.textContent = 'Next in ' + fmt(upcoming.t - s) + ': ' + steps[upcoming.i].textContent;
+            } else {
+                next.textContent = events.length && current >= 0 ? 'That was the last timed step' : '';
+            }
+        }
+
+        function stop() {
+            stoppedAt = elapsed();
+            startedAt = null;
+            clearInterval(tick);
+            letSleep();
+            startBtn.textContent = 'Resume';
+            resetBtn.hidden = false;
+            render();
+            var notes = document.getElementById('log-notes');
+            if (notes && stoppedAt > 0) {
+                var line = 'Brewed ' + fmt(stoppedAt);
+                notes.value = /^Brewed \d+:\d\d/.test(notes.value)
+                    ? notes.value.replace(/^Brewed \d+:\d\d/, line)
+                    : (notes.value ? line + '\n' + notes.value : line);
+            }
+        }
+
+        function start() {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx && !audio) { try { audio = new Ctx(); } catch (e) { audio = null; } }
+            startedAt = Date.now() - stoppedAt * 1000;
+            tick = setInterval(render, 250);
+            keepAwake();
+            startBtn.textContent = 'Stop';
+            resetBtn.hidden = true;
+            render();
+        }
+
+        startBtn.addEventListener('click', function () { if (startedAt === null) { start(); } else { stop(); } });
+        resetBtn.addEventListener('click', function () {
+            stoppedAt = 0;
+            lastEvent = -1;
+            startBtn.textContent = 'Start';
+            resetBtn.hidden = true;
+            render();
+        });
+        // the browser drops the wake lock when the tab is hidden; take it back
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && startedAt !== null) keepAwake();
+        });
+        render();
+    })();
+</script>
+{% endblock %}

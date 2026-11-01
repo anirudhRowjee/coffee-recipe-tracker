@@ -1,0 +1,37 @@
+{# Log a brew. Expects log_recipe_id, log_bag_id and optionally log_plan_id
+   (the scheduled brew this consumes). Used by the recipe panel and brew mode;
+   one per page (ids below). #}
+<form method="post" action="/brews" class="stacked-form" id="log-brew-form">
+    <input type="hidden" name="recipe_id" value="{{ log_recipe_id }}" />
+    <input type="hidden" name="bag_id" value="{{ log_bag_id }}" />
+    {% if log_plan_id %}<input type="hidden" name="planned_brew_id" value="{{ log_plan_id }}" />{% endif %}
+    <label>Tasting notes</label>
+    <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
+    <label style="margin-top:8px">Recommend next change</label>
+    <select name="recommended_param" onchange="toggleRecDelta(this)">
+        <option value="">— no recommendation —</option>
+        <option value="dose_g">Dose</option>
+        <option value="water_ml">Water</option>
+        <option value="temp_c">Temp</option>
+        <option value="grind_size">Grind size</option>
+        <option value="recipe_text">Recipe text</option>
+    </select>
+    <div id="rec-delta-row" style="display:none">
+        <label style="margin-top:6px">By how much
+            <span class="signed-input">
+                <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
+                <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+            </span>
+        </label>
+    </div>
+    <label>Why
+        <input name="recommended_rationale" placeholder="e.g. slightly bitter, try less" />
+    </label>
+    <button type="submit" style="margin-top:8px">Log brew</button>
+</form>
+<script>
+    function toggleRecDelta(sel) {
+        document.getElementById('rec-delta-row').style.display =
+            (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
+    }
+</script>

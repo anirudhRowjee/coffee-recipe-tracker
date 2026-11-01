@@ -20,7 +20,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 ## Design philosophy
 
-**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel and its named-recipe picker), the searchable bag-picker modal on the brew page, the ± sign button on signed amounts, and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
+**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel and its named-recipe picker), the searchable bag-picker modal on the brew page, the ± sign button on signed amounts, the brew-mode timer (`brew.html`, ES5 so the Kindle's old browser doesn't choke; without JavaScript the page is still the full recipe), and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
 
 **Server-rendered, not API-first.** Routes return HTML, not JSON. Forms POST to endpoints that redirect. This keeps the Kindle-compatibility high and the codebase small.
 
@@ -188,11 +188,14 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 |---|---|
 | `app/models.py` | SQLModel ORM definitions. All schema changes start here. |
 | `app/crud.py` | All DB reads and writes. No business logic in routes — it belongs here. |
+| `app/brew.py` | Brew mode: `parse_steps` splits a method into lines and picks out `m:ss` times (skipping ratios like "1:16" and the end of ranges like "3:30–4:00"). Server-side so it's tested in pytest; the page's script only keeps time. |
 | `app/export.py` | Named recipe → shareable Markdown (`GET /lines/{id}/export.md`, `?download=1` for a file). Whitelists what it shows; see "Sharing recipes". |
 | `app/db.py` | Engine (path overridable with `COFFEE_DB`), session factory, `create_db_and_tables()`, `run_migrations()` (creates missing tables, additive column adds, user seeding, Default named-recipe backfill). |
 | `app/main.py` | FastAPI routes. Thin — calls crud, returns TemplateResponse. Also user-cookie helpers, the morning banner's pixel art and quotes. |
 | `app/templates/base.html` | Nav bar (with current user link), page shell, `toggleForm()` and `flipSign()` JS helpers. |
 | `app/templates/select_user.html` | Pick which user you are (sets the `user_id` cookie). |
+| `app/templates/brew.html` | Brew mode (`GET /lines/{id}/brew?bag_id=&plan_id=`): large parameters, timer, steps with `data-times`, and the log form when the bag belongs to this bean. `plan_id` is only honoured if it is the current user's plan for this bag/brewer/grinder/line, so logging from here clears the schedule like the panel does. |
+| `app/templates/partials/log_brew_form.html` | The "Log a brew" form, included by the recipe panel and brew mode with `log_recipe_id` / `log_bag_id` / `log_plan_id`. One per page: it uses fixed ids (`log-notes`, `rec-delta-row`). |
 | `app/templates/index.html` | Brew page. Morning banner, bag-picker modal, picker form with htmx (`hx-get="/recipes/latest"`). Shows the scheduled brew first if one exists. |
 | `app/templates/partials/latest_recipe.html` | htmx partial. Named-recipe picker (only with 2+ lines), recipe display, plan-for-next-time form, recommendation banner, and collapsed sections: log a brew, create variation, new named recipe, rename/delete the current one. |
 | `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders, users. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. Beans whose bags are all completed are listed separately as archived. |
@@ -208,6 +211,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/conftest.py` | `app_on` fixture: runs the real app (startup migrations included) against a throwaway DB, empty or copied from a reference DB. |
 | `tests/test_flows.py` | Behaviour of the core flows through HTTP: baseline → brews → variations, one-parameter rule, scheduling, browse, delete cascades. Written before named recipes; must keep passing unchanged. |
 | `tests/test_named_recipes.py` | Several named recipes per combination: separate histories, picker, default choice, scheduling, rename/delete. |
+| `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
 | `tests/test_export_recipe.py` | Recipe export: exact output, no personal data (marker strings planted in every private field), per-line history, CRLF normalisation, download headers. |
 | `tests/test_reference_parity.py` | On a copy of the reference DB: every combination shows the same latest recipe / brews / deltas as the original rules (computed in plain SQL), every page renders, existing rows untouched, migrations idempotent. |
 | `tests/test_export_import.py` | Export→import round-trip against a temp copy of the reference DB, plus named recipes, legacy-snapshot and non-empty-DB checks. |
@@ -235,6 +239,7 @@ If you add new htmx interactions, keep them similarly self-contained with gracef
 - **Low stock:** rows with `remaining ≤ low_threshold_g` get class `low-stock` (amber background).
 - **Muted text:** class `.muted` for secondary/empty-state text.
 - **Buttons:** default button is dark brown (`#6b3d2e`). Secondary actions use `.btn-secondary` (parchment `#f0e4d4`). The apply-recommendation button uses `.btn-apply-rec` (amber). Destructive actions add `.btn-danger`.
+- **Phone width:** the page must never be wider than the screen, or iOS zooms everything out ("the recipe got tiny"). `.grid` uses `minmax(0, 1fr)` — never a bare `1fr`/auto column, which grows to its widest content and widens every card; rows of inputs + buttons need `flex-wrap`/`min-width: 0`; `.delta-table` scrolls inside its card under 600px. Check new UI at 375px wide (`document.documentElement.scrollWidth` must equal the viewport). The manage page is still too wide on phones.
 - **Signed amounts:** iOS number keypads (`inputmode="decimal"`) have no minus key. Any input that can be negative goes in a `<span class="signed-input">` with a `<button type="button" class="btn-sign" onclick="flipSign(this)">±</button>` right after the input (`flipSign` flips the sign of its previous sibling).
 - **Forms:** always use `.stacked-form` class. Labels go above inputs (separate `<label>` tag, not wrapping the input) for textareas. Inputs wrap labels for single-line fields — this is inconsistent and worth standardising if the forms grow.
 

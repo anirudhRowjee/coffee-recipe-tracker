@@ -108,6 +108,10 @@ nav a:hover, nav a.active {
 
 .grid {
     display: grid;
+    /* minmax(0, 1fr), not the implicit auto column: an auto column grows to
+       its widest content, which made every card wider than a phone screen
+       and iOS then zoomed the whole page out */
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
 }
 
@@ -315,12 +319,14 @@ details[open] > .history-summary::before {
 
 .plan-form {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
 }
 
 .plan-form input {
-    flex: 1;
+    flex: 1 1 12em;
+    min-width: 0;
     width: auto;
 }
 
@@ -700,6 +706,119 @@ details[open] > .history-summary::before {
 
 @media (min-width: 700px) {
     .grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
+}
+
+/* Phones: wide tables scroll inside their card instead of widening the page */
+@media (max-width: 600px) {
+    .delta-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
+
+/* Brew mode (/lines/{id}/brew): readable at arm's length while brewing */
+.btn-brew {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 8px 18px;
+    border-radius: 6px;
+    background: #6b3d2e;
+    color: #fffcf7;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.brew-back {
+    margin: 0 0 6px;
+    font-size: 0.9rem;
+}
+
+.brew-back a {
+    color: #6b3d2e;
+}
+
+.brew-title {
+    margin: 0;
+    font-size: 1.6rem;
+}
+
+.brew-gear {
+    margin: 4px 0 12px;
+}
+
+.brew-params {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(6.5em, 1fr));
+    gap: 8px;
+    margin: 0 0 14px;
+}
+
+.brew-params div {
+    background: #f5ebe0;
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+.brew-params dt {
+    font-size: 0.8rem;
+    color: #8c6a4f;
+}
+
+.brew-params dd {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #3b1f0e;
+}
+
+.brew-timer {
+    text-align: center;
+    margin: 6px 0 14px;
+}
+
+.brew-clock {
+    font-size: 4rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    color: #3b1f0e;
+}
+
+.brew-next {
+    min-height: 1.5em;
+    margin: 6px 0 10px;
+    color: #5c3520;
+}
+
+.brew-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.brew-controls button {
+    width: auto;
+    min-width: 7em;
+    padding: 12px 20px;
+    font-size: 1.15rem;
+}
+
+.brew-steps {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.brew-steps li {
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+
+.brew-steps li.brew-step-now {
+    background: #fef3e2;
+    font-weight: 700;
 }

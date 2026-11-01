@@ -20,6 +20,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Multiple users** — pick who you are from a list (no passwords; meant for a trusted network). Each user has their own beans, brewers, and grinders.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
+- **Brew mode** — "▶ Brew" on the recipe card opens the recipe in large type with a big timer. Times written in the method ("Swirl at 1:00", "0:40 — pour to 200g") become steps: the current one is highlighted, the next one counts down, and the phone beeps at each (not in silent mode) and stays awake while the timer runs. Stopping puts "Brewed 3:12" into the log form below it.
 - **Share a recipe as text** — "Share as text" on the recipe card opens the current named recipe as plain Markdown to copy into a chat ("Download .md" saves a file): bean, gear, dose/water/ratio/temp, grind on which grinder, method, and how it got there. Tasting notes, bags, and other personal details are left out.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
 
@@ -90,6 +91,7 @@ Open http://127.0.0.1:8000 and pick (or add) a user.
    - When ready to experiment, open "Create variation" — one parameter must change
    - To keep a separate recipe for the same coffee and gear, open "New named recipe"; switch between them with the "Recipe" picker
    - "Plan for next time" schedules this brew for tomorrow morning
+   - "▶ Brew" opens brew mode: big numbers, a timer that follows the times in your method, and the log form
    - "Share as text" (under the recipe) gives you the recipe to paste to a friend
 3. **Browse** (`/browse`) — overview of all beans, current bag inventory, latest recipes, history, and "Schedule next brew"
 
@@ -116,15 +118,18 @@ app/
 │                    #   RecipeLine, Recipe, Brew, PlannedBrew, Delta)
 ├── crud.py          # All database read/write operations
 ├── export.py        # Named recipe → shareable Markdown (no personal data)
+├── brew.py          # Brew mode: method → steps with the m:ss times in them
 ├── db.py            # Engine setup, DB initialisation, startup migrations
 ├── templates/
 │   ├── base.html           # Nav bar, shell, small JS helpers (toggleForm, flipSign)
+│   ├── brew.html           # Brew mode: large recipe, timer, log form
 │   ├── select_user.html    # Pick who you are
 │   ├── index.html          # Brew page (bag + brewer + grinder picker, scheduled brew)
 │   ├── browse.html         # Bean overview + scheduling
 │   ├── manage.html         # Add/edit beans, bags, brewers, grinders, users
 │   └── partials/
-│       └── latest_recipe.html  # htmx partial: recipe picker, recipe, brew log, variation form
+│       ├── latest_recipe.html  # htmx partial: recipe picker, recipe, brew log, variation form
+│       └── log_brew_form.html  # "Log a brew" form, shared by the recipe panel and brew mode
 └── static/
     ├── styles.css
     └── htmx.min.js
@@ -140,7 +145,7 @@ scripts/
 └── remote/          # The VPS side of deploy/rollback, streamed over ssh
 
 tests/               # pytest: HTTP flows, named recipes, recipe export, real-data
-                     #   parity, migrate script, export/import round-trip
+                     #   parity, brew mode, migrate script, export/import round-trip
 
 data/
 ├── coffee.db        # SQLite database (created on first run; not tracked by git)

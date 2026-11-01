@@ -22,6 +22,13 @@ def _value(recipe: models.Recipe, param: str) -> str:
     return shown + UNITS[param]
 
 
+def ratio(recipe: models.Recipe) -> str:
+    """Brew ratio as "1:16.7" (or "1:15"); "" if there is no dose."""
+    if not recipe.dose_g:
+        return ""
+    return f"1:{recipe.water_ml / recipe.dose_g:.1f}".removesuffix(".0")
+
+
 def title(line: models.RecipeLine, bean: models.Bean) -> str:
     # "Default" means nothing to a friend; any other name is part of the title
     return bean.name if line.name == db.DEFAULT_LINE_NAME else f"{bean.name} — {line.name}"
@@ -49,9 +56,9 @@ def to_markdown(
     if about or bean.flavor_notes:
         out.append("")
 
-    ratio = f" (1:{latest.water_ml / latest.dose_g:.1f})".replace(".0)", ")") if latest.dose_g else ""
+    shown_ratio = f" ({ratio(latest)})" if latest.dose_g else ""
     out += [
-        f"- Dose: {_value(latest, 'dose_g')} · Water: {_value(latest, 'water_ml')}{ratio} · Temp: {_value(latest, 'temp_c')}",
+        f"- Dose: {_value(latest, 'dose_g')} · Water: {_value(latest, 'water_ml')}{shown_ratio} · Temp: {_value(latest, 'temp_c')}",
         f"- Grind: {_value(latest, 'grind_size')} on {grinder.name}",
         "",
     ]
