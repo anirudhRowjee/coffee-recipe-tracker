@@ -29,6 +29,12 @@
     <p><strong>Recipe:</strong></p>
     <pre class="recipe-text">{{ latest.recipe_text }}</pre>
     {% endif %}
+    {% if line %}
+    <p class="share-links">
+        <a href="/lines/{{ line.id }}/export.md" target="_blank" rel="noopener">Share as text</a>
+        · <a href="/lines/{{ line.id }}/export.md?download=1">Download .md</a>
+    </p>
+    {% endif %}
 </div>
 
 {% if is_current_plan %}

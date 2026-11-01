@@ -106,6 +106,21 @@ def test_every_page_renders_for_every_user(app_on, reference_db, original):
             assert app.client.get(page).status_code == 200, (page, user["id"])
 
 
+def test_every_named_recipe_exports(app_on, reference_db):
+    app = app_on(reference_db)
+    lines = app.rows("""
+        SELECT l.id, b.user_id,
+               (SELECT grind_size FROM recipe WHERE line_id = l.id ORDER BY created_at DESC LIMIT 1) AS grind
+        FROM recipeline l JOIN bean b ON b.id = l.bean_id
+    """)
+    assert lines
+    for line in lines:
+        app.client.cookies.set("user_id", str(line["user_id"]))
+        r = app.client.get(f"/lines/{line['id']}/export.md")
+        assert r.status_code == 200, line
+        assert f"\n- Grind: {line['grind']} on " in r.text, line
+
+
 def test_startup_keeps_existing_rows_intact(app_on, reference_db, original):
     app = app_on(reference_db)
     migrated = sqlite3.connect(app.path)

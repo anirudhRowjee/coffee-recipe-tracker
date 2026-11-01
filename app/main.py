@@ -2,13 +2,13 @@ import random
 from datetime import date as date_type
 
 from fastapi import FastAPI, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 from typing import Optional
 
-from . import crud, db, models
+from . import crud, db, export, models
 
 app = FastAPI(title="Coffee Recipe Tracker")
 
@@ -487,6 +487,23 @@ def rename_line(line_id: int, name: str = Form(...)):
             raise HTTPException(status_code=400, detail=f'There is already a recipe called "{name}" for this combination')
         crud.rename_line(session, line_id, name)
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/lines/{line_id}/export.md")
+def export_line(line_id: int, request: Request, download: bool = False):
+    """The named recipe as Markdown: shown as plain text (to copy into a chat),
+    or with ?download=1 as a .md file."""
+    with Session(db.engine) as session:
+        _require_user(request, session)
+        line = session.get(models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id) if line else None
+        if not line or not latest or not latest.bean:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        text = export.to_markdown(line, latest, crud.get_line_history(session, line_id))
+        if download:
+            return PlainTextResponse(text, media_type="text/markdown; charset=utf-8", headers={
+                "Content-Disposition": f'attachment; filename="{export.filename(line, latest.bean)}"'})
+        return PlainTextResponse(text)
 
 
 @app.post("/lines/{line_id}/delete")

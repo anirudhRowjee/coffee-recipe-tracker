@@ -423,6 +423,16 @@ details[open] > .history-summary::before {
     background: #e8d5c0;
 }
 
+.share-links {
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    color: #8c6a4f;
+}
+
+.share-links a {
+    color: #6b3d2e;
+}
+
 .signed-input {
     display: flex;
     gap: 6px;

@@ -20,6 +20,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Multiple users** — pick who you are from a list (no passwords; meant for a trusted network). Each user has their own beans, brewers, and grinders.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
+- **Share a recipe as text** — "Share as text" on the recipe card opens the current named recipe as plain Markdown to copy into a chat ("Download .md" saves a file): bean, gear, dose/water/ratio/temp, grind on which grinder, method, and how it got there. Tasting notes, bags, and other personal details are left out.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
 
 ---
@@ -89,6 +90,7 @@ Open http://127.0.0.1:8000 and pick (or add) a user.
    - When ready to experiment, open "Create variation" — one parameter must change
    - To keep a separate recipe for the same coffee and gear, open "New named recipe"; switch between them with the "Recipe" picker
    - "Plan for next time" schedules this brew for tomorrow morning
+   - "Share as text" (under the recipe) gives you the recipe to paste to a friend
 3. **Browse** (`/browse`) — overview of all beans, current bag inventory, latest recipes, history, and "Schedule next brew"
 
 ---
@@ -113,6 +115,7 @@ app/
 ├── models.py        # SQLModel ORM models (User, Bean, BeanBag, Brewer, Grinder,
 │                    #   RecipeLine, Recipe, Brew, PlannedBrew, Delta)
 ├── crud.py          # All database read/write operations
+├── export.py        # Named recipe → shareable Markdown (no personal data)
 ├── db.py            # Engine setup, DB initialisation, startup migrations
 ├── templates/
 │   ├── base.html           # Nav bar, shell, small JS helpers (toggleForm, flipSign)
@@ -136,8 +139,8 @@ scripts/
 ├── rollback.sh      # Undo the last deploy
 └── remote/          # The VPS side of deploy/rollback, streamed over ssh
 
-tests/               # pytest: HTTP flows, named recipes, real-data parity,
-                     #   migrate script, export/import round-trip
+tests/               # pytest: HTTP flows, named recipes, recipe export, real-data
+                     #   parity, migrate script, export/import round-trip
 
 data/
 ├── coffee.db        # SQLite database (created on first run; not tracked by git)

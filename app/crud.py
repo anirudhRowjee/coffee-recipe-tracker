@@ -160,6 +160,22 @@ def get_recent_brews(session: Session, recipe_id: int, limit: int = 5) -> List[m
     ).all()
 
 
+def get_line_history(session: Session, line_id: int) -> List[Tuple[models.Delta, models.Recipe, models.Recipe]]:
+    """Every change in a named recipe, oldest first, as (delta, from_version, to_version)."""
+    rows = []
+    for delta in session.exec(
+        select(models.Delta)
+        .join(models.Recipe, models.Recipe.id == models.Delta.to_recipe_id)  # type: ignore[arg-type]
+        .where(models.Recipe.line_id == line_id)
+        .order_by(models.Delta.created_at)
+    ).all():
+        before = session.get(models.Recipe, delta.from_recipe_id)
+        after = session.get(models.Recipe, delta.to_recipe_id)
+        if before and after:
+            rows.append((delta, before, after))
+    return rows
+
+
 def get_recent_deltas(session: Session, line_id: int, limit: int = 10) -> List[models.Delta]:
     return session.exec(
         select(models.Delta)
