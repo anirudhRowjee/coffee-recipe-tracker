@@ -73,7 +73,7 @@
         {% endif %}
 
         {% if recipe %}
-        <h4>Latest recipe</h4>
+        <h4>Latest recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
         <div class="recipe-card">
             <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
                <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
@@ -171,7 +171,7 @@
                 </table>
                 {% endif %}
                 {% if recipe %}
-                <h4>Latest recipe</h4>
+                <h4>Latest recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
                 <div class="recipe-card">
                     <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
                        <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;

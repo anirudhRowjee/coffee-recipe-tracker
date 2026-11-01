@@ -9,12 +9,23 @@ The target database must be empty (all tables have zero rows). Run
 scripts/drop_tables.py first if you need to wipe an existing database.
 
 Import order respects foreign-key dependencies:
-    Bean → BeanBag
-    Brewer
-    Grinder
-    Recipe (self-referential previous_recipe_id handled in two passes)
+    User
+    Bean → User
+    Brewer → User
+    Grinder → User
+    BeanBag → Bean
+    RecipeLine → Bean + Brewer + Grinder
+    Recipe → RecipeLine (self-referential previous_recipe_id handled in two passes)
     Brew → Recipe + BeanBag
+    PlannedBrew → User + BeanBag + Brewer + Grinder
     Delta → Recipe
+
+Older snapshots still import: ones from before multi-user support have no
+users.csv / planned_brews.csv / user_id columns, and ones from before named
+recipes have no recipe_lines.csv / line_id columns. After loading, the app's
+own migrations (db.run_migrations) fill the gaps exactly as app startup
+would: user 1 is created and owns everything ownerless, and each
+bean/brewer/grinder's recipes go into a "Default" named recipe.
 """
 
 import csv
@@ -24,35 +35,39 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlmodel import Session, select, text
+from sqlalchemy import func
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import Bean, BeanBag, Brewer, Grinder, Recipe, Brew, Delta
+from app.models import User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _str(val: str) -> str | None:
-    return val.strip() or None
+def _str(val: str | None) -> str | None:
+    # Empty cells are None; anything else is kept verbatim (no stripping) so
+    # notes and recipe text round-trip exactly.
+    return val if val else None
 
-def _int(val: str) -> int | None:
-    v = val.strip()
+def _int(val: str | None) -> int | None:
+    v = (val or "").strip()
     return int(v) if v else None
 
-def _float(val: str) -> float | None:
-    v = val.strip()
+def _float(val: str | None) -> float | None:
+    v = (val or "").strip()
     return float(v) if v else None
 
-def _date(val: str) -> date | None:
-    v = val.strip()
+def _date(val: str | None) -> date | None:
+    v = (val or "").strip()
     if not v:
         return None
     # export writes date objects as YYYY-MM-DD
     return date.fromisoformat(v[:10])
 
-def _datetime(val: str) -> datetime | None:
-    v = val.strip()
+def _datetime(val: str | None) -> datetime | None:
+    v = (val or "").strip()
     if not v:
         return None
     # export writes datetime with possible timezone suffix
@@ -65,16 +80,18 @@ def _datetime(val: str) -> datetime | None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
 
-def _bool(val: str) -> bool:
-    return val.strip().lower() in ("true", "1", "yes")
+def _bool(val: str | None) -> bool:
+    return (val or "").strip().lower() in ("true", "1", "yes")
 
 def abort(msg: str) -> None:
     print(f"ERROR: {msg}")
     sys.exit(1)
 
-def read_csv(path: Path) -> list[dict]:
+def read_csv(path: Path, required: bool = True) -> list[dict]:
     if not path.exists():
-        abort(f"{path} not found. Are you pointing at the right snapshot directory?")
+        if required:
+            abort(f"{path} not found. Are you pointing at the right snapshot directory?")
+        return []
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
 
@@ -84,12 +101,11 @@ def read_csv(path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def check_empty(session: Session) -> None:
-    for model, name in [(Bean, "bean"), (BeanBag, "beanbag"), (Brewer, "brewer"),
-                        (Grinder, "grinder"), (Recipe, "recipe"), (Brew, "brew"), (Delta, "delta")]:
-        count = session.exec(select(model)).all()
+    for model in [User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta]:
+        count = session.exec(select(func.count()).select_from(model)).one()
         if count:
             abort(
-                f'Table "{name}" already has {len(count)} row(s). '
+                f'Table "{model.__tablename__}" already has {count} row(s). '
                 "Run scripts/drop_tables.py first, or point at an empty database."
             )
 
@@ -98,23 +114,28 @@ def check_empty(session: Session) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    src = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("export")
+def import_all(engine: Engine, src: Path) -> None:
     if not src.is_dir():
         abort(f'Snapshot directory "{src}" does not exist.')
 
-    print(f"Importing from {src.resolve()}/")
+    SQLModel.metadata.create_all(engine)
 
-    db.create_db_and_tables()
-
-    with Session(db.engine) as session:
+    with Session(engine) as session:
         check_empty(session)
 
-        # 1. Beans
+        # 1. Users (absent in pre-multi-user snapshots)
+        rows = read_csv(src / "users.csv", required=False)
+        for r in rows:
+            session.add(User(id=_int(r["id"]), name=r["name"]))
+        session.commit()
+        print(f"  users:    {len(rows)}")
+
+        # 2. Beans
         rows = read_csv(src / "beans.csv")
         for r in rows:
             session.add(Bean(
                 id=_int(r["id"]),
+                user_id=_int(r.get("user_id")),
                 name=r["name"],
                 origin=_str(r["origin"]),
                 roast_level=_str(r["roast_level"]),
@@ -124,11 +145,12 @@ def main() -> None:
         session.commit()
         print(f"  beans:    {len(rows)}")
 
-        # 2. Brewers
+        # 3. Brewers
         rows = read_csv(src / "brewers.csv")
         for r in rows:
             session.add(Brewer(
                 id=_int(r["id"]),
+                user_id=_int(r.get("user_id")),
                 name=r["name"],
                 method=_str(r["method"]),
                 notes=_str(r["notes"]),
@@ -136,18 +158,19 @@ def main() -> None:
         session.commit()
         print(f"  brewers:  {len(rows)}")
 
-        # 3. Grinders
+        # 4. Grinders
         rows = read_csv(src / "grinders.csv")
         for r in rows:
             session.add(Grinder(
                 id=_int(r["id"]),
+                user_id=_int(r.get("user_id")),
                 name=r["name"],
                 notes=_str(r["notes"]),
             ))
         session.commit()
         print(f"  grinders: {len(rows)}")
 
-        # 4. Bags
+        # 5. Bags
         rows = read_csv(src / "bags.csv")
         for r in rows:
             session.add(BeanBag(
@@ -159,13 +182,28 @@ def main() -> None:
                 low_threshold_g=float(r["low_threshold_g"]),
                 is_frozen=_bool(r["is_frozen"]),
                 frozen_date=_date(r["frozen_date"]),
-                is_completed=_bool(r.get("is_completed", "")),
+                thaw_date=_date(r.get("thaw_date")),
+                is_completed=_bool(r.get("is_completed")),
                 notes=_str(r["notes"]),
             ))
         session.commit()
         print(f"  bags:     {len(rows)}")
 
-        # 5. Recipes — two passes to handle self-referential previous_recipe_id
+        # 6. Named recipes (absent in pre-named-recipe snapshots)
+        rows = read_csv(src / "recipe_lines.csv", required=False)
+        for r in rows:
+            session.add(RecipeLine(
+                id=_int(r["id"]),
+                bean_id=_int(r["bean_id"]),
+                brewer_id=_int(r["brewer_id"]),
+                grinder_id=_int(r["grinder_id"]),
+                name=r["name"],
+                created_at=_datetime(r["created_at"]) or datetime.now(timezone.utc),
+            ))
+        session.commit()
+        print(f"  lines:    {len(rows)}")
+
+        # 7. Recipes — two passes to handle self-referential previous_recipe_id
         rows = read_csv(src / "recipes.csv")
 
         # Pass 1: insert all recipes without previous_recipe_id
@@ -175,6 +213,7 @@ def main() -> None:
                 bean_id=_int(r["bean_id"]),
                 brewer_id=_int(r["brewer_id"]),
                 grinder_id=_int(r["grinder_id"]),
+                line_id=_int(r.get("line_id")),
                 dose_g=float(r["dose_g"]),
                 water_ml=float(r["water_ml"]),
                 temp_c=float(r["temp_c"]),
@@ -194,7 +233,7 @@ def main() -> None:
         session.commit()
         print(f"  recipes:  {len(rows)}")
 
-        # 6. Brews
+        # 8. Brews
         rows = read_csv(src / "brews.csv")
         for r in rows:
             session.add(Brew(
@@ -210,7 +249,23 @@ def main() -> None:
         session.commit()
         print(f"  brews:    {len(rows)}")
 
-        # 7. Deltas
+        # 9. Planned brews (absent in pre-multi-user snapshots)
+        rows = read_csv(src / "planned_brews.csv", required=False)
+        for r in rows:
+            session.add(PlannedBrew(
+                id=_int(r["id"]),
+                user_id=_int(r["user_id"]),
+                bag_id=_int(r["bag_id"]),
+                brewer_id=_int(r["brewer_id"]),
+                grinder_id=_int(r["grinder_id"]),
+                line_id=_int(r.get("line_id")),
+                notes=_str(r["notes"]),
+                created_at=_datetime(r["created_at"]) or datetime.now(timezone.utc),
+            ))
+        session.commit()
+        print(f"  planned:  {len(rows)}")
+
+        # 10. Deltas
         rows = read_csv(src / "deltas.csv")
         for r in rows:
             session.add(Delta(
@@ -225,6 +280,14 @@ def main() -> None:
         session.commit()
         print(f"  deltas:   {len(rows)}")
 
+    # Fill in whatever an older snapshot lacks (owners, named recipes)
+    db.run_migrations(engine)
+
+
+def main() -> None:
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("export")
+    print(f"Importing from {src.resolve()}/")
+    import_all(db.engine, src)
     print("Done.")
 
 

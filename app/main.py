@@ -161,7 +161,7 @@ def delete_user(target_user_id: int, request: Request):
     return RedirectResponse(url="/manage", status_code=303)
 
 
-def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_id_int: Optional[int], grinder_id_int: Optional[int], user_id: Optional[int]) -> dict:
+def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_id_int: Optional[int], grinder_id_int: Optional[int], user_id: Optional[int], line_id_int: Optional[int] = None) -> dict:
     pending_plan = crud.get_pending_plan(session, user_id) if user_id else None
 
     if not bag_id_int or not brewer_id_int or not grinder_id_int:
@@ -169,6 +169,8 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
             "latest": None,
             "recent_brews": [],
             "recent_deltas": [],
+            "lines": [],
+            "line": None,
             "bag": None,
             "bag_id": bag_id_int,
             "bean_id": None,
@@ -176,6 +178,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
             "grinder_id": grinder_id_int,
             "message": "Select a bag, brewer, and grinder to show recipes.",
             "pending_plan": pending_plan,
+            "is_current_plan": False,
         }
 
     bag = session.get(models.BeanBag, bag_id_int)
@@ -183,13 +186,27 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         raise HTTPException(status_code=404, detail="Bag not found")
 
     bean_id = bag.bean_id
-    latest = crud.get_latest_recipe(session, bean_id, brewer_id_int, grinder_id_int)
+    # lines[0] is the most recently used named recipe: the default when none is picked
+    lines = crud.get_lines_for_combo(session, bean_id, brewer_id_int, grinder_id_int)
+    line = next((ln for ln in lines if ln.id == line_id_int), lines[0] if lines else None)
+    latest = crud.get_latest_recipe(session, line.id) if line and line.id else None  # type: ignore[arg-type]
     recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
-    recent_deltas = crud.get_recent_deltas(session, bean_id, brewer_id_int, grinder_id_int)
+    recent_deltas = crud.get_recent_deltas(session, line.id) if line and line.id else []  # type: ignore[arg-type]
+
+    # A plan without a line (made from the browse page) means "the default one"
+    is_current_plan = bool(
+        pending_plan and line
+        and pending_plan.bag_id == bag_id_int
+        and pending_plan.brewer_id == brewer_id_int
+        and pending_plan.grinder_id == grinder_id_int
+        and (pending_plan.line_id == line.id or (pending_plan.line_id is None and line is lines[0]))
+    )
     return {
         "latest": latest,
         "recent_brews": recent_brews,
         "recent_deltas": recent_deltas,
+        "lines": lines,
+        "line": line,
         "bag": bag,
         "bag_id": bag_id_int,
         "bean_id": bean_id,
@@ -197,6 +214,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         "grinder_id": grinder_id_int,
         "message": "",
         "pending_plan": pending_plan,
+        "is_current_plan": is_current_plan,
     }
 
 
@@ -224,21 +242,22 @@ def index(request: Request):
             "morning_quote": random.choice(QUOTES),
         }
         if pending_plan:
-            context.update(_latest_recipe_context(session, pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, user.id))  # type: ignore[arg-type]
+            context.update(_latest_recipe_context(session, pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, user.id, pending_plan.line_id))  # type: ignore[arg-type]
             if context.get("bag"):
                 context["planned_bag_remaining"] = crud.get_remaining_quantity(session, context["bag"])
         return templates.TemplateResponse("index.html", context)
 
 
 @app.get("/recipes/latest", response_class=HTMLResponse)
-def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[str] = None, grinder_id: Optional[str] = None):
+def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[str] = None, grinder_id: Optional[str] = None, line_id: Optional[str] = None):
     bag_id_int = int(bag_id) if bag_id and bag_id.isdigit() else None
     brewer_id_int = int(brewer_id) if brewer_id and brewer_id.isdigit() else None
     grinder_id_int = int(grinder_id) if grinder_id and grinder_id.isdigit() else None
+    line_id_int = int(line_id) if line_id and line_id.isdigit() else None
 
     with Session(db.engine) as session:
         user = _get_current_user(request, session)
-        context = _latest_recipe_context(session, bag_id_int, brewer_id_int, grinder_id_int, user.id if user else None)  # type: ignore[arg-type]
+        context = _latest_recipe_context(session, bag_id_int, brewer_id_int, grinder_id_int, user.id if user else None, line_id_int)  # type: ignore[arg-type]
         context["request"] = request
         return templates.TemplateResponse("partials/latest_recipe.html", context)
 
@@ -442,10 +461,38 @@ def create_plan(
     brewer_id: int = Form(...),
     grinder_id: int = Form(...),
     notes: str = Form(None),
+    line_id: int = Form(None),
 ):
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None)  # type: ignore[arg-type]
+        if line_id:
+            line = session.get(models.RecipeLine, line_id)
+            bag = session.get(models.BeanBag, bag_id)
+            if not line or not bag or (line.bean_id, line.brewer_id, line.grinder_id) != (bag.bean_id, brewer_id, grinder_id):
+                line_id = None  # stale or mismatched: fall back to the default line
+        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line_id)  # type: ignore[arg-type]
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/lines/{line_id}/rename")
+def rename_line(line_id: int, name: str = Form(...)):
+    with Session(db.engine) as session:
+        line = session.get(models.RecipeLine, line_id)
+        if not line:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        name = name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name can't be empty")
+        if crud.line_name_taken(session, line.bean_id, line.brewer_id, line.grinder_id, name, exclude_line_id=line_id):
+            raise HTTPException(status_code=400, detail=f'There is already a recipe called "{name}" for this combination')
+        crud.rename_line(session, line_id, name)
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/lines/{line_id}/delete")
+def delete_line(line_id: int):
+    with Session(db.engine) as session:
+        crud.delete_line(session, line_id)
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -508,6 +555,7 @@ def create_recipe(
     brew_recommended_delta: str = Form(None),
     brew_recommended_rationale: str = Form(None),
     planned_brew_id: int = Form(None),
+    line_name: str = Form(None),
 ):
     delta_amount_f: Optional[float] = None
     if delta_amount and delta_amount.strip():
@@ -535,12 +583,26 @@ def create_recipe(
             })
             if not valid:
                 raise HTTPException(status_code=400, detail=f"Must change exactly one parameter. Changed: {changed}")
+            # A variation always stays in its parent's named recipe
+            line_id = prev.line_id
+        else:
+            # A recipe with no parent starts a new named recipe. The first one
+            # for a combination may be left unnamed ("Default"); later ones need a name.
+            name = (line_name or "").strip()
+            if not name:
+                if crud.get_lines_for_combo(session, bean_id, brewer_id, grinder_id):
+                    raise HTTPException(status_code=400, detail="Give the new recipe a name")
+                name = db.DEFAULT_LINE_NAME
+            if crud.line_name_taken(session, bean_id, brewer_id, grinder_id, name):
+                raise HTTPException(status_code=400, detail=f'There is already a recipe called "{name}" for this combination')
+            line_id = crud.create_line(session, bean_id, brewer_id, grinder_id, name).id
 
         recipe = crud.create_recipe(
             session,
             bean_id=bean_id,
             brewer_id=brewer_id,
             grinder_id=grinder_id,
+            line_id=line_id,  # type: ignore[arg-type]
             dose_g=dose_g,
             water_ml=water_ml,
             temp_c=temp_c,

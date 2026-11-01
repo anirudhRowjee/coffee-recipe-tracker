@@ -4,10 +4,22 @@
 
 {% if latest %}
 {% set rec = recent_brews[0] if recent_brews and recent_brews[0].recommended_param else none %}
-{% set is_current_plan = pending_plan and pending_plan.bag_id == bag_id and pending_plan.brewer_id == brewer_id and pending_plan.grinder_id == grinder_id %}
+{# Only name the recipe once there is a choice, or it has been renamed #}
+{% set show_line_name = line and (lines|length > 1 or line.name != 'Default') %}
+{% if lines|length > 1 %}
+<form class="line-picker stacked-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change" hx-include="#picker-form">
+    <label>Recipe
+        <select name="line_id">
+            {% for ln in lines %}
+            <option value="{{ ln.id }}" {% if ln.id == line.id %}selected{% endif %}>{{ ln.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</form>
+{% endif %}
 <div class="recipe-card">
     {% if bag %}
-    <p class="recipe-bean-name">{{ bag.bean.name }}</p>
+    <p class="recipe-bean-name">{{ bag.bean.name }}{% if show_line_name %} · {{ line.name }}{% endif %}</p>
     {% endif %}
     <p><strong>Dose:</strong> {{ latest.dose_g }} g &nbsp;·&nbsp;
        <strong>Water:</strong> {{ latest.water_ml }} ml &nbsp;·&nbsp;
@@ -31,6 +43,7 @@
     <input type="hidden" name="bag_id" value="{{ bag_id }}" />
     <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
     <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+    <input type="hidden" name="line_id" value="{{ line.id }}" />
     <input type="text" name="notes" placeholder="Optional note (e.g. want it stronger)" />
     <button type="submit">📅 Plan for next time</button>
 </form>
@@ -68,7 +81,10 @@
             </select>
             <div id="rec-delta-row" style="display:none">
                 <label style="margin-top:6px">By how much
-                    <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
+                    <span class="signed-input">
+                        <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
+                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+                    </span>
                 </label>
             </div>
             <label>Why
@@ -149,7 +165,10 @@
             </label>
             <div id="delta-amount-row">
                 <label>Delta amount
-                    <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" />
+                    <span class="signed-input">
+                        <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" />
+                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+                    </span>
                 </label>
             </div>
             <label>Rationale
@@ -176,7 +195,10 @@
             </select>
             <div id="var-rec-delta-row" style="display:none">
                 <label style="margin-top:6px">By how much
-                    <input name="brew_recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1" />
+                    <span class="signed-input">
+                        <input name="brew_recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1" />
+                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+                    </span>
                 </label>
             </div>
             <label>Why
@@ -254,12 +276,51 @@
     </div>
 </details>
 
+<details class="history-block" style="margin-top:8px">
+    <summary class="history-summary">New named recipe</summary>
+    <div style="margin-top:10px">
+        <p class="muted">A separate recipe for this bean, brewer and grinder, with its own versions and history. Values start from the recipe above.</p>
+        <form method="post" action="/recipes" class="stacked-form">
+            <input type="hidden" name="bean_id" value="{{ bean_id }}" />
+            <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
+            <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+            <label>Name
+                <input name="line_name" required placeholder="e.g. 2 cup" />
+            </label>
+            <label>Dose (g) <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required /></label>
+            <label>Water (ml) <input name="water_ml" type="number" step="0.1" value="{{ latest.water_ml }}" required /></label>
+            <label>Temp (°C) <input name="temp_c" type="number" step="0.1" value="{{ latest.temp_c }}" required /></label>
+            <label>Grind size <input name="grind_size" value="{{ latest.grind_size }}" required /></label>
+            <label>Recipe text</label>
+            <textarea name="recipe_text" rows="4">{{ latest.recipe_text or '' }}</textarea>
+            <button type="submit" style="margin-top:8px">Save new recipe</button>
+        </form>
+    </div>
+</details>
+
+<details class="history-block" style="margin-top:8px">
+    <summary class="history-summary">Rename or delete “{{ line.name }}”</summary>
+    <div style="margin-top:10px">
+        <form method="post" action="/lines/{{ line.id }}/rename" class="stacked-form">
+            <label>Name <input name="name" value="{{ line.name }}" required /></label>
+            <button type="submit">Rename</button>
+        </form>
+        <form method="post" action="/lines/{{ line.id }}/delete" style="margin-top:10px"
+            onsubmit="return confirm('Delete “{{ line.name }}” with all its versions, brews and change history?')">
+            <button type="submit" class="btn-danger">Delete this recipe</button>
+        </form>
+    </div>
+</details>
+
 {% else %}
 <p class="muted">No recipe yet for this combination. Add a baseline below.</p>
 <form method="post" action="/recipes" class="stacked-form">
     <input type="hidden" name="bean_id" value="{{ bean_id }}" />
     <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
     <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+    <label>Name (optional)
+        <input name="line_name" placeholder="Default" />
+    </label>
     <label>Dose (g) <input name="dose_g" type="number" step="0.1" required /></label>
     <label>Water (ml) <input name="water_ml" type="number" step="0.1" required /></label>
     <label>Temp (°C) <input name="temp_c" type="number" step="0.1" required /></label>

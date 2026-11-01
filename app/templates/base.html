@@ -12,6 +12,17 @@
             const form = document.getElementById(formId);
             form.classList.toggle('hidden');
         }
+
+        // iOS decimal keypads have no minus key; the ± button next to a
+        // signed input flips its sign and returns focus to it.
+        function flipSign(btn) {
+            const input = btn.previousElementSibling;
+            const v = input.value.trim();
+            if (v.startsWith('-')) input.value = v.slice(1);
+            else if (v.startsWith('+')) input.value = '-' + v.slice(1);
+            else input.value = '-' + v;
+            input.focus();
+        }
     </script>
 </head>
 

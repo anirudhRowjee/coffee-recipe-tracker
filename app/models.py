@@ -66,11 +66,30 @@ class Grinder(SQLModel, table=True):
     recipes: List["Recipe"] = Relationship(back_populates="grinder")
 
 
+class RecipeLine(SQLModel, table=True):
+    """A named recipe ("Coffee Chronicler", "2 cup") for one bean/brewer/grinder.
+
+    Its versions are the Recipe rows pointing at it. A combination can have
+    several lines, each with its own versions, brews, deltas and recommendations.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    bean_id: int = Field(foreign_key="bean.id")
+    brewer_id: int = Field(foreign_key="brewer.id")
+    grinder_id: int = Field(foreign_key="grinder.id")
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    recipes: List["Recipe"] = Relationship(back_populates="line")
+
+
 class Recipe(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     bean_id: int = Field(foreign_key="bean.id")
     brewer_id: int = Field(foreign_key="brewer.id")
     grinder_id: int = Field(foreign_key="grinder.id")
+    # Nullable only so the column can be added with ALTER TABLE; the startup
+    # migration assigns every recipe to a line and new recipes always get one.
+    line_id: Optional[int] = Field(default=None, foreign_key="recipeline.id")
 
     dose_g: float
     water_ml: float
@@ -84,6 +103,7 @@ class Recipe(SQLModel, table=True):
     bean: Optional[Bean] = Relationship(back_populates="recipes")
     brewer: Optional[Brewer] = Relationship(back_populates="recipes")
     grinder: Optional[Grinder] = Relationship(back_populates="recipes")
+    line: Optional[RecipeLine] = Relationship(back_populates="recipes")
     brews: List["Brew"] = Relationship(back_populates="recipe")
 
 
@@ -107,6 +127,9 @@ class PlannedBrew(SQLModel, table=True):
     bag_id: int = Field(foreign_key="beanbag.id")
     brewer_id: int = Field(foreign_key="brewer.id")
     grinder_id: int = Field(foreign_key="grinder.id")
+    # None = whichever named recipe is the default for the combination when
+    # the plan is opened (plans made from the browse page don't pick one).
+    line_id: Optional[int] = Field(default=None, foreign_key="recipeline.id")
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

@@ -2,7 +2,7 @@
 
 A personal web app for tracking coffee recipes, brew sessions, and iterative improvements across different beans, brewers, and grinders.
 
-Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — just server-rendered HTML with lightweight partial updates.
+Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — just server-rendered HTML with lightweight partial updates. Designed to be used mid-brew on a Kindle, phone, or desktop.
 
 ---
 
@@ -12,11 +12,14 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Low stock alerts** — configurable per-bag threshold; highlighted in the UI when you're running low.
 - **Frozen bag tracking** — mark bags as frozen with a freeze date, tracked separately from active bags.
 - **Brew log** — log every brew with tasting notes against a specific bag and recipe.
-- **Recipe versioning** — recipes are immutable snapshots. Changing one parameter creates a new recipe linked to the previous one.
+- **Named recipes** — keep several independent recipes for the same bean + brewer + grinder (e.g. "Default", "2 cup", "Coffee Chronicler"), each with its own versions, brews, change history, and recommendations. A recipe picker appears on the brew page once there is more than one.
+- **Recipe versioning** — each version is an immutable snapshot. Changing one parameter creates a new version linked to the previous one, within the same named recipe.
 - **One-parameter delta rule** — each variation must change exactly one parameter (dose, water, temp, grind size, or recipe text), keeping the change history clean.
-- **Recommended next change** — when logging a brew, optionally record what to try next time. Surfaces prominently on your next session.
+- **Recommended next change** — when logging a brew, optionally record what to try next time (e.g. grind −1). Surfaces prominently next session and can pre-fill the variation form. A **±** button next to each amount flips its sign, since phone number keypads (iOS) have no minus key.
+- **Scheduled brews** — plan tomorrow's brew (bag, brewer, grinder, named recipe, note) from the brew or browse page; it opens first on the home page the next morning.
+- **Multiple users** — pick who you are from a list (no passwords; meant for a trusted network). Each user has their own beans, brewers, and grinders.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
-- **Full edit/delete UI** — edit or delete beans, bags, brewers, and grinders directly from the Manage page; deletes cascade automatically. Mark a bag as completed when it's finished.
+- **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
 
 ---
@@ -24,21 +27,25 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 ## Data model
 
 ```
-Bean              — coffee type (name, origin, roast level, flavor notes)
-└── BeanBag       — physical bag (roast date, quantity, frozen status)
-    └── Brew      — single brew session (tasting notes, recommendation)
+User              — whoever is brewing (picked on /select-user, stored in a cookie)
+└── Bean          — coffee type (name, origin, roast level, flavor notes)
+    └── BeanBag   — physical bag (roast date, quantity, frozen status)
+        └── Brew  — single brew session (tasting notes, recommendation)
 
-Brewer            — brewing device (V60, Aeropress, espresso machine, etc.)
-Grinder           — grinder
+Brewer            — brewing device (V60, Aeropress, espresso machine, etc.), per user
+Grinder           — grinder, per user
 
-Recipe            — parameter snapshot (dose, water, temp, grind, recipe text)
-                    linked to Bean + Brewer + Grinder
-└── Delta         — records what changed between two recipes and why
+RecipeLine        — a named recipe for one Bean + Brewer + Grinder ("Default", "2 cup")
+└── Recipe        — one version: dose, water, temp, grind, recipe text
+    └── Delta     — records what changed between two versions and why
+
+PlannedBrew       — a scheduled brew: bag + brewer + grinder (+ named recipe), one per user
 ```
 
 **Key relationships:**
-- A `Brew` links a `Recipe` to a `BeanBag` — this is how quantity is tracked (remaining = initial − Σ dose_g across all brews from that bag)
-- Recipes are looked up by bean+brewer+grinder, so history is preserved across bag changes
+- A `Brew` links a `Recipe` version to a `BeanBag` — this is how quantity is tracked (remaining = initial − Σ dose_g across all brews from that bag)
+- Named recipes are keyed by bean+brewer+grinder, so history is preserved across bag changes
+- A variation always stays in the named recipe it came from; a recipe with no parent starts a new one
 - A `Delta` is created whenever you save a variation, recording the changed parameter, amount, and rationale
 
 ---
@@ -64,23 +71,25 @@ python -m app.db
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000
+Open http://127.0.0.1:8000 and pick (or add) a user.
 
 ---
 
 ## Usage workflow
 
-1. **Manage** (`/manage`) — add, edit, and delete beans, bags, brewers, and grinders
+1. **Manage** (`/manage`) — add, edit, and delete beans, bags, brewers, grinders, and users
    - Add a bean first (coffee type), then add one or more bags to it
    - Each bag gets its own roast date and quantity
    - Mark a bag as "Done" when it's finished — it disappears from the brew picker but stays in the history
    - Edit any field inline; delete cascades to all linked recipes, brews, and deltas
 2. **Brew** (`/`) — select a bag + brewer + grinder to load the latest recipe
-   - If no recipe exists yet, enter a baseline
+   - If no recipe exists yet, enter a baseline (optionally give it a name)
    - Log a brew with tasting notes after each cup
-   - Optionally recommend what to change next time
+   - Optionally recommend what to change next time — use **±** for a negative amount
    - When ready to experiment, open "Create variation" — one parameter must change
-3. **Browse** (`/browse`) — overview of all beans, current bag inventory, latest recipes, and history
+   - To keep a separate recipe for the same coffee and gear, open "New named recipe"; switch between them with the "Recipe" picker
+   - "Plan for next time" schedules this brew for tomorrow morning
+3. **Browse** (`/browse`) — overview of all beans, current bag inventory, latest recipes, history, and "Schedule next brew"
 
 ---
 
@@ -92,6 +101,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Find your machine's local IP (`ipconfig getifaddr en0` on Mac, `hostname -I` on Linux) and open `http://<your-ip>:8000` from any device on the same network.
 
+There is no authentication or CSRF protection: keep the app on a trusted network.
+
 ---
 
 ## Project structure
@@ -99,16 +110,18 @@ Find your machine's local IP (`ipconfig getifaddr en0` on Mac, `hostname -I` on 
 ```
 app/
 ├── main.py          # FastAPI routes
-├── models.py        # SQLModel ORM models (Bean, BeanBag, Brewer, Grinder, Recipe, Brew, Delta)
+├── models.py        # SQLModel ORM models (User, Bean, BeanBag, Brewer, Grinder,
+│                    #   RecipeLine, Recipe, Brew, PlannedBrew, Delta)
 ├── crud.py          # All database read/write operations
-├── db.py            # Engine setup, DB initialisation
+├── db.py            # Engine setup, DB initialisation, startup migrations
 ├── templates/
-│   ├── base.html           # Nav bar, shell
-│   ├── index.html          # Brew page (bag + brewer + grinder picker)
-│   ├── browse.html         # Bean overview
-│   ├── manage.html         # Add/view beans, bags, brewers, grinders
+│   ├── base.html           # Nav bar, shell, small JS helpers (toggleForm, flipSign)
+│   ├── select_user.html    # Pick who you are
+│   ├── index.html          # Brew page (bag + brewer + grinder picker, scheduled brew)
+│   ├── browse.html         # Bean overview + scheduling
+│   ├── manage.html         # Add/edit beans, bags, brewers, grinders, users
 │   └── partials/
-│       └── latest_recipe.html  # htmx partial: recipe, brew log, variation form
+│       └── latest_recipe.html  # htmx partial: recipe picker, recipe, brew log, variation form
 └── static/
     ├── styles.css
     └── htmx.min.js
@@ -116,19 +129,36 @@ app/
 scripts/
 ├── export.py        # Export all data to CSV (creates export/ directory)
 ├── import.py        # Restore from a CSV snapshot (tables must be empty)
-└── drop_tables.py   # Wipe and recreate all tables (prompts for confirmation)
+├── drop_tables.py   # Wipe and recreate all tables (prompts for confirmation)
+├── migrate.py       # Bring a DB up to the current schema + one-off data fixes
+├── backup.py        # Consistent SQLite backup using only the Python stdlib
+├── deploy.sh        # Deploy main to the prod VPS (see "Deploying")
+├── rollback.sh      # Undo the last deploy
+└── remote/          # The VPS side of deploy/rollback, streamed over ssh
+
+tests/               # pytest: HTTP flows, named recipes, real-data parity,
+                     #   migrate script, export/import round-trip
 
 data/
-└── coffee.db        # SQLite database (created on first run)
+├── coffee.db        # SQLite database (created on first run; not tracked by git)
+└── backups/         # Local backups, including prod backups pulled by deploy
 ```
 
-**Important implementation note:** All `TemplateResponse` calls must be made *inside* the `with Session(db.engine) as session:` block. SQLModel uses lazy loading — accessing a relationship after the session closes raises `DetachedInstanceError`.
+**Important implementation note:** All `TemplateResponse` calls must be made *inside* the `with Session(db.engine) as session:` block. SQLModel uses lazy loading — accessing a relationship after the session closes raises `DetachedInstanceError`. See `AGENTS.md` for this and other gotchas.
 
 ---
 
 ## Database
 
-The database is a single file at `data/coffee.db`. It can be opened directly with [DB Browser for SQLite](https://sqlitebrowser.org) or the `sqlite3` CLI.
+The database is a single file at `data/coffee.db` (override with the `COFFEE_DB` environment variable). It can be opened directly with [DB Browser for SQLite](https://sqlitebrowser.org) or the `sqlite3` CLI. It is not tracked by git.
+
+**Schema changes** are applied automatically on startup by `db.run_migrations()`: missing tables are created, new columns are added, and data is backfilled (e.g. every existing recipe is put into a "Default" named recipe). These steps are idempotent. Anything non-additive (renames, type changes) still needs the export → wipe → import cycle below.
+
+**Back up the database (safe while the app is running):**
+```bash
+python scripts/backup.py data/coffee.db data/backups/   # data/backups/coffee-YYYY-MM-DD.db
+```
+`--keep-days N` also deletes `coffee-YYYY-MM-DD.db` files in that folder older than N days (meant for a nightly cron job).
 
 **Export all data to CSV:**
 ```bash
@@ -141,13 +171,12 @@ python scripts/drop_tables.py   # wipe first
 python scripts/import.py        # reads from export/ by default
 # python scripts/import.py path/to/other/snapshot
 ```
+Older snapshots (from before multi-user support or named recipes) still import; the missing pieces are filled in the same way app startup would.
 
 **Wipe and reset the database:**
 ```bash
 python scripts/drop_tables.py
 ```
-
-**Schema changes** require recreating the database (there is no migration system). Always export first.
 
 **Useful queries:**
 
@@ -161,21 +190,59 @@ LEFT JOIN brew bw ON bw.bag_id = bg.id
 LEFT JOIN recipe r ON r.id = bw.recipe_id
 GROUP BY bg.id;
 
--- Full brew history with tasting notes
-SELECT b.name, bw.brewed_at, r.dose_g, r.grind_size, bw.notes,
+-- Full brew history with tasting notes and named recipe
+SELECT b.name, l.name AS recipe, bw.brewed_at, r.dose_g, r.grind_size, bw.notes,
        bw.recommended_param, bw.recommended_delta
 FROM brew bw
 JOIN recipe r ON r.id = bw.recipe_id
+JOIN recipeline l ON l.id = r.line_id
 JOIN bean b ON b.id = r.bean_id
 ORDER BY bw.brewed_at DESC;
 
 -- Change history for all beans
-SELECT b.name, d.changed_param, d.delta_amount, d.rationale, d.created_at
+SELECT b.name, l.name AS recipe, d.changed_param, d.delta_amount, d.rationale, d.created_at
 FROM delta d
 JOIN recipe r ON r.id = d.to_recipe_id
+JOIN recipeline l ON l.id = r.line_id
 JOIN bean b ON b.id = r.bean_id
 ORDER BY d.created_at DESC;
 ```
+
+---
+
+## Tests
+
+```bash
+.venv/bin/pytest tests/
+```
+
+The tests run the real app against throwaway databases; real database files are only ever read (copied with the SQLite backup API). Several tests check behaviour against a reference database — `data/coffee.db` by default. To check a change against production data, point them at a prod backup:
+
+```bash
+COFFEE_REFERENCE_DB=data/backups/prod-<stamp>-predeploy.db .venv/bin/pytest tests/
+```
+
+---
+
+## Deploying
+
+Prod runs on a VPS as the systemd service `coffee` (uvicorn behind Caddy) from a git checkout. Code reaches it through GitHub; the database there is never replaced, only migrated in place.
+
+With `main` committed and pushed:
+
+```bash
+scripts/deploy.sh
+```
+
+This backs up prod and copies the backup to `data/backups/`, runs the tests against it locally, shows the commits and asks to confirm, then on the VPS: stops the app, takes another copy, fast-forwards the code, runs the tests with the server's packages, migrates, and starts the app. If any of those steps fails it restores the copy and the previous code automatically. Finally it checks every page for every user and that no existing row was lost.
+
+To undo the last deploy (the database as it was then is restored; the current one is kept aside on the VPS):
+
+```bash
+scripts/rollback.sh
+```
+
+Details, and how to rehearse a deploy locally, are in `AGENTS.md` ("Deploying to prod").
 
 ---
 

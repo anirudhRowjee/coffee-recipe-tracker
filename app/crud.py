@@ -82,14 +82,73 @@ def get_remaining_quantity(session: Session, bag: models.BeanBag) -> float:
     return bag.initial_quantity_g - (used or 0.0)
 
 
-def get_latest_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int) -> Optional[models.Recipe]:
+def get_lines_for_combo(session: Session, bean_id: int, brewer_id: int, grinder_id: int) -> List[models.RecipeLine]:
+    """Named recipes for a combination, most recently used first.
+
+    "Used" is the newest version or brew in the line, so the first entry is
+    the one the brew page opens by default.
+    """
+    lines = session.exec(
+        select(models.RecipeLine)
+        .where(models.RecipeLine.bean_id == bean_id)
+        .where(models.RecipeLine.brewer_id == brewer_id)
+        .where(models.RecipeLine.grinder_id == grinder_id)
+    ).all()
+
+    def last_used(line: models.RecipeLine):
+        recipe_at = session.exec(
+            select(func.max(models.Recipe.created_at)).where(models.Recipe.line_id == line.id)
+        ).first()
+        brew_at = session.exec(
+            select(func.max(models.Brew.brewed_at))
+            .join(models.Recipe, models.Recipe.id == models.Brew.recipe_id)  # type: ignore[arg-type]
+            .where(models.Recipe.line_id == line.id)
+        ).first()
+        # SQLite hands back naive datetimes; a just-created line may be aware
+        return max(t.replace(tzinfo=None) for t in (recipe_at, brew_at, line.created_at) if t is not None)
+
+    return sorted(lines, key=lambda line: (last_used(line), line.id or 0), reverse=True)
+
+
+def get_latest_recipe(session: Session, line_id: int) -> Optional[models.Recipe]:
     return session.exec(
         select(models.Recipe)
-        .where(models.Recipe.bean_id == bean_id)
-        .where(models.Recipe.brewer_id == brewer_id)
-        .where(models.Recipe.grinder_id == grinder_id)
+        .where(models.Recipe.line_id == line_id)
         .order_by(models.Recipe.created_at.desc())  # type: ignore[union-attr]
     ).first()
+
+
+def line_name_taken(session: Session, bean_id: int, brewer_id: int, grinder_id: int, name: str, exclude_line_id: Optional[int] = None) -> bool:
+    return any(
+        line.name.strip().lower() == name.strip().lower() and line.id != exclude_line_id
+        for line in get_lines_for_combo(session, bean_id, brewer_id, grinder_id)
+    )
+
+
+def create_line(session: Session, bean_id: int, brewer_id: int, grinder_id: int, name: str) -> models.RecipeLine:
+    line = models.RecipeLine(bean_id=bean_id, brewer_id=brewer_id, grinder_id=grinder_id, name=name)
+    session.add(line)
+    session.commit()
+    session.refresh(line)
+    return line
+
+
+def rename_line(session: Session, line_id: int, name: str) -> Optional[models.RecipeLine]:
+    line = session.get(models.RecipeLine, line_id)
+    if not line:
+        return None
+    line.name = name
+    session.commit()
+    return line
+
+
+def delete_line(session: Session, line_id: int) -> None:
+    recipe_ids = [r.id for r in session.exec(
+        select(models.Recipe).where(models.Recipe.line_id == line_id)
+    ).all()]
+    _delete_recipes(session, recipe_ids)  # type: ignore[arg-type]
+    _delete_lines(session, [line_id])
+    session.commit()
 
 
 def get_recent_brews(session: Session, recipe_id: int, limit: int = 5) -> List[models.Brew]:
@@ -101,13 +160,11 @@ def get_recent_brews(session: Session, recipe_id: int, limit: int = 5) -> List[m
     ).all()
 
 
-def get_recent_deltas(session: Session, bean_id: int, brewer_id: int, grinder_id: int, limit: int = 10) -> List[models.Delta]:
+def get_recent_deltas(session: Session, line_id: int, limit: int = 10) -> List[models.Delta]:
     return session.exec(
         select(models.Delta)
         .join(models.Recipe, models.Recipe.id == models.Delta.to_recipe_id)  # type: ignore[arg-type]
-        .where(models.Recipe.bean_id == bean_id)
-        .where(models.Recipe.brewer_id == brewer_id)
-        .where(models.Recipe.grinder_id == grinder_id)
+        .where(models.Recipe.line_id == line_id)
         .order_by(models.Delta.created_at.desc())  # type: ignore[union-attr]
         .limit(limit)
     ).all()
@@ -175,27 +232,48 @@ def update_bean(session: Session, bean_id: int, name: str, origin: Optional[str]
     return bean
 
 
-def delete_bean(session: Session, bean_id: int) -> None:
-    recipe_ids = [r.id for r in session.exec(
-        select(models.Recipe).where(models.Recipe.bean_id == bean_id)
-    ).all()]
+def _delete_recipes(session: Session, recipe_ids: List[int]) -> None:
+    """Delete recipes plus the deltas and brews that reference them. No commit."""
+    if not recipe_ids:
+        return
+    for delta in session.exec(
+        select(models.Delta).where(
+            (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
+            (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
+        )
+    ).all():
+        session.delete(delta)
+    for brew in session.exec(
+        select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
+    ).all():
+        session.delete(brew)
+    for recipe in session.exec(
+        select(models.Recipe).where(models.Recipe.id.in_(recipe_ids))  # type: ignore[union-attr]
+    ).all():
+        session.delete(recipe)
 
-    if recipe_ids:
-        for delta in session.exec(
-            select(models.Delta).where(
-                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
-                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
-            )
-        ).all():
-            session.delete(delta)
-        for brew in session.exec(
-            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
-        ).all():
-            session.delete(brew)
-        for recipe in session.exec(
-            select(models.Recipe).where(models.Recipe.bean_id == bean_id)
-        ).all():
-            session.delete(recipe)
+
+def _delete_lines(session: Session, line_ids: List[int]) -> None:
+    """Delete named recipes and plans pointing at them (their recipes must already be gone). No commit."""
+    if not line_ids:
+        return
+    for plan in session.exec(
+        select(models.PlannedBrew).where(models.PlannedBrew.line_id.in_(line_ids))  # type: ignore[union-attr]
+    ).all():
+        session.delete(plan)
+    for line in session.exec(
+        select(models.RecipeLine).where(models.RecipeLine.id.in_(line_ids))  # type: ignore[union-attr]
+    ).all():
+        session.delete(line)
+
+
+def delete_bean(session: Session, bean_id: int) -> None:
+    _delete_recipes(session, [r.id for r in session.exec(  # type: ignore[misc]
+        select(models.Recipe).where(models.Recipe.bean_id == bean_id)
+    ).all()])
+    _delete_lines(session, [line.id for line in session.exec(  # type: ignore[misc]
+        select(models.RecipeLine).where(models.RecipeLine.bean_id == bean_id)
+    ).all()])
 
     for bag in session.exec(select(models.BeanBag).where(models.BeanBag.bean_id == bean_id)).all():
         for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag.id)).all():
@@ -255,25 +333,12 @@ def update_brewer(session: Session, brewer_id: int, name: str, method: Optional[
 
 
 def delete_brewer(session: Session, brewer_id: int) -> None:
-    recipe_ids = [r.id for r in session.exec(
+    _delete_recipes(session, [r.id for r in session.exec(  # type: ignore[misc]
         select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
-    ).all()]
-    if recipe_ids:
-        for delta in session.exec(
-            select(models.Delta).where(
-                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
-                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
-            )
-        ).all():
-            session.delete(delta)
-        for brew in session.exec(
-            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
-        ).all():
-            session.delete(brew)
-        for recipe in session.exec(
-            select(models.Recipe).where(models.Recipe.brewer_id == brewer_id)
-        ).all():
-            session.delete(recipe)
+    ).all()])
+    _delete_lines(session, [line.id for line in session.exec(  # type: ignore[misc]
+        select(models.RecipeLine).where(models.RecipeLine.brewer_id == brewer_id)
+    ).all()])
     for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.brewer_id == brewer_id)).all():
         session.delete(plan)
     brewer = session.get(models.Brewer, brewer_id)
@@ -293,25 +358,12 @@ def update_grinder(session: Session, grinder_id: int, name: str, notes: Optional
 
 
 def delete_grinder(session: Session, grinder_id: int) -> None:
-    recipe_ids = [r.id for r in session.exec(
+    _delete_recipes(session, [r.id for r in session.exec(  # type: ignore[misc]
         select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
-    ).all()]
-    if recipe_ids:
-        for delta in session.exec(
-            select(models.Delta).where(
-                (models.Delta.from_recipe_id.in_(recipe_ids)) |  # type: ignore[union-attr]
-                (models.Delta.to_recipe_id.in_(recipe_ids))      # type: ignore[union-attr]
-            )
-        ).all():
-            session.delete(delta)
-        for brew in session.exec(
-            select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
-        ).all():
-            session.delete(brew)
-        for recipe in session.exec(
-            select(models.Recipe).where(models.Recipe.grinder_id == grinder_id)
-        ).all():
-            session.delete(recipe)
+    ).all()])
+    _delete_lines(session, [line.id for line in session.exec(  # type: ignore[misc]
+        select(models.RecipeLine).where(models.RecipeLine.grinder_id == grinder_id)
+    ).all()])
     for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.grinder_id == grinder_id)).all():
         session.delete(plan)
     grinder = session.get(models.Grinder, grinder_id)
@@ -342,11 +394,12 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
     return (len(changed) == 1, changed)
 
 
-def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, previous_recipe_id: Optional[int] = None) -> models.Recipe:
+def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, line_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, previous_recipe_id: Optional[int] = None) -> models.Recipe:
     recipe = models.Recipe(
         bean_id=bean_id,
         brewer_id=brewer_id,
         grinder_id=grinder_id,
+        line_id=line_id,
         dose_g=dose_g,
         water_ml=water_ml,
         temp_c=temp_c,
@@ -402,12 +455,12 @@ def get_pending_plan(session: Session, user_id: int) -> Optional[models.PlannedB
     ).first()
 
 
-def create_plan(session: Session, user_id: int, bag_id: int, brewer_id: int, grinder_id: int, notes: Optional[str] = None) -> models.PlannedBrew:
+def create_plan(session: Session, user_id: int, bag_id: int, brewer_id: int, grinder_id: int, notes: Optional[str] = None, line_id: Optional[int] = None) -> models.PlannedBrew:
     for existing in session.exec(
         select(models.PlannedBrew).where(models.PlannedBrew.user_id == user_id)
     ).all():
         session.delete(existing)
-    plan = models.PlannedBrew(user_id=user_id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes)
+    plan = models.PlannedBrew(user_id=user_id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line_id, notes=notes)
     session.add(plan)
     session.commit()
     session.refresh(plan)

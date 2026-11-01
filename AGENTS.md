@@ -20,7 +20,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 ## Design philosophy
 
-**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel) and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
+**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel and its named-recipe picker), the searchable bag-picker modal on the brew page, the ± sign button on signed amounts, and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
 
 **Server-rendered, not API-first.** Routes return HTML, not JSON. Forms POST to endpoints that redirect. This keeps the Kindle-compatibility high and the codebase small.
 
@@ -28,16 +28,25 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 **Recipe = definition, Brew = instance.** A `Recipe` is a parameter snapshot (dose, water, temp, grind). A `Brew` is a single cup pulled using that recipe, linked to a specific physical bag. Tasting notes live on `Brew`, not `Recipe`. This distinction is central — conflating them causes quantity tracking to break.
 
-**Bean = type, BeanBag = physical bag.** `Bean` is the coffee variety (Ethiopia Yirgacheffe, etc.). `BeanBag` is a specific purchase of that variety, with its own roast date, quantity, and freeze status. You can have multiple bags of the same bean. Recipe history is shared across bags of the same bean (looked up by `bean_id + brewer_id + grinder_id`).
+**RecipeLine = named recipe, Recipe = one version of it.** In the UI a "recipe" ("Default", "2 cup", "Coffee Chronicler") is a `RecipeLine`; each `Recipe` row is one version in that line's chain (`previous_recipe_id`). A bean/brewer/grinder combination can have several lines, each with its own versions, brews, deltas, and recommendations. The current version of a line is its newest `Recipe` by `created_at`. A variation always stays in its parent's line (the server takes `line_id` from the parent, never from the form), and the one-parameter rule compares it with that parent only. A recipe with no parent starts a new line: the first for a combination may be unnamed ("Default"), later ones need a name unique within the combination. When no line is chosen, the brew page opens the combination's most recently used line (newest version or brew) — with a single line this is exactly the old "newest recipe for the combination" behaviour.
 
-**No migrations.** Schema changes require recreating the database. This is an intentional trade-off for a personal single-user app. There is `scripts/export.py` to export data before a wipe and `scripts/drop_tables.py` to reset. If the app grows in users or data, `alembic` is the right next step.
+**Bean = type, BeanBag = physical bag.** `Bean` is the coffee variety (Ethiopia Yirgacheffe, etc.). `BeanBag` is a specific purchase of that variety, with its own roast date, quantity, and freeze status. You can have multiple bags of the same bean. Recipe history is shared across bags of the same bean (named recipes are keyed by `bean_id + brewer_id + grinder_id`, not by bag).
+
+**Trusted network, a few household users.** The app runs on a trusted LAN/VPS with no external users. Multiple people share it via a `user_id` cookie picked on `/select-user` — there are no passwords and no auth. Beans, brewers, and grinders are owned by a user (`user_id`); bags, recipes, brews, and deltas inherit ownership through their bean. Routes filter *list* views by the current user but do not check ownership on edit/delete/create-by-ID routes. That is deliberate for this deployment — do not add auth/ownership checks unless asked.
+
+**Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, and (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
 
 ---
 
 ## Data model
 
 ```
-Bean
+User
+├── beans: List[Bean]
+├── brewers: List[Brewer]
+└── grinders: List[Grinder]
+
+Bean                          (user_id → User)
 ├── bags: List[BeanBag]
 └── recipes: List[Recipe]
 
@@ -45,26 +54,41 @@ BeanBag
 ├── bean: Bean
 └── brews: List[Brew]         ← quantity tracked via brews, not directly
 
-Brewer
+Brewer                        (user_id → User)
 └── recipes: List[Recipe]
 
-Grinder
+Grinder                       (user_id → User)
 └── recipes: List[Recipe]
 
-Recipe
-├── bean: Bean
+RecipeLine                    ← a named recipe ("Default", "2 cup")
+├── bean_id, brewer_id, grinder_id
+└── recipes: List[Recipe]     ← its versions
+
+Recipe                        ← one version
+├── line: RecipeLine
+├── bean: Bean                (same combination as its line)
 ├── brewer: Brewer
 ├── grinder: Grinder
+├── previous_recipe_id → Recipe (same line)
 └── brews: List[Brew]
 
 Brew
 ├── recipe: Recipe
 └── bag: BeanBag
 
+PlannedBrew                   ← "scheduled brew"; at most one per user
+├── user_id → User
+├── bag_id → BeanBag
+├── brewer_id → Brewer
+├── grinder_id → Grinder
+└── line_id → RecipeLine      (None = the combination's default line)
+
 Delta
 ├── from_recipe_id → Recipe
 └── to_recipe_id → Recipe
 ```
+
+**PlannedBrew:** created from the brew page ("Plan for next time") or the browse page ("Schedule next brew"). `crud.create_plan` replaces any existing plan for that user. When a plan exists, the home page renders the planned recipe first with "Log a brew" open; logging a brew or saving a variation with `planned_brew_id` deletes the plan. Deleting a bag, brewer, grinder, or named recipe also deletes plans that reference it. Plans from the brew page record the named recipe (`line_id`); plans from the browse page leave it `None`, meaning "whichever line is the default when opened". `/plan` drops a `line_id` that doesn't belong to the submitted combination. `is_current_plan` is computed in `main._latest_recipe_context`, not in the template.
 
 **Quantity formula:**
 ```
@@ -79,7 +103,8 @@ This is computed in `crud.get_remaining_quantity`. It joins through `Brew → Re
 
 **Brew recommendation fields:**
 - `recommended_param`, `recommended_delta` (Optional[float]), `recommended_rationale`
-- These surface in the brew page as a green banner and pre-populate the "Create variation" form via the `applyRecommendation()` JS function
+- These surface in the brew page as an amber "Recommended next" banner and pre-populate the "Create variation" form via the `applyRecommendation()` JS function
+- Recommendations, like everything else in history, are per named recipe: the banner comes from the newest brew of the current line's latest version
 
 ---
 
@@ -115,6 +140,33 @@ The global CSS rule `input, select, button { width: 100% }` originally omitted `
 
 FastAPI's `bool = Form(...)` does not parse HTML checkbox values correctly by default — an unchecked checkbox sends nothing, a checked one sends `"true"` (a string). The `is_frozen` field in `/bags` works around this. If you add more boolean form fields, test the unchecked case explicitly.
 
+### 7. Schema changes must also update export/import
+
+`scripts/export.py` and `scripts/import.py` list every column by hand. When you add a model or column, add it to both (import should read new columns with `r.get(...)` so older snapshots still load), then run `.venv/bin/pytest tests/`. The round-trip test copies `data/coffee.db`, exports it, imports into a fresh DB, and asserts every table is row-for-row identical — it will fail if a column is dropped. Import's `_str` deliberately does **not** strip whitespace; several real notes have trailing whitespace/newlines. Add the new table to `TABLES` in `tests/test_export_import.py`.
+
+### 8. Test against prod data before deploying
+
+Every test that uses a reference DB reads `COFFEE_REFERENCE_DB` (default `data/coffee.db`) and only ever works on a copy made with the sqlite backup API. Prod has more and messier data than the local DB; `scripts/deploy.sh` runs the suite against a fresh prod backup automatically, but run it yourself while developing a schema change: `COFFEE_REFERENCE_DB=/path/to/prod.db .venv/bin/pytest tests/`.
+
+Scripts that run as their own process (like `scripts/migrate.py`) only see the models they import. `db.run_migrations()` therefore creates missing tables itself; keep it that way. `tests/test_migrate_script.py` runs the script as a subprocess (with `COFFEE_DB` pointing at a copy) for exactly this reason.
+
+### 9. Routes that need a user call `_require_user`
+
+`_require_user(request, session)` raises `_redirect_to_select`, which the `user_redirect_middleware` turns into a redirect to `/select-user` (and clears a stale cookie). Use it in any page or create route that needs the current user; list queries in `crud` take `user_id` and filter on it.
+
+---
+
+## Deploying to prod
+
+Prod is a VPS (`root@168.144.126.15`, Ubuntu): systemd unit `coffee.service` runs uvicorn on 127.0.0.1:8000 from a git checkout at `/root/coffee-recipe-tracker`, behind Caddy. The live database is `data/coffee.db` in that checkout and is **not** tracked by git (never commit a database; prod's data and the local DB have diverged and the local one must never reach prod). Code moves by `git merge --ff-only` from GitHub; data only changes in place via migrations.
+
+From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs up prod, copies the backup to `data/backups/`, runs the tests against it locally, then on the VPS (`scripts/remote/ship.sh`): stops the app, copies the database, fast-forwards, runs the tests again with prod's own packages, runs `scripts/migrate.py`, starts the app. Any failure there restores the copy and the previous commit automatically. `scripts/remote/verify.sh` then checks every page for every user and that no pre-deploy row changed. `scripts/rollback.sh` undoes the last deploy (keeping the current database aside as `*-before-rollback.db`). The last deploy (previous commit, backup path) is recorded in `/root/backups/last-deploy`; a rollback renames it to `last-deploy.rolled-back-<stamp>`.
+
+- Prod's venv was not installed from `requirements.txt` and has different versions (e.g. starlette 0.46 vs 0.52). Deploy only runs `pip install` when `requirements.txt` changed, and its on-VPS test run is what catches version problems.
+- One-off data corrections go in `DATA_FIXES` in `scripts/migrate.py`, each guarded to match exactly the bad row (so it is a no-op elsewhere and on re-runs). Allow-list the row in `verify.sh` too, which otherwise flags any changed pre-deploy row.
+- The root crontab's nightly backup (`sqlite3 ... .backup`) has never worked: the VPS has no `sqlite3` CLI. Replace it with `scripts/backup.py data/coffee.db /root/backups --keep-days 60` (needs the user's OK — it changes prod config).
+- To rehearse without touching prod, `COFFEE_HOST=local` plus `APP`, `BACKUPS`, `URL`, `START_CMD`, `STOP_CMD` run the VPS side on your machine against a local checkout.
+
 ---
 
 ## File map
@@ -123,23 +175,38 @@ FastAPI's `bool = Form(...)` does not parse HTML checkbox values correctly by de
 |---|---|
 | `app/models.py` | SQLModel ORM definitions. All schema changes start here. |
 | `app/crud.py` | All DB reads and writes. No business logic in routes — it belongs here. |
-| `app/db.py` | Engine, session factory, `create_db_and_tables()`. |
-| `app/main.py` | FastAPI routes. Thin — calls crud, returns TemplateResponse. |
-| `app/templates/base.html` | Nav bar, page shell, `toggleForm()` JS helper. |
-| `app/templates/index.html` | Brew page. Picker form with htmx (`hx-get="/recipes/latest"`). |
-| `app/templates/partials/latest_recipe.html` | htmx partial. Recipe display, log-a-brew form, variation form, recommendation banner. |
-| `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. |
-| `app/templates/browse.html` | Bean overview with bag inventory and collapsible history. |
+| `app/db.py` | Engine (path overridable with `COFFEE_DB`), session factory, `create_db_and_tables()`, `run_migrations()` (creates missing tables, additive column adds, user seeding, Default named-recipe backfill). |
+| `app/main.py` | FastAPI routes. Thin — calls crud, returns TemplateResponse. Also user-cookie helpers, the morning banner's pixel art and quotes. |
+| `app/templates/base.html` | Nav bar (with current user link), page shell, `toggleForm()` and `flipSign()` JS helpers. |
+| `app/templates/select_user.html` | Pick which user you are (sets the `user_id` cookie). |
+| `app/templates/index.html` | Brew page. Morning banner, bag-picker modal, picker form with htmx (`hx-get="/recipes/latest"`). Shows the scheduled brew first if one exists. |
+| `app/templates/partials/latest_recipe.html` | htmx partial. Named-recipe picker (only with 2+ lines), recipe display, plan-for-next-time form, recommendation banner, and collapsed sections: log a brew, create variation, new named recipe, rename/delete the current one. |
+| `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders, users. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. Beans whose bags are all completed are listed separately as archived. |
+| `app/templates/browse.html` | Bean overview with bag inventory, collapsible history, and "Schedule next brew" form. |
 | `app/static/styles.css` | All styles. No external CSS framework. |
-| `scripts/export.py` | Exports all tables to CSV in `export/`. |
-| `scripts/import.py` | Restores from a CSV snapshot. Two-pass recipe insert for `previous_recipe_id`. Requires empty tables. |
+| `scripts/export.py` | Exports every table (incl. users, named recipes, planned brews, owner `user_id`s) to CSV. Brings the DB up to the current schema first. Default `export/`, or pass a directory. `export_all(engine, out_dir)` is importable. |
+| `scripts/import.py` | Restores from a CSV snapshot. Two-pass recipe insert for `previous_recipe_id`. Requires every table to be empty. Also accepts older snapshots (no `users.csv` / `planned_brews.csv` / `recipe_lines.csv`) and fills the gaps via `run_migrations`. `import_all(engine, src_dir)` is importable. |
 | `scripts/drop_tables.py` | Drops and recreates all tables after confirmation prompt. |
+| `scripts/migrate.py` | Schema migrations + guarded one-off data fixes + sanity checks; exits non-zero on problems. Run by deploy with the app stopped. |
+| `scripts/backup.py` | Consistent SQLite backup with the stdlib only (the VPS has no `sqlite3` CLI). Must not import the app: deploy streams it over ssh. |
+| `scripts/deploy.sh`, `scripts/rollback.sh` | Run on your Mac. See "Deploying to prod". |
+| `scripts/remote/*.sh` | `ship.sh`, `verify.sh`, `rollback.sh`: the VPS side, streamed over ssh by the two scripts above. |
+| `tests/conftest.py` | `app_on` fixture: runs the real app (startup migrations included) against a throwaway DB, empty or copied from a reference DB. |
+| `tests/test_flows.py` | Behaviour of the core flows through HTTP: baseline → brews → variations, one-parameter rule, scheduling, browse, delete cascades. Written before named recipes; must keep passing unchanged. |
+| `tests/test_named_recipes.py` | Several named recipes per combination: separate histories, picker, default choice, scheduling, rename/delete. |
+| `tests/test_reference_parity.py` | On a copy of the reference DB: every combination shows the same latest recipe / brews / deltas as the original rules (computed in plain SQL), every page renders, existing rows untouched, migrations idempotent. |
+| `tests/test_export_import.py` | Export→import round-trip against a temp copy of the reference DB, plus named recipes, legacy-snapshot and non-empty-DB checks. |
+| `tests/test_migrate_script.py` | Runs `scripts/migrate.py` as a subprocess on a copy of the reference DB (idempotent, no unassigned recipes) and checks the data fix only touches the known bad row. |
+| `data/backups/` | Dated copies of `coffee.db`, plus `prod-*-predeploy.db` copies pulled down by deploy (not tracked in git). |
+| `export/` | A committed pre-multi-user CSV snapshot; the tests use it as the legacy-format fixture. |
 
 ---
 
 ## htmx usage
 
-Only one htmx interaction exists: the brew page picker (`index.html`). When any select changes, htmx fires a GET to `/recipes/latest?bag_id=&brewer_id=&grinder_id=` and swaps the response into `#latest-wing`.
+Only one htmx interaction exists: the brew page picker (`index.html`). The bag is chosen in a JS modal that writes a hidden `bag_id` input and dispatches a `change` event; brewer and grinder are plain selects. When any of them changes, htmx fires a GET to `/recipes/latest?bag_id=&brewer_id=&grinder_id=` and swaps the response into `#latest-wing`.
+
+The partial adds a second, nested interaction: when a combination has more than one named recipe it renders a "Recipe" `<select name="line_id">` whose form does the same GET with `hx-include="#picker-form"`, so the bag/brewer/grinder come along. Changing the bag, brewer, or grinder drops `line_id`, which resets to the default line.
 
 The partial endpoint (`/recipes/latest`) handles the incomplete-selection case gracefully — if any of the three IDs are missing, it returns a prompt message instead of querying the DB.
 
@@ -152,22 +219,23 @@ If you add new htmx interactions, keep them similarly self-contained with gracef
 - **Collapsibles:** use `<details>/<summary>` — no JS needed, already styled with `.bean-block`, `.history-block` classes. The arrow indicator is a CSS `::before` pseudo-element that rotates on `[open]`.
 - **Low stock:** rows with `remaining ≤ low_threshold_g` get class `low-stock` (amber background).
 - **Muted text:** class `.muted` for secondary/empty-state text.
-- **Buttons:** default button is dark (`#334155`). Secondary actions use `.btn-secondary` (light grey). The apply-recommendation button uses `.btn-apply-rec` (green, defined in styles.css).
+- **Buttons:** default button is dark brown (`#6b3d2e`). Secondary actions use `.btn-secondary` (parchment `#f0e4d4`). The apply-recommendation button uses `.btn-apply-rec` (amber). Destructive actions add `.btn-danger`.
+- **Signed amounts:** iOS number keypads (`inputmode="decimal"`) have no minus key. Any input that can be negative goes in a `<span class="signed-input">` with a `<button type="button" class="btn-sign" onclick="flipSign(this)">±</button>` right after the input (`flipSign` flips the sign of its previous sibling).
 - **Forms:** always use `.stacked-form` class. Labels go above inputs (separate `<label>` tag, not wrapping the input) for textareas. Inputs wrap labels for single-line fields — this is inconsistent and worth standardising if the forms grow.
 
 ---
 
 ## Edit/delete patterns
 
-All entity management (beans, bags, brewers, grinders) follows the same pattern:
+All entity management on the manage page (beans, bags, brewers, grinders) follows the same pattern (named recipes are renamed/deleted from the brew page instead):
 
 **Inline edit forms:** Hidden `<div class="edit-form hidden" id="edit-<entity>-{{ id }}">` inside the row. `toggleForm(id)` in `base.html` flips the `.hidden` class. Edit button calls `toggleForm(...)` with `event.stopPropagation()` when inside a `<summary>` (to prevent `<details>` open/close).
 
-**Delete with cascade:** Deletion order must respect FK constraints: Deltas → Brews → Recipes → (Bags) → Bean. The crud functions handle this explicitly (SQLite does not enforce FK constraints by default). See `crud.delete_bean`, `crud.delete_brewer`, `crud.delete_grinder`.
+**Delete with cascade:** Deletion order must respect FK constraints: Deltas → Brews → Recipes → PlannedBrews → RecipeLines → (Bags) → Bean. The crud functions handle this explicitly (SQLite does not enforce FK constraints by default), via the shared helpers `crud._delete_recipes` and `crud._delete_lines`. See `crud.delete_bean`, `crud.delete_brewer`, `crud.delete_grinder`, `crud.delete_line`, and `crud.delete_user` (which cascades through all of the user's beans, brewers, and grinders).
 
-**Completed bags:** `BeanBag.is_completed = True` hides the bag from the brew-page picker (`index.html` filters `{% if not bag.is_completed %}`). The bag remains in the database and still appears in the manage page (greyed out with `.row-completed`).
+**Completed bags:** `BeanBag.is_completed = True` hides the bag from the brew-page picker (`crud.get_active_bags_for_user` excludes completed bags, and the `/` route also drops bags with nothing remaining). The bag remains in the database and still appears in the manage page (greyed out with `.row-completed`).
 
-**Routes:** All edit/delete/complete routes are `POST` (HTML forms cannot `DELETE`). They all redirect to `/manage` with `status_code=303`.
+**Routes:** All edit/delete/complete routes are `POST` (HTML forms cannot `DELETE`). They redirect with `status_code=303`: to `/manage`, except the named-recipe routes (`/lines/{id}/rename`, `/lines/{id}/delete`), which redirect to `/`. Validation failures raise `HTTPException(400)` with a plain message.
 
 **Confirm dialogs:** Delete buttons use `onsubmit="return confirm('...')"` to prevent accidental deletion.
 
@@ -175,8 +243,7 @@ All entity management (beans, bags, brewers, grinders) follows the same pattern:
 
 ## What has been intentionally left out
 
-- **No user accounts.** Single-user personal app. Auth was discussed for public cloud deployment but not implemented.
-- **No CSRF protection.** Safe for local/LAN use. Add `starlette-csrf` middleware before any public deployment.
-- **No migrations.** Use `scripts/export.py` before any schema change.
-- **No tests.** The CRUD functions are pure and easily testable with pytest fixtures if needed.
-- **No migrations.** Use `scripts/export.py` before any schema change, then `scripts/drop_tables.py` to wipe, then `scripts/import.py` to restore.
+- **No authentication or per-route ownership checks.** Users are picked from a list, not logged into. The app stays on a trusted network with no external users, so this is intended, not a TODO.
+- **No CSRF protection.** Same reasoning — trusted network only. Add `starlette-csrf` middleware if that ever changes.
+- **No alembic.** Additive columns go in `db.run_migrations()`; anything else uses export → `scripts/drop_tables.py` → import.
+- **No unit tests for templates/CSS.** `tests/` covers the HTTP flows, data parity, and export/import; visual changes are checked by hand in a browser.

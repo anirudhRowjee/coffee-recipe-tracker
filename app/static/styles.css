@@ -423,6 +423,22 @@ details[open] > .history-summary::before {
     background: #e8d5c0;
 }
 
+.signed-input {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-sign {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 44px;
+    background: #f0e4d4;
+    color: #5c3520;
+    border: 1px solid #d4b896;
+    font-size: 1.1rem;
+    padding: 4px 12px;
+}
+
 .btn-apply-rec {
     background: #fef3e2;
     color: #92400e;

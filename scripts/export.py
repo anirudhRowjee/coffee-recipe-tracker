@@ -1,6 +1,11 @@
 """
 Export all coffee data to CSV files in an export/ directory.
-Usage: python scripts/export.py
+
+Usage:
+    python scripts/export.py                  # writes to export/
+    python scripts/export.py path/to/snapshot # writes to a custom directory
+
+Restore with scripts/import.py.
 """
 import csv
 import sys
@@ -9,81 +14,116 @@ from pathlib import Path
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlmodel import Session, select
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import Bean, BeanBag, Brewer, Grinder, Recipe, Brew, Delta
+from app.models import User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
 from app import crud
 
-OUT = Path("export")
-OUT.mkdir(exist_ok=True)
 
-db.create_db_and_tables()
+def export_all(engine: Engine, out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    # Same schema catch-up the app runs on startup, so an older DB exports cleanly
+    SQLModel.metadata.create_all(engine)
+    db.run_migrations(engine)
 
-with Session(db.engine) as session:
+    with Session(engine) as session:
 
-    # Beans
-    with open(OUT / "beans.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "name", "origin", "roast_level", "flavor_notes", "notes"])
-        for b in session.exec(select(Bean)).all():
-            w.writerow([b.id, b.name, b.origin, b.roast_level, b.flavor_notes, b.notes])
+        # Users
+        with open(out / "users.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "name"])
+            for u in session.exec(select(User).order_by(User.id)).all():
+                w.writerow([u.id, u.name])
 
-    # Bags (with remaining quantity)
-    with open(OUT / "bags.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "bean_id", "bean_name", "roast_date", "purchase_date",
-                    "initial_quantity_g", "remaining_g", "low_threshold_g", "is_frozen", "frozen_date", "is_completed", "notes"])
-        for bag in session.exec(select(BeanBag)).all():
-            remaining = crud.get_remaining_quantity(session, bag)
-            w.writerow([bag.id, bag.bean_id, bag.bean.name, bag.roast_date, bag.purchase_date,
-                        bag.initial_quantity_g, round(remaining, 1), bag.low_threshold_g,
-                        bag.is_frozen, bag.frozen_date, bag.is_completed, bag.notes])
+        # Beans
+        with open(out / "beans.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "user_id", "name", "origin", "roast_level", "flavor_notes", "notes"])
+            for b in session.exec(select(Bean).order_by(Bean.id)).all():
+                w.writerow([b.id, b.user_id, b.name, b.origin, b.roast_level, b.flavor_notes, b.notes])
 
-    # Brewers
-    with open(OUT / "brewers.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "name", "method", "notes"])
-        for b in session.exec(select(Brewer)).all():
-            w.writerow([b.id, b.name, b.method, b.notes])
+        # Bags (with remaining quantity)
+        with open(out / "bags.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "bean_id", "bean_name", "roast_date", "purchase_date",
+                        "initial_quantity_g", "remaining_g", "low_threshold_g", "is_frozen", "frozen_date",
+                        "thaw_date", "is_completed", "notes"])
+            for bag in session.exec(select(BeanBag).order_by(BeanBag.id)).all():
+                remaining = crud.get_remaining_quantity(session, bag)
+                w.writerow([bag.id, bag.bean_id, bag.bean.name if bag.bean else "", bag.roast_date, bag.purchase_date,
+                            bag.initial_quantity_g, round(remaining, 1), bag.low_threshold_g,
+                            bag.is_frozen, bag.frozen_date, bag.thaw_date, bag.is_completed, bag.notes])
 
-    # Grinders
-    with open(OUT / "grinders.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "name", "notes"])
-        for g in session.exec(select(Grinder)).all():
-            w.writerow([g.id, g.name, g.notes])
+        # Brewers
+        with open(out / "brewers.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "user_id", "name", "method", "notes"])
+            for b in session.exec(select(Brewer).order_by(Brewer.id)).all():
+                w.writerow([b.id, b.user_id, b.name, b.method, b.notes])
 
-    # Recipes
-    with open(OUT / "recipes.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "bean_id", "bean_name", "brewer_id", "brewer_name",
-                    "grinder_id", "grinder_name", "dose_g", "water_ml", "temp_c",
-                    "grind_size", "recipe_text", "previous_recipe_id", "created_at"])
-        for r in session.exec(select(Recipe)).all():
-            w.writerow([r.id, r.bean_id, r.bean.name, r.brewer_id, r.brewer.name,
-                        r.grinder_id, r.grinder.name, r.dose_g, r.water_ml, r.temp_c,
-                        r.grind_size, r.recipe_text, r.previous_recipe_id, r.created_at])
+        # Grinders
+        with open(out / "grinders.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "user_id", "name", "notes"])
+            for g in session.exec(select(Grinder).order_by(Grinder.id)).all():
+                w.writerow([g.id, g.user_id, g.name, g.notes])
 
-    # Brews (with tasting notes and recommendations)
-    with open(OUT / "brews.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "recipe_id", "bean_name", "bag_id", "brewed_at", "notes",
-                    "recommended_param", "recommended_delta", "recommended_rationale"])
-        for b in session.exec(select(Brew)).all():
-            w.writerow([b.id, b.recipe_id, b.recipe.bean.name, b.bag_id, b.brewed_at,
-                        b.notes, b.recommended_param, b.recommended_delta, b.recommended_rationale])
+        # Named recipes
+        with open(out / "recipe_lines.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "bean_id", "brewer_id", "grinder_id", "name", "created_at"])
+            for ln in session.exec(select(RecipeLine).order_by(RecipeLine.id)).all():
+                w.writerow([ln.id, ln.bean_id, ln.brewer_id, ln.grinder_id, ln.name, ln.created_at])
 
-    # Deltas (change history)
-    with open(OUT / "deltas.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "from_recipe_id", "to_recipe_id", "bean_name",
-                    "changed_param", "delta_amount", "rationale", "created_at"])
-        for d in session.exec(select(Delta)).all():
-            recipe = session.get(Recipe, d.to_recipe_id)
-            w.writerow([d.id, d.from_recipe_id, d.to_recipe_id,
-                        recipe.bean.name if recipe else "",
-                        d.changed_param, d.delta_amount, d.rationale, d.created_at])
+        # Recipes (versions of a named recipe)
+        with open(out / "recipes.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "bean_id", "bean_name", "brewer_id", "brewer_name",
+                        "grinder_id", "grinder_name", "line_id", "line_name", "dose_g", "water_ml", "temp_c",
+                        "grind_size", "recipe_text", "previous_recipe_id", "created_at"])
+            for r in session.exec(select(Recipe).order_by(Recipe.id)).all():
+                w.writerow([r.id, r.bean_id, r.bean.name if r.bean else "", r.brewer_id, r.brewer.name if r.brewer else "",
+                            r.grinder_id, r.grinder.name if r.grinder else "", r.line_id, r.line.name if r.line else "",
+                            r.dose_g, r.water_ml, r.temp_c,
+                            r.grind_size, r.recipe_text, r.previous_recipe_id, r.created_at])
 
-print(f"Exported to {OUT.resolve()}/")
-for f in sorted(OUT.iterdir()):
-    print(f"  {f.name}")
+        # Brews (with tasting notes and recommendations)
+        with open(out / "brews.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "recipe_id", "bean_name", "bag_id", "brewed_at", "notes",
+                        "recommended_param", "recommended_delta", "recommended_rationale"])
+            for b in session.exec(select(Brew).order_by(Brew.id)).all():
+                bean_name = b.recipe.bean.name if b.recipe and b.recipe.bean else ""
+                w.writerow([b.id, b.recipe_id, bean_name, b.bag_id, b.brewed_at,
+                            b.notes, b.recommended_param, b.recommended_delta, b.recommended_rationale])
+
+        # Planned (scheduled) brews
+        with open(out / "planned_brews.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "user_id", "bag_id", "brewer_id", "grinder_id", "line_id", "notes", "created_at"])
+            for p in session.exec(select(PlannedBrew).order_by(PlannedBrew.id)).all():
+                w.writerow([p.id, p.user_id, p.bag_id, p.brewer_id, p.grinder_id, p.line_id, p.notes, p.created_at])
+
+        # Deltas (change history)
+        with open(out / "deltas.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "from_recipe_id", "to_recipe_id", "bean_name",
+                        "changed_param", "delta_amount", "rationale", "created_at"])
+            for d in session.exec(select(Delta).order_by(Delta.id)).all():
+                recipe = session.get(Recipe, d.to_recipe_id)
+                w.writerow([d.id, d.from_recipe_id, d.to_recipe_id,
+                            recipe.bean.name if recipe and recipe.bean else "",
+                            d.changed_param, d.delta_amount, d.rationale, d.created_at])
+
+
+def main() -> None:
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("export")
+    export_all(db.engine, out)
+    print(f"Exported to {out.resolve()}/")
+    for f in sorted(out.iterdir()):
+        print(f"  {f.name}")
+
+
+if __name__ == "__main__":
+    main()
