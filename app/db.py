@@ -58,10 +58,16 @@ def run_migrations(target: Optional[Engine] = None):
 
     with target.begin() as conn:
         _migrate_recipe_lines(conn)
+        _migrate_brew_ratings(conn)
 
 
 def _columns(conn, table: str) -> set:
     return {row[1] for row in conn.execute(text(f'PRAGMA table_info("{table}")'))}
+
+
+def _migrate_brew_ratings(conn) -> None:
+    if "rating" not in _columns(conn, "brew"):
+        conn.execute(text("ALTER TABLE brew ADD COLUMN rating INTEGER"))
 
 
 DEFAULT_LINE_NAME = "Default"

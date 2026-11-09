@@ -211,8 +211,8 @@ def create_bag(session: Session, bean_id: int, initial_quantity_g: float, roast_
     return bag
 
 
-def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[str] = None, recommended_param: Optional[str] = None, recommended_delta: Optional[float] = None, recommended_rationale: Optional[str] = None) -> models.Brew:
-    brew = models.Brew(recipe_id=recipe_id, bag_id=bag_id, notes=notes, recommended_param=recommended_param, recommended_delta=recommended_delta, recommended_rationale=recommended_rationale)
+def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[str] = None, recommended_param: Optional[str] = None, recommended_delta: Optional[float] = None, recommended_rationale: Optional[str] = None, rating: Optional[int] = None) -> models.Brew:
+    brew = models.Brew(recipe_id=recipe_id, bag_id=bag_id, notes=notes, rating=rating, recommended_param=recommended_param, recommended_delta=recommended_delta, recommended_rationale=recommended_rationale)
     session.add(brew)
     session.commit()
     session.refresh(brew)

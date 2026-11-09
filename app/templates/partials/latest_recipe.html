@@ -80,6 +80,7 @@
             {% for brew in recent_brews %}
             <div class="brew-entry">
                 <span class="brew-date">{{ brew.brewed_at.strftime('%b %d, %Y') }}</span>
+                {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
                 <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
                 {% if brew.recommended_param %}
                 <p class="brew-rec">→ Try: {{ brew.recommended_param.replace('_', ' ') }}
@@ -152,6 +153,8 @@
             </label>
             <label>Tasting notes for this brew</label>
             <textarea name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
+            <label style="margin-top:8px">Rating</label>
+            {% with star_name='brew_rating' %}{% include 'partials/star_input.html' %}{% endwith %}
             {% if rec %}
             <div class="muted" style="font-size:0.85em;margin-top:10px;padding:6px 8px;border-left:3px solid var(--border,#ccc)">
                 Previous recommendation:

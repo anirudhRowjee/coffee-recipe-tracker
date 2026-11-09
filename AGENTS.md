@@ -34,7 +34,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 **Trusted network, a few household users.** The app runs on a trusted LAN/VPS with no external users. Multiple people share it via a `user_id` cookie picked on `/select-user` — there are no passwords and no auth. Beans, brewers, and grinders are owned by a user (`user_id`); bags, recipes, brews, and deltas inherit ownership through their bean. Routes filter *list* views by the current user but do not check ownership on edit/delete/create-by-ID routes. That is deliberate for this deployment — do not add auth/ownership checks unless asked.
 
-**Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, and (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
+**Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line, and (`_migrate_brew_ratings`) adds `brew.rating`. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
 
 ---
 
@@ -72,7 +72,7 @@ Recipe                        ← one version
 ├── previous_recipe_id → Recipe (same line)
 └── brews: List[Brew]
 
-Brew
+Brew                          (rating: 1-5 or None)
 ├── recipe: Recipe
 └── bag: BeanBag
 
@@ -175,7 +175,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 
 "Share as text" / "Download .md" on the recipe card serve `app/export.py`'s Markdown for the current named recipe. It stays behind Caddy's basic auth like every other route; nothing is public.
 
-- **Privacy is a whitelist.** `export.py` reads only bean name/origin/roast/flavour notes, brewer and grinder names, the latest version's parameters and method, and the line's deltas with their rationales. Tasting notes, recommendations, bags/quantities, `Bean.notes`, plans, and user names must never appear; `tests/test_export_recipe.py` plants marker strings in all of them. Keep new fields out unless they are clearly meant for friends.
+- **Privacy is a whitelist.** `export.py` reads only bean name/origin/roast/flavour notes, brewer and grinder names, the latest version's parameters and method, and the line's deltas with their rationales. Tasting notes, ratings, recommendations, bags/quantities, `Bean.notes`, plans, and user names must never appear; `tests/test_export_recipe.py` plants marker strings in all of them. Keep new fields out unless they are clearly meant for friends.
 - **History shows real values** (`before → after` read from the two versions), never `Delta.delta_amount`, which is typed by hand and can be wrong (prod change #22 records −1 for 21 → 19).
 - "Default" is not shown as a recipe name; grind is always printed with the grinder's name, since a setting means nothing on another grinder.
 - A public link (`/s/<token>`) was planned as a second step: a `RecipeShare` table with revocable random tokens, a self-contained read-only page reusing `export.py`'s data, and a Caddy `handle /s/*` placed before `basicauth`. Not built; it needs the user's go-ahead for the Caddy change.
@@ -196,6 +196,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `app/templates/select_user.html` | Pick which user you are (sets the `user_id` cookie). |
 | `app/templates/brew.html` | Brew mode (`GET /lines/{id}/brew?bag_id=&plan_id=`): large parameters, timer (current step above the clock, so nothing needs scrolling mid-brew; no site header and compact tiles so everything down to Start fits one phone screen, and the page must not scroll itself), steps with `data-times`, and the log form when the bag belongs to this bean. `plan_id` is only honoured if it is the current user's plan for this bag/brewer/grinder/line, so logging from here clears the schedule like the panel does. |
 | `app/templates/partials/log_brew_form.html` | The "Log a brew" form, included by the recipe panel and brew mode with `log_recipe_id` / `log_bag_id` / `log_plan_id`. One per page: it uses fixed ids (`log-notes`, `rec-delta-row`). |
+| `app/templates/partials/star_input.html` | 1-5 star picker, CSS only (reversed radios). Expects `star_name`; used by the log form (`rating`) and variation form (`brew_rating`). |
 | `app/templates/index.html` | Brew page. Morning banner, bag-picker modal, picker form with htmx (`hx-get="/recipes/latest"`). Shows the scheduled brew first if one exists. |
 | `app/templates/partials/latest_recipe.html` | htmx partial. Named-recipe picker (only with 2+ lines), recipe display, plan-for-next-time form, recommendation banner, and collapsed sections: log a brew, create variation, new named recipe, rename/delete the current one. |
 | `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders, users. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. Beans whose bags are all completed are listed separately as archived. |
@@ -212,6 +213,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/test_flows.py` | Behaviour of the core flows through HTTP: baseline → brews → variations, one-parameter rule, scheduling, browse, delete cascades. Written before named recipes; must keep passing unchanged. |
 | `tests/test_named_recipes.py` | Several named recipes per combination: separate histories, picker, default choice, scheduling, rename/delete. |
 | `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
+| `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |
 | `tests/test_export_recipe.py` | Recipe export: exact output, no personal data (marker strings planted in every private field), per-line history, CRLF normalisation, download headers. |
 | `tests/test_reference_parity.py` | On a copy of the reference DB: every combination shows the same latest recipe / brews / deltas as the original rules (computed in plain SQL), every page renders, existing rows untouched, migrations idempotent. |
 | `tests/test_export_import.py` | Export→import round-trip against a temp copy of the reference DB, plus named recipes, legacy-snapshot and non-empty-DB checks. |

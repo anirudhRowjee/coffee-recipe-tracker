@@ -91,12 +91,12 @@ def export_all(engine: Engine, out: Path) -> None:
         # Brews (with tasting notes and recommendations)
         with open(out / "brews.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "recipe_id", "bean_name", "bag_id", "brewed_at", "notes",
+            w.writerow(["id", "recipe_id", "bean_name", "bag_id", "brewed_at", "notes", "rating",
                         "recommended_param", "recommended_delta", "recommended_rationale"])
             for b in session.exec(select(Brew).order_by(Brew.id)).all():
                 bean_name = b.recipe.bean.name if b.recipe and b.recipe.bean else ""
                 w.writerow([b.id, b.recipe_id, bean_name, b.bag_id, b.brewed_at,
-                            b.notes, b.recommended_param, b.recommended_delta, b.recommended_rationale])
+                            b.notes, b.rating, b.recommended_param, b.recommended_delta, b.recommended_rationale])
 
         # Planned (scheduled) brews
         with open(out / "planned_brews.csv", "w", newline="") as f:

@@ -20,6 +20,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Multiple users** — pick who you are from a list (no passwords; meant for a trusted network). Each user has their own beans, brewers, and grinders.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
+- **Star ratings** — rate each brew from 1 to 5 when you log it; stars appear in the brew history.
 - **Brew mode** — "▶ Brew" on the recipe card opens the recipe in large type with a big timer. Times written in the method ("Swirl at 1:00", "0:40 — pour to 200g") become steps: the current one is highlighted, the next one counts down, and the phone beeps at each (not in silent mode) and stays awake while the timer runs. Stopping puts "Brewed 3:12" into the log form below it.
 - **Share a recipe as text** — "Share as text" on the recipe card opens the current named recipe as plain Markdown to copy into a chat ("Download .md" saves a file): bean, gear, dose/water/ratio/temp, grind on which grinder, method, and how it got there. Tasting notes, bags, and other personal details are left out.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
@@ -129,7 +130,8 @@ app/
 │   ├── manage.html         # Add/edit beans, bags, brewers, grinders, users
 │   └── partials/
 │       ├── latest_recipe.html  # htmx partial: recipe picker, recipe, brew log, variation form
-│       └── log_brew_form.html  # "Log a brew" form, shared by the recipe panel and brew mode
+│       ├── log_brew_form.html  # "Log a brew" form, shared by the recipe panel and brew mode
+│       └── star_input.html     # 1-5 star picker (no JavaScript)
 └── static/
     ├── styles.css
     └── htmx.min.js

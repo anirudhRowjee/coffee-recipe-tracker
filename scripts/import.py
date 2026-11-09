@@ -241,6 +241,7 @@ def import_all(engine: Engine, src: Path) -> None:
                 recipe_id=_int(r["recipe_id"]),
                 bag_id=_int(r["bag_id"]),
                 notes=_str(r["notes"]),
+                rating=_int(r.get("rating")),
                 recommended_param=_str(r["recommended_param"]),
                 recommended_delta=_float(r["recommended_delta"]),
                 recommended_rationale=_str(r["recommended_rationale"]),

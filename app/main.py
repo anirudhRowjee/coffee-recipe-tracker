@@ -15,6 +15,7 @@ app = FastAPI(title="Coffee Recipe Tracker")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
+templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 PIXEL_ART_COLORS = [
     # coffee browns
@@ -91,6 +92,11 @@ def _generate_pixel_art_svg(grid: int = 12, cell: int = 7, fill_chance: float = 
 def on_startup():
     db.create_db_and_tables()
     db.run_migrations()
+
+
+def _parse_rating(value: Optional[str]) -> Optional[int]:
+    """1-5 from the star inputs; anything else is treated as not rated."""
+    return int(value) if value in ("1", "2", "3", "4", "5") else None
 
 
 def _get_current_user(request: Request, session: Session) -> Optional[models.User]:
@@ -564,6 +570,7 @@ def create_brew(
     recipe_id: int = Form(...),
     bag_id: int = Form(...),
     notes: str = Form(None),
+    rating: str = Form(None),
     recommended_param: str = Form(None),
     recommended_delta: str = Form(None),
     recommended_rationale: str = Form(None),
@@ -581,6 +588,7 @@ def create_brew(
             recipe_id=recipe_id,
             bag_id=bag_id,
             notes=notes,
+            rating=_parse_rating(rating),
             recommended_param=recommended_param or None,
             recommended_delta=rec_delta,
             recommended_rationale=recommended_rationale or None,
@@ -606,6 +614,7 @@ def create_recipe(
     rationale: str = Form(None),
     bag_id: int = Form(None),
     brew_notes: str = Form(None),
+    brew_rating: str = Form(None),
     brew_recommended_param: str = Form(None),
     brew_recommended_delta: str = Form(None),
     brew_recommended_rationale: str = Form(None),
@@ -682,6 +691,7 @@ def create_recipe(
                 recipe_id=recipe.id,
                 bag_id=bag_id,
                 notes=brew_notes or None,
+                rating=_parse_rating(brew_rating),
                 recommended_param=brew_recommended_param or None,
                 recommended_delta=brew_rec_delta,
                 recommended_rationale=brew_recommended_rationale or None,

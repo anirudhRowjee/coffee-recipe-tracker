@@ -838,3 +838,43 @@ details[open] > .history-summary::before {
     background: #fef3e2;
     font-weight: 700;
 }
+
+/* Star ratings */
+.star-input {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    position: relative;
+}
+
+.star-input input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.star-input label {
+    display: block;
+    margin: 0;
+    padding: 2px 6px;
+    font-size: 2rem;
+    line-height: 1;
+    color: #d4b896;
+    cursor: pointer;
+}
+
+.star-input input:checked ~ label {
+    color: #c68a3d;
+}
+
+.star-input input:focus-visible + label {
+    outline: 2px solid #a0622a;
+    border-radius: 4px;
+}
+
+.brew-stars {
+    margin-left: 8px;
+    color: #c68a3d;
+    letter-spacing: 1px;
+}

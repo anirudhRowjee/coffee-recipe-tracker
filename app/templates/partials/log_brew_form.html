@@ -7,6 +7,8 @@
     {% if log_plan_id %}<input type="hidden" name="planned_brew_id" value="{{ log_plan_id }}" />{% endif %}
     <label>Tasting notes</label>
     <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
+    <label style="margin-top:8px">Rating</label>
+    {% with star_name='rating' %}{% include 'partials/star_input.html' %}{% endwith %}
     <label style="margin-top:8px">Recommend next change</label>
     <select name="recommended_param" onchange="toggleRecDelta(this)">
         <option value="">— no recommendation —</option>

@@ -108,6 +108,7 @@
                         {{ brew.brewed_at.strftime('%b %d, %Y') }}
                         · {{ brew.recipe.dose_g }}g dose · grind {{ brew.recipe.grind_size }}
                     </span>
+                    {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
                     <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
                 </div>
                 {% endfor %}

@@ -181,3 +181,32 @@ def test_round_trip_keeps_named_recipes_and_plans(app_on, tmp_path: Path):
     assert actual["plannedbrew"][0]["line_id"] == 2
     for table in TABLES:
         assert actual[table] == expected[table], table
+
+
+def _seed_one_brew(app) -> None:
+    for url, data in [
+        ("/beans", {"name": "Blue Tokai Baarbara Estate"}),
+        ("/bags", {"bean_id": 1, "initial_quantity_g": 250}),
+        ("/brewers", {"name": "Hario Switch"}),
+        ("/grinders", {"name": "Timemore C2"}),
+        ("/recipes", {"bean_id": 1, "brewer_id": 1, "grinder_id": 1, "dose_g": 15, "water_ml": 250,
+                      "temp_c": 93, "grind_size": "13"}),
+        ("/brews", {"recipe_id": 1, "bag_id": 1, "rating": "4"}),
+    ]:
+        assert app.client.post(url, data=data, follow_redirects=False).status_code == 303, url
+
+
+def _round_trip(app, tmp_path: Path) -> dict:
+    snapshot, restored = tmp_path / "snapshot", tmp_path / "restored.db"
+    export_script.export_all(app.engine, snapshot)
+    import_script.import_all(_engine(restored), snapshot)
+    actual, expected = _dump(restored), _dump(app.path)
+    for table in TABLES:
+        assert actual[table] == expected[table], table
+    return actual
+
+
+def test_round_trip_keeps_ratings(app_on, tmp_path: Path):
+    app = app_on()
+    _seed_one_brew(app)
+    assert _round_trip(app, tmp_path)["brew"][0]["rating"] == 4
