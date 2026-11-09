@@ -1196,6 +1196,7 @@ textarea[hidden] {
 
 .brew-scene .swell { transform-origin: 80px var(--bottom); animation: ba-swell var(--d) ease-out var(--late) both; }
 @keyframes ba-swell { 0% { transform: scaleY(1); } 35%, 100% { transform: scaleY(1.32); } }
+.brew-scene .swollen { transform-origin: 80px var(--bottom); transform: scaleY(1.32); }
 .brew-scene .bubble { opacity: 0; animation: ba-bubble 1.5s ease-out infinite; }
 @keyframes ba-bubble { 0% { opacity: 0; transform: translateY(6px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
 

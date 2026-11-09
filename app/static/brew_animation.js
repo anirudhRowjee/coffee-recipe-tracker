@@ -25,7 +25,7 @@ window.BrewAnimation = (function () {
         draw: '<path class="o" d="M48 120 L112 120 L108 177 Q108 181 104 181 L56 181 Q52 181 52 177 Z"/><path class="o thin" d="M111 134 C132 132 132 162 108 162"/>' };
 
     var ACTIVE_SECONDS = 10;  // stirring and swirling take this long, however long the step is
-    var READY = { kind: 'idle', at: 0, seconds: 1, from: 0, to: 0, cup_from: 0, cup_to: 0, valve: 'open', flip: false, flow: false };
+    var READY = { kind: 'idle', at: 0, seconds: 1, from: 0, to: 0, cup_from: 0, cup_to: 0, valve: 'open', flip: false, flow: false, bloomed: false };
 
     var ids = 0;
 
@@ -37,7 +37,7 @@ window.BrewAnimation = (function () {
         return '<svg class="brew-scene" viewBox="0 0 160 190" style="' + style + '" aria-hidden="true">' + inner + '</svg>';
     }
 
-    // Draw one step, `late` seconds after it began.
+    // Draw one phase of a step, `late` seconds after it began.
     function scene(shape, step, late) {
         var s = SHAPES[shape], id = 'brew-clip-' + (++ids), span = s.bottom - s.top;
         var a = step.kind, seconds = Math.max(step.seconds, 0.5);
@@ -82,7 +82,7 @@ window.BrewAnimation = (function () {
                 bubbles += '<circle class="bubble" cx="' + (80 + x) + '" cy="' + (s.bottom - s.bed - 8) + '" r="2.2" fill="#fff" style="animation-delay:' + i * 0.35 + 's"/>';
             });
         }
-        var bedClass = a === 'bloom' ? 'bed swell' : (a === 'add' ? 'bed grow' : 'bed');
+        var bedClass = step.bloomed ? 'bed swollen' : (a === 'bloom' ? 'bed swell' : (a === 'add' ? 'bed grow' : 'bed'));
         var liquid = '<g clip-path="url(#' + id + ')"><g' + (a === 'swirl' ? ' class="slosh"' : '') + '>' +
             '<g class="level"><rect class="water" x="0" y="' + s.top + '" width="160" height="' + (span + 40) + '"/><rect class="surface" x="0" y="' + s.top + '" width="160" height="3"/></g>' +
             '</g><rect class="' + bedClass + '" x="30" y="' + (s.bottom - s.bed) + '" width="100" height="' + s.bed + '"/>' + bubbles + '</g>';
@@ -90,7 +90,7 @@ window.BrewAnimation = (function () {
         var valve = '', badge = '';
         if (s.valve) {
             var isOpen = step.valve === 'open';
-            var moving = (step.flip || a === 'open' || a === 'close') && late < 1;
+            var moving = step.flip && late < 1;
             var lever = (moving ? 'to-' : 'is-') + (isOpen ? 'open' : 'closed');
             var state = isOpen ? 'valve-open' : 'valve-closed';
             valve = '<g class="lever ' + lever + ' ' + state + '"><path class="o" d="M98 110 L116 110"/><circle cx="118" cy="110" r="5"/></g>';
@@ -138,18 +138,25 @@ window.BrewAnimation = (function () {
         var enabled = setting() !== 'off';
         var drawn = null, last = { index: -1, elapsed: 0, running: false };
 
-        function draw() {
-            var step = data.steps[last.index];
-            host.innerHTML = scene(data.shape, step || READY, step ? Math.max(last.elapsed - step.at, 0) : 0);
-            drawn = last.index;
+        // Which phase of a step the clock is in
+        function phaseOf(step, elapsed) {
+            var found = 0;
+            step.phases.forEach(function (phase, i) { if (phase.at <= elapsed) found = i; });
+            return found;
         }
 
         function update(index, elapsed, running) {
             last = { index: index, elapsed: elapsed, running: running };
             if (!enabled) return;
-            if (index !== drawn) draw();
             var step = data.steps[index];
-            host.classList.toggle('brew-anim-paused', !running && !(step && step.kind === 'done'));
+            var at = step ? phaseOf(step, elapsed) : 0;
+            var phase = step ? step.phases[at] : READY;
+            var key = index + ':' + at;
+            if (key !== drawn) {
+                host.innerHTML = scene(data.shape, phase, step ? Math.max(elapsed - phase.at, 0) : 0);
+                drawn = key;
+            }
+            host.classList.toggle('brew-anim-paused', !running && phase.kind !== 'done');
         }
 
         function apply() {

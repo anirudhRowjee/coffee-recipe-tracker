@@ -140,30 +140,41 @@ def step_editor_data(text: Optional[str]) -> str:
 
 # --- what brew mode's animation shows for each step ---------------------------------
 
-# Checked in order; the first that matches names the step. "idle" (no match) draws
-# the brewer with nothing happening, so an unfamiliar step is never shown wrongly.
+# A step can name several actions; each is found where it's written, so they keep
+# their order. "Valve OPEN" on a valve that's already open is a statement, not an action.
 _ACTIONS = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
-    ("done", r"\bdone\b|^finish|^serve|^enjoy"),
     ("plunge", r"plunge|\bpress\b"),
-    ("open", r"\bopen\b|\brelease\b|\bdrain\b"),
-    ("drawdown", r"draw\s?down"),
-    ("bloom", r"bloom"),
-    ("stir", r"\bstir|nsew|nsns"),
-    ("swirl", r"swirl"),
-    ("pour", r"\bpour|top up|\bwater\b"),
-    ("add", r"\b(coffee|grounds)\b"),
+    ("open", r"\bopen\b|\brelease\b"),
     ("close", r"\bclose"),
-    ("wait", r"\bwait\b|\bsteep|immersion|\brest\b"),
+    ("drawdown", r"draw\s?down|\bdrain\b"),
+    ("bloom", r"bloom"),
+    ("stir", r"\bstir|nsew|nsns|agitat"),
+    ("swirl", r"swirl"),
+    ("pour", r"\bpour|top up|\b(?:add|fill)\b[^,]*\bwater\b"),
+    ("add", r"\badd\b[^,]*\b(?:coffee|grounds)\b"),
+    ("wait", r"\bwait\b|\bsteep|immersion|(?<!the )\brest\b"),
 )]
-_DRAINS = ("open", "drawdown", "plunge")
-_CLOSES_VALVE = re.compile(r"\bclose", re.IGNORECASE)
+_VALVE = {"open": "open", "close": "closed"}
+_RISES = ("pour", "bloom")
+_DRAINS = ("drawdown", "plunge")
+_ENDS_BREW = re.compile(r"\bdone\b|^finish|^serve|^enjoy", re.IGNORECASE)
 _LAST_STEP_SECONDS = 30  # how long to play a last step that isn't "Done": nothing says
+_FLIP_SECONDS = 2        # moving the Switch's lever
+_PHASE_SECONDS = 6       # each action, when a step loops through several
 
 
-def action_kind(action: str, grams: Optional[float] = None) -> str:
-    kind = next((name for name, pattern in _ACTIONS if pattern.search(action)), "idle")
+def step_actions(action: str, grams: Optional[float] = None) -> List[str]:
+    """Every action a step names, in the order written; ["idle"] if none are recognised,
+    so an unfamiliar step is never drawn as the wrong thing."""
+    found = sorted((match.start(), name) for name, pattern in _ACTIONS for match in pattern.finditer(action))
+    actions: List[str] = []
+    for _, name in found:
+        if name not in actions:
+            actions.append(name)
     # a target weight means water is going in, whatever else the step says
-    return "pour" if grams is not None and kind in ("stir", "swirl", "wait", "idle", "add", "close") else kind
+    if grams is not None and not set(actions) & set(_RISES):
+        actions.insert(sum(1 for name in actions if name in _VALVE), "pour")
+    return actions or ["idle"]
 
 
 def brewer_shape(name: Optional[str], method: Optional[str] = None) -> Optional[str]:
@@ -180,51 +191,107 @@ def brewer_shape(name: Optional[str], method: Optional[str] = None) -> Optional[
     return None
 
 
-def animation_data(text: Optional[str], brewer_name: Optional[str], brewer_method: Optional[str] = None) -> str:
-    """A step-by-step plan for static/brew_animation.js as JSON, or "" if there's nothing
-    to animate. Only standard-format methods: free text has no reliable step lengths.
+def _timeline(actions: List[str], seconds: float) -> List[Tuple[str, float]]:
+    """(action, seconds) for a step. Several actions play in the order written, then the
+    moving ones loop until the step ends; a valve only needs moving once."""
+    if len(actions) == 1:
+        return [(actions[0], seconds)]
+    moving = [name for name in actions if name not in _VALVE]
+    if not moving:
+        return [(name, seconds / len(actions)) for name in actions]
+    flip = min(_FLIP_SECONDS, seconds / (len(actions) + 1))
+    remaining = seconds - flip * (len(actions) - len(moving))
+    count = max(len(moving), round(remaining / _PHASE_SECONDS)) if len(moving) > 1 else 1  # nothing to alternate with
+    each = remaining / count
+    first_pass = [(name, flip if name in _VALVE else each) for name in actions]
+    return first_pass + [(moving[i % len(moving)], each) for i in range(len(moving), count)]
 
-    Walks the recipe once tracking the water level (the pour-to weight as a share of
-    the largest), the Switch's valve, and how full the cup is (shared out across the
-    time coffee is dripping through)."""
+
+def animation_data(text: Optional[str], brewer_name: Optional[str], brewer_method: Optional[str] = None) -> str:
+    """A timeline for static/brew_animation.js as JSON, or "" if there's nothing to
+    animate. Only standard-format methods: free text has no reliable step lengths.
+
+    Each step becomes phases, one per action being shown. State carries from phase to
+    phase and step to step: the water level (the pour-to weight as a share of the
+    largest, moving only while water is going in or out), the Switch's valve, the
+    swollen bed after a bloom, and how full the cup is (shared out across the time
+    coffee is dripping through)."""
     shape = brewer_shape(brewer_name, brewer_method)
     parts = _standard_parts(text)
     if not shape or not parts:
         return ""
-    rows = sorted(parts[1], key=lambda row: _seconds(row[0]))  # the order the timer uses
-    kinds = [action_kind(action, grams) for _, action, grams in rows]
-    total = max((grams or 0 for _, _, grams in rows), default=0)
+    rows = []
+    for time, action, grams in sorted(parts[1], key=lambda row: _seconds(row[0])):  # the order the timer uses
+        actions = step_actions(action, grams)
+        inline = _POUR_GRAMS.search(action) if grams is None and set(actions) & set(_RISES) else None  # "90g bloom"
+        rows.append((_seconds(time), action, float(inline.group(1)) if inline else grams, actions))
+    total = max((grams or 0 for _, _, grams, _ in rows), default=0)
+
+    def drains(actions: List[str]) -> bool:
+        return bool(set(actions) & set(_DRAINS)) or actions == ["open"]
 
     steps = []
-    level, valve = 0.0, "open"
-    for i, (time, action, grams) in enumerate(rows):
-        kind, before, valve_before = kinds[i], level, valve
-        if _CLOSES_VALVE.search(action):
-            valve = "closed"
-        if kind == "open":
-            valve = "open"
-        if kind in ("pour", "bloom"):
-            level = grams / total if grams and total else 1.0
-        if kind in _DRAINS:
-            level = level * 0.4 if any(later in _DRAINS for later in kinds[i + 1:]) else 0.0
-        if i + 1 < len(rows):
-            seconds = _seconds(rows[i + 1][0]) - _seconds(time)
-        else:
-            seconds = 0 if kind == "done" else _LAST_STEP_SECONDS
-        percolates = shape != "aeropress" and (shape != "switch" or valve == "open")
-        steps.append({
-            "kind": kind, "at": _seconds(time), "seconds": seconds,
-            "from": round(before, 3), "to": round(level, 3),
-            "valve": valve, "flip": valve != valve_before,
-            "flow": kind in _DRAINS or (percolates and kind != "done" and (before > 0 or level > 0)),
-        })
+    level, valve, bloomed = 0.0, "open", False
+    wanted = valve
+    for i, (at, action, grams, named) in enumerate(rows):
+        if i == len(rows) - 1 and _ENDS_BREW.search(action):
+            named = ["done"]
+        actions = []
+        for name in named:  # keep only the valve moves that change something
+            if name in _VALVE:
+                if shape != "switch" or _VALVE[name] == wanted:
+                    continue
+                wanted = _VALVE[name]
+            actions.append(name)
+        if not actions:
+            actions = ["open"] if "open" in named else ["idle"]
+        rows[i] = (at, action, grams, actions)
 
-    flowing = sum(step["seconds"] for step in steps if step["flow"]) or 1
-    so_far = 0
-    for step in steps:
-        step["cup_from"] = 1.0 if step["kind"] == "done" else round(so_far / flowing, 3)
-        so_far += step["seconds"] if step["flow"] else 0
-        step["cup_to"] = 1.0 if step["kind"] == "done" else round(so_far / flowing, 3)
+    for i, (at, action, grams, actions) in enumerate(rows):
+        if i + 1 < len(rows):
+            seconds = rows[i + 1][0] - at
+        else:
+            seconds = 0 if actions == ["done"] else _LAST_STEP_SECONDS
+        before = level
+        if set(actions) & set(_RISES):
+            changers, level = _RISES, (grams / total if grams and total else 1.0)
+        elif drains(actions):
+            changers = _DRAINS + ("open",)
+            level = level * 0.4 if any(drains(later[3]) for later in rows[i + 1:]) else 0.0
+        else:
+            changers = ()
+            level = 0.0 if actions == ["done"] else level
+        timeline = _timeline(actions, seconds)
+        changing = sum(length for name, length in timeline if name in changers)
+
+        phases, elapsed, shown = [], 0.0, before
+        for name, length in timeline:
+            valve_before = valve
+            if name in _VALVE:
+                valve = _VALVE[name]
+            start = shown
+            if name in changers:
+                shown += (level - before) * (length / changing if changing else 1)
+            percolates = shape != "aeropress" and (shape != "switch" or valve == "open")
+            phases.append({
+                "kind": name, "at": round(at + elapsed, 2), "seconds": round(length, 2),
+                "from": round(start, 3), "to": round(shown, 3),
+                "valve": valve, "flip": valve != valve_before, "bloomed": bloomed,
+                "flow": name in _DRAINS or (name == "open" and actions == ["open"])
+                        or (percolates and name != "done" and (start > 0 or shown > 0)),
+            })
+            bloomed = bloomed or name == "bloom"
+            elapsed += length
+        steps.append({"at": at, "phases": phases})
+
+    everything = [phase for step in steps for phase in step["phases"]]
+    flowing = sum(phase["seconds"] for phase in everything if phase["flow"]) or 1
+    so_far = 0.0
+    for phase in everything:
+        done = phase["kind"] == "done"
+        phase["cup_from"] = 1.0 if done else round(so_far / flowing, 3)
+        so_far += phase["seconds"] if phase["flow"] else 0
+        phase["cup_to"] = 1.0 if done else round(so_far / flowing, 3)
     return json.dumps({"shape": shape, "steps": steps})
 
 
