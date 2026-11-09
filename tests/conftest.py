@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 # app.main mounts app/static and loads app/templates relative to the cwd
 os.chdir(ROOT)
 
-from app import db, main  # noqa: E402
+from app import crud, db, main, models  # noqa: E402
 
 REFERENCE_DB = Path(os.environ.get("COFFEE_REFERENCE_DB", ROOT / "data" / "coffee.db")).expanduser()
 
@@ -54,6 +54,10 @@ class App:
     def session(self) -> Session:
         return Session(self.engine)
 
+    def sign_in(self, user_id: int) -> None:
+        with self.session() as s:
+            self.client.cookies.set("session", crud.create_user_session(s, user_id))
+
 
 @pytest.fixture
 def app_on(tmp_path: Path, monkeypatch):
@@ -68,9 +72,14 @@ def app_on(tmp_path: Path, monkeypatch):
         client = TestClient(main.app)
         client.__enter__()  # runs the startup hook (create tables + migrations)
         started.append(client)
+        app = App(client=client, engine=engine, path=path)
         if user_id is not None:
-            client.cookies.set("user_id", str(user_id))
-        return App(client=client, engine=engine, path=path)
+            with app.session() as s:
+                if s.get(models.User, user_id):
+                    app.sign_in(user_id)
+                else:
+                    client.cookies.set("session", "not-a-real-session")
+        return app
 
     yield _start
     for client in started:

@@ -3,27 +3,19 @@
 {% block content %}
 <div class="grid">
     <section class="card">
-        <h2>Who are you?</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:16px">
-            {% for user in users %}
-            <form method="post" action="/set-user">
-                <input type="hidden" name="user_id" value="{{ user.id }}" />
-                <button type="submit" class="btn-secondary" style="font-size:1.1em;padding:12px 24px">{{ user.name }}</button>
-            </form>
-            {% else %}
-            <p class="muted">No users yet. Add one below.</p>
-            {% endfor %}
-        </div>
-
-        <div style="margin-top:24px;border-top:1px solid var(--border,#eee);padding-top:16px">
-            <button onclick="toggleForm('new-user-form')" class="btn-secondary">+ Add user</button>
-            <div id="new-user-form" class="hidden" style="margin-top:10px">
-                <form method="post" action="/users" class="stacked-form" novalidate>
-                    <label>Name <input name="name" placeholder="Name" required /></label>
-                    <button type="submit">Add</button>
-                </form>
-            </div>
-        </div>
+        <h2>Sign in</h2>
+        {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+        <form method="post" action="/login" class="stacked-form">
+            <label>Who are you?
+                <select name="user_id" required>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if user.id == selected_user_id %}selected{% endif %}>{{ user.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Password <input name="password" type="password" autocomplete="current-password" required /></label>
+            <button type="submit" style="margin-top:8px">Sign in</button>
+        </form>
     </section>
 </div>
 {% endblock %}

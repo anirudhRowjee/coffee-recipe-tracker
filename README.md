@@ -17,7 +17,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **One-parameter delta rule** — each variation must change exactly one parameter (dose, water, temp, grind size, or recipe text), keeping the change history clean.
 - **Recommended next change** — when logging a brew, optionally record what to try next time (e.g. grind −1). Surfaces prominently next session and can pre-fill the variation form. A **±** button next to each amount flips its sign, since phone number keypads (iOS) have no minus key.
 - **Scheduled brews** — plan tomorrow's brew (bag, brewer, grinder, named recipe, note) from the brew or browse page; it opens first on the home page the next morning.
-- **Multiple users** — pick who you are from a list (no passwords; meant for a trusted network). Each user has their own beans, brewers, and grinders.
+- **Accounts** — everyone signs in with their own password and sees only their own beans, brewers, grinders, and brews. The admin creates accounts with a temporary password, resets forgotten ones, and is the only person who can delete an account. A separate site-wide password keeps the open internet out.
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
 - **Star ratings** — rate each brew from 1 to 5 when you log it; stars appear in the brew history.
@@ -75,7 +75,11 @@ python -m app.db
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000 and pick (or add) a user.
+Then set the first account's password, and open http://127.0.0.1:8000 to sign in:
+
+```bash
+python scripts/set_password.py 1
+```
 
 ---
 
@@ -108,7 +112,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Find your machine's local IP (`ipconfig getifaddr en0` on Mac, `hostname -I` on Linux) and open `http://<your-ip>:8000` from any device on the same network.
 
-There is no authentication or CSRF protection: keep the app on a trusted network.
+Keep the app behind a site-wide password or on a trusted network: accounts separate people from each other, but there is no login rate limiting.
 
 ---
 
@@ -124,10 +128,12 @@ app/
 ├── theme.py         # Bean accent colour → readable CSS variables
 ├── brew.py          # Brew mode: method → steps with the m:ss times in them
 ├── db.py            # Engine setup, DB initialisation, startup migrations
+├── auth.py          # Password hashing and session tokens
 ├── templates/
 │   ├── base.html           # Nav bar, shell, small JS helpers (toggleForm, flipSign)
 │   ├── brew.html           # Brew mode: large recipe, timer, log form
-│   ├── select_user.html    # Pick who you are
+│   ├── select_user.html    # Sign in
+│   ├── account.html        # Change your password, sign out
 │   ├── index.html          # Brew page (bag + brewer + grinder picker, scheduled brew)
 │   ├── browse.html         # Bean overview + scheduling
 │   ├── manage.html         # Add/edit beans, bags, brewers, grinders, users
@@ -145,6 +151,8 @@ scripts/
 ├── export.py        # Export all data to CSV (creates export/ directory)
 ├── import.py        # Restore from a CSV snapshot (tables must be empty)
 ├── drop_tables.py   # Wipe and recreate all tables (prompts for confirmation)
+├── set_password.py  # Set an account's password from the terminal
+├── change_gate_password.sh  # Change the site-wide Caddy login
 ├── migrate.py       # Bring a DB up to the current schema + one-off data fixes
 ├── backup.py        # Consistent SQLite backup using only the Python stdlib
 ├── deploy.sh        # Deploy main to the prod VPS (see "Deploying")

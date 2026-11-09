@@ -19,7 +19,7 @@ curl -fsS -o /dev/null "$URL/select-user" || { say "app is not answering at $URL
 
 cd "$APP"
 .venv/bin/python - "$BACKUP" data/coffee.db "$URL" <<'PY'
-import sqlite3, sys, urllib.request
+import hashlib, secrets, sqlite3, sys, urllib.request
 
 backup, live, url = sys.argv[1:4]
 b = sqlite3.connect(f"file:{backup}?mode=ro", uri=True)
@@ -42,15 +42,28 @@ for table in ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", 
 if l.execute("SELECT COUNT(*) FROM recipe WHERE line_id IS NULL").fetchone()[0]:
     problems.append("recipes without a named recipe")
 
-for (uid,) in l.execute("SELECT id FROM user"):
-    for page in ["/", "/browse", "/manage"]:
-        req = urllib.request.Request(url + page, headers={"Cookie": f"user_id={uid}"})
+# Check pages as each user with a throwaway session, removed straight after.
+w = sqlite3.connect(live)
+try:
+    for (uid,) in w.execute("SELECT id FROM user").fetchall():
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        w.execute("INSERT INTO usersession (token_hash, user_id, created_at) VALUES (?, ?, datetime('now'))", (token_hash, uid))
+        w.commit()
         try:
-            status = urllib.request.urlopen(req, timeout=10).status
-        except Exception as e:  # noqa: BLE001
-            status = getattr(e, "code", e)
-        if status != 200:
-            problems.append(f"GET {page} as user {uid} -> {status}")
+            for page in ["/", "/browse", "/manage"]:
+                req = urllib.request.Request(url + page, headers={"Cookie": f"session={token}"})
+                try:
+                    status = urllib.request.urlopen(req, timeout=10).status
+                except Exception as e:  # noqa: BLE001
+                    status = getattr(e, "code", e)
+                if status != 200:
+                    problems.append(f"GET {page} as user {uid} -> {status}")
+        finally:
+            w.execute("DELETE FROM usersession WHERE token_hash = ?", (token_hash,))
+            w.commit()
+finally:
+    w.close()
 
 if problems:
     print("  [vps] VERIFY FAILED:\n  [vps]   " + "\n  [vps]   ".join(problems))

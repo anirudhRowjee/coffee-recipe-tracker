@@ -32,7 +32,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 **Bean = type, BeanBag = physical bag.** `Bean` is the coffee variety (Ethiopia Yirgacheffe, etc.). `BeanBag` is a specific purchase of that variety, with its own roast date, quantity, and freeze status. You can have multiple bags of the same bean. Recipe history is shared across bags of the same bean (named recipes are keyed by `bean_id + brewer_id + grinder_id`, not by bag).
 
-**Trusted network, a few household users.** The app runs on a trusted LAN/VPS with no external users. Multiple people share it via a `user_id` cookie picked on `/select-user` — there are no passwords and no auth. Beans, brewers, and grinders are owned by a user (`user_id`); bags, recipes, brews, and deltas inherit ownership through their bean. Routes filter *list* views by the current user but do not check ownership on edit/delete/create-by-ID routes. That is deliberate for this deployment — do not add auth/ownership checks unless asked.
+**Two locks: a site password, then personal accounts.** Caddy's basic auth keeps the open internet out entirely (one shared login for friends; see "Deploying to prod"). Behind it, each person signs in with their own password on `/select-user`: `app/auth.py` hashes passwords with scrypt, and a random session cookie is stored only as a hash in `usersession`. Beans, brewers, and grinders are owned by a user (`user_id`); bags, recipes, lines, brews, and deltas inherit ownership through their bean. **Every route that takes an ID must load it with `_owned(session, user, Model, id)`**, which treats someone else's row as a 404; `tests/test_accounts.py` attacks each route as a second user, and a safety-net test fails if any new route works without a session. Only the admin (`is_admin`, the first user) can create, reset, or delete accounts; deleting also needs the admin's own password. New accounts and resets get a generated temporary password that must be changed at first sign-in.
 
 **Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line, (`_migrate_brew_ratings`) adds `brew.rating`, and (`_migrate_bean_art`) adds `bean.accent_color`, `bean.mesh_colors` and `bean.image_version`. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
 
@@ -41,7 +41,8 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 ## Data model
 
 ```
-User
+User                          (password_hash, is_admin, must_change_password)
+├── sessions: UserSession     ← one per signed-in browser; only a hash of the cookie's token
 ├── beans: List[Bean]
 ├── brewers: List[Brewer]
 └── grinders: List[Grinder]
@@ -155,9 +156,9 @@ Every test that uses a reference DB reads `COFFEE_REFERENCE_DB` (default `data/c
 
 Scripts that run as their own process (like `scripts/migrate.py`) only see the models they import. `db.run_migrations()` therefore creates missing tables itself; keep it that way. `tests/test_migrate_script.py` runs the script as a subprocess (with `COFFEE_DB` pointing at a copy) for exactly this reason.
 
-### 9. Routes that need a user call `_require_user`
+### 9. Routes that need a user call `_require_user`, and IDs go through `_owned`
 
-`_require_user(request, session)` raises `_redirect_to_select`, which the `_redirect_to_select_handler` exception handler turns into a redirect to `/select-user` (and clears a stale cookie). Use it in any page or create route that needs the current user; list queries in `crud` take `user_id` and filter on it.
+`_require_user(request, session)` raises `_redirect_to_select`, which the `_redirect_to_select_handler` exception handler turns into a redirect to `/select-user` (and clears a stale session cookie). Someone on a temporary password is sent to `/account` first. Tests sign in with `app.sign_in(user_id)`. Use it in any page or create route that needs the current user; list queries in `crud` take `user_id` and filter on it.
 
 Keep it an `@app.exception_handler`. It used to be an `@app.middleware("http")` that caught the exception; under prod's starlette 0.46 that still sent the redirect but then re-raised, logging a traceback on every redirect (and failing the first deploy's on-VPS tests). Avoid `BaseHTTPMiddleware` for control flow in general.
 
@@ -167,10 +168,12 @@ Keep it an `@app.exception_handler`. It used to be an `@app.middleware("http")` 
 
 Prod is a VPS (`root@168.144.126.15`, Ubuntu): systemd unit `coffee.service` runs uvicorn on 127.0.0.1:8000 from a git checkout at `/root/coffee-recipe-tracker`, behind Caddy. The live database is `data/coffee.db` in that checkout and is **not** tracked by git (never commit a database; prod's data and the local DB have diverged and the local one must never reach prod). Code moves by `git merge --ff-only` from GitHub; data only changes in place via migrations.
 
-From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs up prod, copies the backup to `data/backups/`, runs the tests against it locally, then on the VPS (`scripts/remote/ship.sh`): stops the app, copies the database, fast-forwards, runs the tests again with prod's own packages, runs `scripts/migrate.py`, starts the app. Any failure there restores the copy and the previous commit automatically. `scripts/remote/verify.sh` then checks every page for every user and that no pre-deploy row changed. `scripts/rollback.sh` undoes the last deploy (keeping the current database aside as `*-before-rollback.db`). The last deploy (previous commit, backup path) is recorded in `/root/backups/last-deploy`; a rollback renames it to `last-deploy.rolled-back-<stamp>`.
+From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs up prod, copies the backup to `data/backups/`, runs the tests against it locally, then on the VPS (`scripts/remote/ship.sh`): stops the app, copies the database, fast-forwards, runs the tests again with prod's own packages, runs `scripts/migrate.py`, starts the app. Any failure there restores the copy and the previous commit automatically. `scripts/remote/verify.sh` then checks every page for every user (with throwaway sessions it removes straight after) and that no pre-deploy row changed. `scripts/rollback.sh` undoes the last deploy (keeping the current database aside as `*-before-rollback.db`). The last deploy (previous commit, backup path) is recorded in `/root/backups/last-deploy`; a rollback renames it to `last-deploy.rolled-back-<stamp>`.
 
 - Prod's venv was not installed from `requirements.txt` and has different versions (e.g. starlette 0.46 vs 0.52). Deploy only runs `pip install` when `requirements.txt` changed, and its on-VPS test run is what catches version problems.
 - One-off data corrections go in `DATA_FIXES` in `scripts/migrate.py`, each guarded to match exactly the bad row (so it is a no-op elsewhere and on re-runs). Allow-list the row in `verify.sh` too, which otherwise flags any changed pre-deploy row.
+- The first deploy of accounts leaves everyone without a password until `scripts/set_password.py 1` is run on the VPS for the admin (`ssh -t`, it prompts); the admin then uses Manage for everyone else. A rollback restores the pre-accounts database, so passwords set since are lost, but Caddy still guards the site.
+- `scripts/change_gate_password.sh` replaces Caddy's logins with one shared login. It prompts on your own terminal, so never ask for or pass that password through chat.
 - The root crontab's nightly backup (`sqlite3 ... .backup`) has never worked: the VPS has no `sqlite3` CLI. Replace it with `scripts/backup.py data/coffee.db /root/backups --keep-days 60` (needs the user's OK — it changes prod config).
 - To rehearse without touching prod, `COFFEE_HOST=local` plus `APP`, `BACKUPS`, `URL`, `START_CMD`, `STOP_CMD` run the VPS side on your machine against a local checkout.
 
@@ -193,13 +196,16 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 |---|---|
 | `app/models.py` | SQLModel ORM definitions. All schema changes start here. |
 | `app/crud.py` | All DB reads and writes. No business logic in routes — it belongs here. |
+| `app/auth.py` | Password hashing (scrypt, stdlib only) and session tokens. |
 | `app/brew.py` | Brew mode: `parse_steps` splits a method into lines and picks out `m:ss` times (skipping ratios like "1:16" and the end of ranges like "3:30–4:00"). Server-side so it's tested in pytest; the page's script only keeps time. |
 | `app/theme.py` | Bean colours → `--accent`, `--accent-soft`, `--mesh-strip` and `--mesh-strong` CSS variables (the `bean_theme` filter, applied to a bean). Validates the colours and guarantees readable contrast. |
 | `app/export.py` | Named recipe → shareable Markdown (`GET /lines/{id}/export.md`, `?download=1` for a file). Whitelists what it shows; see "Sharing recipes". |
 | `app/db.py` | Engine (path overridable with `COFFEE_DB`), session factory, `create_db_and_tables()`, `run_migrations()` (creates missing tables, additive column adds, user seeding, Default named-recipe backfill). |
 | `app/main.py` | FastAPI routes. Thin — calls crud, returns TemplateResponse. Also user-cookie helpers, the morning banner's pixel art and quotes. |
 | `app/templates/base.html` | Nav bar (with current user link), page shell, `toggleForm()` and `flipSign()` JS helpers. |
-| `app/templates/select_user.html` | Pick which user you are (sets the `user_id` cookie). |
+| `app/templates/select_user.html` | Sign-in page: pick your name, enter your password. |
+| `app/templates/account.html` | Change your password, sign out; also the forced first-sign-in password step. |
+| `app/templates/temporary_password.html` | Shows a new temporary password once, to the admin. |
 | `app/templates/brew.html` | Brew mode (`GET /lines/{id}/brew?bag_id=&plan_id=`): large parameters, timer (current step above the clock, so nothing needs scrolling mid-brew; no site header and compact tiles so everything down to Start fits one phone screen, and the page must not scroll itself), steps with `data-times`, and the log form when the bag belongs to this bean. `plan_id` is only honoured if it is the current user's plan for this bag/brewer/grinder/line, so logging from here clears the schedule like the panel does. |
 | `app/templates/partials/log_brew_form.html` | The "Log a brew" form, included by the recipe panel and brew mode with `log_recipe_id` / `log_bag_id` / `log_plan_id`. One per page: it uses fixed ids (`log-notes`, `rec-delta-row`). |
 | `app/templates/partials/star_input.html` | 1-5 star picker, CSS only (reversed radios). Expects `star_name`; used by the log form (`rating`) and variation form (`brew_rating`). |
@@ -212,6 +218,8 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `scripts/export.py` | Exports every table (incl. users, named recipes, planned brews, owner `user_id`s) to CSV. Brings the DB up to the current schema first. Default `export/`, or pass a directory. `export_all(engine, out_dir)` is importable. |
 | `scripts/import.py` | Restores from a CSV snapshot. Two-pass recipe insert for `previous_recipe_id`. Requires every table to be empty. Also accepts older snapshots (no `users.csv` / `planned_brews.csv` / `recipe_lines.csv`) and fills the gaps via `run_migrations`. `import_all(engine, src_dir)` is importable. |
 | `scripts/drop_tables.py` | Drops and recreates all tables after confirmation prompt. |
+| `scripts/set_password.py` | Set a password from the server's terminal; needed for the admin's first sign-in. |
+| `scripts/change_gate_password.sh` | Change Caddy's site-wide login (with `scripts/remote/set_gate_login.py`). |
 | `scripts/migrate.py` | Schema migrations + guarded one-off data fixes + sanity checks; exits non-zero on problems. Run by deploy with the app stopped. |
 | `scripts/backup.py` | Consistent SQLite backup with the stdlib only (the VPS has no `sqlite3` CLI). Must not import the app: deploy streams it over ssh. |
 | `scripts/deploy.sh`, `scripts/rollback.sh` | Run on your Mac. See "Deploying to prod". |
@@ -220,6 +228,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/test_flows.py` | Behaviour of the core flows through HTTP: baseline → brews → variations, one-parameter rule, scheduling, browse, delete cascades. Written before named recipes; must keep passing unchanged. |
 | `tests/test_named_recipes.py` | Several named recipes per combination: separate histories, picker, default choice, scheduling, rename/delete. |
 | `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
+| `tests/test_accounts.py` | Sign-in, passwords, admin tools, one user attacking another's data on every route, and sign-in required everywhere. |
 | `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |
 | `tests/test_bean_art.py` | Bag photo upload/serve/replace/remove and validation, per-bean colours and their contrast. Colour picking itself runs in the browser and is checked by hand. |
 | `tests/test_export_recipe.py` | Recipe export: exact output, no personal data (marker strings planted in every private field), per-line history, CRLF normalisation, download headers. |
@@ -274,7 +283,7 @@ All entity management on the manage page (beans, bags, brewers, grinders) follow
 
 ## What has been intentionally left out
 
-- **No authentication or per-route ownership checks.** Users are picked from a list, not logged into. The app stays on a trusted network with no external users, so this is intended, not a TODO.
-- **No CSRF protection.** Same reasoning — trusted network only. Add `starlette-csrf` middleware if that ever changes.
+- **No email or self-service password reset.** The admin resets passwords. There is also no login rate limiting, because Caddy's password already keeps the open internet away; add both before ever removing it.
+- **No CSRF tokens.** The session cookie is `SameSite=Lax`, which stops cross-site form posts, and the site is behind Caddy's password.
 - **No alembic.** Additive columns go in `db.run_migrations()`; anything else uses export → `scripts/drop_tables.py` → import.
 - **No unit tests for templates/CSS.** `tests/` covers the HTTP flows, data parity, and export/import; visual changes are checked by hand in a browser.

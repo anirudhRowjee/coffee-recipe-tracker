@@ -8,9 +8,9 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 from typing import Optional
 
-from . import brew, crud, db, export, models, theme
+from . import auth, brew, crud, db, export, models, theme
 
-app = FastAPI(title="Coffee Recipe Tracker")
+app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -20,6 +20,9 @@ templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
 MAX_BEAN_IMAGE_BYTES = 3_000_000
+
+SESSION_COOKIE = "session"
+SESSION_MAX_AGE = 60 * 60 * 24 * 365  # a year: phones and the Kindle should stay signed in
 
 PIXEL_ART_COLORS = [
     # coffee browns
@@ -104,70 +107,184 @@ def _parse_rating(value: Optional[str]) -> Optional[int]:
 
 
 def _get_current_user(request: Request, session: Session) -> Optional[models.User]:
-    uid = request.cookies.get("user_id")
-    if not uid or not uid.isdigit():
-        return None
-    return session.get(models.User, int(uid))
+    token = request.cookies.get(SESSION_COOKIE)
+    return crud.get_user_by_session_token(session, token) if token else None
 
 
-def _require_user(request: Request, session: Session):
+def _require_user(request: Request, session: Session, allow_temporary_password: bool = False) -> models.User:
     user = _get_current_user(request, session)
     if not user:
         raise _redirect_to_select()
+    if user.must_change_password and not allow_temporary_password:
+        raise _redirect_to_change_password()
     return user
+
+
+def _require_admin(request: Request, session: Session) -> models.User:
+    user = _require_user(request, session)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Only the admin can do that")
+    return user
+
+
+def _owner_id(session: Session, item) -> Optional[int]:
+    if isinstance(item, (models.BeanBag, models.RecipeLine, models.Recipe)):
+        bean = session.get(models.Bean, item.bean_id)
+        return bean.user_id if bean else None
+    return item.user_id
+
+
+def _owned(session: Session, user: models.User, model, item_id: int):
+    """The row, if it exists and belongs to this user. Someone else's is a 404, like a missing one."""
+    item = session.get(model, item_id)
+    if not item or _owner_id(session, item) != user.id:
+        raise HTTPException(status_code=404, detail="Not found")
+    return item
 
 
 class _redirect_to_select(Exception):
     pass
 
 
-# An exception handler, not an HTTP middleware: with some starlette versions
-# (prod's 0.46) a middleware that catches this still sends the redirect but
+class _redirect_to_change_password(Exception):
+    pass
+
+
+# Exception handlers, not an HTTP middleware: with some starlette versions
+# (prod's 0.46) a middleware that catches these still sends the redirect but
 # then re-raises the exception, logging a traceback on every redirect.
 @app.exception_handler(_redirect_to_select)
 def _redirect_to_select_handler(request: Request, exc: _redirect_to_select):
     r = RedirectResponse(url="/select-user", status_code=302)
-    r.delete_cookie("user_id")
+    r.delete_cookie(SESSION_COOKIE)
     return r
+
+
+@app.exception_handler(_redirect_to_change_password)
+def _redirect_to_change_password_handler(request: Request, exc: _redirect_to_change_password):
+    return RedirectResponse(url="/account", status_code=302)
+
+
+def _signin_page(request: Request, session: Session, error: str = "", selected_user_id: Optional[int] = None, status_code: int = 200):
+    return templates.TemplateResponse("select_user.html", {
+        "request": request,
+        "users": crud.get_users(session),
+        "current_user": None,
+        "error": error,
+        "selected_user_id": selected_user_id,
+    }, status_code=status_code)
 
 
 @app.get("/select-user", response_class=HTMLResponse)
 def select_user(request: Request):
     with Session(db.engine) as session:
-        users = crud.get_users(session)
-        return templates.TemplateResponse("select_user.html", {
-            "request": request,
-            "users": users,
-            "current_user": None,
-        })
+        return _signin_page(request, session)
 
 
-@app.post("/set-user")
-def set_user(user_id: int = Form(...)):
-    r = RedirectResponse(url="/", status_code=303)
-    r.set_cookie("user_id", str(user_id), max_age=60 * 60 * 24 * 365)
+@app.post("/login", response_class=HTMLResponse)
+def login(request: Request, user_id: int = Form(...), password: str = Form(...)):
+    with Session(db.engine) as session:
+        user = session.get(models.User, user_id)
+        if not user or not user.password_hash or not auth.verify_password(password, user.password_hash):
+            return _signin_page(request, session, "That didn't match. If you don't have a password yet, ask your admin.", user_id, 401)
+        token = crud.create_user_session(session, user_id)
+        r = RedirectResponse(url="/account" if user.must_change_password else "/", status_code=303)
+        r.set_cookie(SESSION_COOKIE, token, max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
+                     secure=request.url.scheme == "https")
+        return r
+
+
+@app.post("/logout")
+def logout(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    with Session(db.engine) as session:
+        if token:
+            crud.delete_user_session(session, token)
+    r = RedirectResponse(url="/select-user", status_code=303)
+    r.delete_cookie(SESSION_COOKIE)
     return r
 
 
-@app.post("/users")
-def create_user(request: Request, name: str = Form(...)):
+def _account_page(request: Request, user: models.User, error: str = "", status_code: int = 200):
+    return templates.TemplateResponse("account.html", {
+        "request": request,
+        "current_user": user,
+        "error": error,
+        "min_length": auth.MIN_PASSWORD_LENGTH,
+    }, status_code=status_code)
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account(request: Request):
     with Session(db.engine) as session:
-        user = _get_current_user(request, session)
-        if not user:
-            return RedirectResponse(url="/select-user", status_code=303)
-        crud.create_user(session, name=name)
-    return RedirectResponse(url="/manage", status_code=303)
+        return _account_page(request, _require_user(request, session, allow_temporary_password=True))
+
+
+@app.post("/account/password", response_class=HTMLResponse)
+def change_password(request: Request, new_password: str = Form(...), confirm_password: str = Form(...), current_password: str = Form("")):
+    with Session(db.engine) as session:
+        user = _require_user(request, session, allow_temporary_password=True)
+        # someone on a temporary password has only just used it to sign in
+        if not user.must_change_password and not auth.verify_password(current_password, user.password_hash or ""):
+            return _account_page(request, user, "Your current password didn't match.", 400)
+        if len(new_password) < auth.MIN_PASSWORD_LENGTH:
+            return _account_page(request, user, f"Use at least {auth.MIN_PASSWORD_LENGTH} characters.", 400)
+        if new_password != confirm_password:
+            return _account_page(request, user, "Those two passwords didn't match.", 400)
+        crud.set_user_password(session, user, new_password, must_change=False)
+        crud.delete_sessions_for_user(session, user.id, except_token=request.cookies.get(SESSION_COOKIE))  # type: ignore[arg-type]
+    return RedirectResponse(url="/", status_code=303)
+
+
+def _temporary_password_page(request: Request, admin: models.User, name: str, password: str):
+    return templates.TemplateResponse("temporary_password.html", {
+        "request": request,
+        "current_user": admin,
+        "name": name,
+        "password": password,
+    })
+
+
+@app.post("/users", response_class=HTMLResponse)
+def create_user(request: Request, name: str = Form("")):
+    with Session(db.engine) as session:
+        admin = _require_admin(request, session)
+        name = name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name can't be empty")
+        if crud.name_taken(session, name):
+            raise HTTPException(status_code=400, detail=f'There is already someone called "{name}"')
+        password = auth.temporary_password()
+        crud.create_user(session, name=name, password=password)
+        return _temporary_password_page(request, admin, name, password)
+
+
+@app.post("/users/{target_user_id}/reset-password", response_class=HTMLResponse)
+def reset_user_password(target_user_id: int, request: Request):
+    with Session(db.engine) as session:
+        admin = _require_admin(request, session)
+        target = session.get(models.User, target_user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Not found")
+        if target.id == admin.id:
+            raise HTTPException(status_code=400, detail="Change your own password on the account page")
+        password = auth.temporary_password()
+        crud.set_user_password(session, target, password, must_change=True)
+        crud.delete_sessions_for_user(session, target_user_id)
+        return _temporary_password_page(request, admin, target.name, password)
 
 
 @app.post("/users/{target_user_id}/delete")
-def delete_user(target_user_id: int, request: Request):
-    current_uid = request.cookies.get("user_id")
+def delete_user(target_user_id: int, request: Request, admin_password: str = Form("")):
     with Session(db.engine) as session:
+        admin = _require_admin(request, session)
+        if not auth.verify_password(admin_password, admin.password_hash or ""):
+            raise HTTPException(status_code=403, detail="Your password didn't match, so nothing was deleted")
+        if target_user_id == admin.id:
+            raise HTTPException(status_code=400, detail="You can't delete your own account")
+        if not session.get(models.User, target_user_id):
+            raise HTTPException(status_code=404, detail="Not found")
         crud.delete_user(session, target_user_id)
-    if current_uid and current_uid.isdigit() and int(current_uid) == target_user_id:
-        r = RedirectResponse(url="/select-user", status_code=303)
-        r.delete_cookie("user_id")
-        return r
     return RedirectResponse(url="/manage", status_code=303)
 
 
@@ -266,8 +383,14 @@ def latest_recipe_partial(request: Request, bag_id: Optional[str] = None, brewer
     line_id_int = int(line_id) if line_id and line_id.isdigit() else None
 
     with Session(db.engine) as session:
-        user = _get_current_user(request, session)
-        context = _latest_recipe_context(session, bag_id_int, brewer_id_int, grinder_id_int, user.id if user else None, line_id_int)  # type: ignore[arg-type]
+        user = _require_user(request, session)
+        if bag_id_int:
+            _owned(session, user, models.BeanBag, bag_id_int)
+        if brewer_id_int:
+            _owned(session, user, models.Brewer, brewer_id_int)
+        if grinder_id_int:
+            _owned(session, user, models.Grinder, grinder_id_int)
+        context = _latest_recipe_context(session, bag_id_int, brewer_id_int, grinder_id_int, user.id, line_id_int)  # type: ignore[arg-type]
         context["request"] = request
         return templates.TemplateResponse("partials/latest_recipe.html", context)
 
@@ -291,7 +414,7 @@ def manage(request: Request):
         ]
         brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
         grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
-        all_users = crud.get_users(session)
+        all_users = crud.get_users(session) if user.is_admin else []
         return templates.TemplateResponse("manage.html", {
             "request": request,
             "beans_with_bags": active_beans_with_bags,
@@ -350,7 +473,7 @@ def create_bean(request: Request, name: str = Form(...), origin: str = Form(None
 
 
 @app.post("/beans/{bean_id}/image")
-def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str = Form(None), mesh: str = Form(None)):
+def upload_bean_image(request: Request, bean_id: int, image: UploadFile = File(...), accent: str = Form(None), mesh: str = Form(None)):
     """Takes the JPEG and colours that static/bean_art.js prepared in the browser."""
     data = image.file.read(MAX_BEAN_IMAGE_BYTES + 1)
     if len(data) > MAX_BEAN_IMAGE_BYTES:
@@ -358,6 +481,8 @@ def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str =
     if not data.startswith(b"\xff\xd8\xff"):
         raise HTTPException(status_code=400, detail="The image must be a JPEG")
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         if not crud.set_bean_image(session, bean_id, data, "image/jpeg", theme.clean_accent(accent), theme.clean_mesh(mesh)):
             raise HTTPException(status_code=404, detail="Bean not found")
     return RedirectResponse(url="/manage", status_code=303)
@@ -365,6 +490,7 @@ def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str =
 
 @app.post("/beans/{bean_id}/colors")
 def edit_bean_colors(
+    request: Request,
     bean_id: int,
     accent: str = Form(None),
     mesh1: str = Form(None),
@@ -379,14 +505,18 @@ def edit_bean_colors(
     if (accent and not accent_color) or (any(mesh_parts) and not mesh_colors):
         raise HTTPException(status_code=400, detail="Colours must be #rrggbb")
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         if not crud.set_bean_colors(session, bean_id, accent_color, mesh_colors):
             raise HTTPException(status_code=404, detail="Bean not found")
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/beans/{bean_id}/image/delete")
-def delete_bean_image(bean_id: int):
+def delete_bean_image(request: Request, bean_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         crud.delete_bean_image(session, bean_id)
     return RedirectResponse(url="/manage", status_code=303)
 
@@ -394,7 +524,7 @@ def delete_bean_image(bean_id: int):
 @app.get("/beans/{bean_id}/image")
 def bean_image(bean_id: int, request: Request):
     with Session(db.engine) as session:
-        _require_user(request, session)
+        _owned(session, _require_user(request, session), models.Bean, bean_id)
         image = session.get(models.BeanImage, bean_id)
         if not image:
             raise HTTPException(status_code=404, detail="No photo for this bean")
@@ -405,6 +535,7 @@ def bean_image(bean_id: int, request: Request):
 
 @app.post("/bags")
 def create_bag(
+    request: Request,
     bean_id: int = Form(...),
     initial_quantity_g: float = Form(...),
     roast_date: str = Form(None),
@@ -415,6 +546,8 @@ def create_bag(
     notes: str = Form(None),
 ):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         crud.create_bag(
             session,
             bean_id=bean_id,
@@ -430,21 +563,26 @@ def create_bag(
 
 
 @app.post("/beans/{bean_id}/edit")
-def edit_bean(bean_id: int, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
+def edit_bean(request: Request, bean_id: int, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         crud.update_bean(session, bean_id, name=name, origin=origin or None, roast_level=roast_level or None, flavor_notes=flavor_notes or None, notes=notes or None)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/beans/{bean_id}/delete")
-def delete_bean(bean_id: int):
+def delete_bean(request: Request, bean_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
         crud.delete_bean(session, bean_id)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/bags/{bag_id}/edit")
 def edit_bag(
+    request: Request,
     bag_id: int,
     initial_quantity_g: float = Form(...),
     roast_date: str = Form(None),
@@ -455,6 +593,8 @@ def edit_bag(
     notes: str = Form(None),
 ):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.BeanBag, bag_id)
         crud.update_bag(
             session, bag_id,
             initial_quantity_g=initial_quantity_g,
@@ -469,43 +609,55 @@ def edit_bag(
 
 
 @app.post("/bags/{bag_id}/complete")
-def complete_bag(bag_id: int):
+def complete_bag(request: Request, bag_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.BeanBag, bag_id)
         crud.complete_bag(session, bag_id)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/bags/{bag_id}/delete")
-def delete_bag(bag_id: int):
+def delete_bag(request: Request, bag_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.BeanBag, bag_id)
         crud.delete_bag(session, bag_id)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/brewers/{brewer_id}/edit")
-def edit_brewer(brewer_id: int, name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
+def edit_brewer(request: Request, brewer_id: int, name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Brewer, brewer_id)
         crud.update_brewer(session, brewer_id, name=name, method=method or None, notes=notes or None)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/brewers/{brewer_id}/delete")
-def delete_brewer(brewer_id: int):
+def delete_brewer(request: Request, brewer_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Brewer, brewer_id)
         crud.delete_brewer(session, brewer_id)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/grinders/{grinder_id}/edit")
-def edit_grinder(grinder_id: int, name: str = Form(...), notes: str = Form(None)):
+def edit_grinder(request: Request, grinder_id: int, name: str = Form(...), notes: str = Form(None)):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Grinder, grinder_id)
         crud.update_grinder(session, grinder_id, name=name, notes=notes or None)
     return RedirectResponse(url="/manage", status_code=303)
 
 
 @app.post("/grinders/{grinder_id}/delete")
-def delete_grinder(grinder_id: int):
+def delete_grinder(request: Request, grinder_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Grinder, grinder_id)
         crud.delete_grinder(session, grinder_id)
     return RedirectResponse(url="/manage", status_code=303)
 
@@ -537,9 +689,13 @@ def create_plan(
 ):
     with Session(db.engine) as session:
         user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        if brewer_id:
+            _owned(session, user, models.Brewer, brewer_id)
+        if grinder_id:
+            _owned(session, user, models.Grinder, grinder_id)
         line = session.get(models.RecipeLine, line_id) if line_id else None
-        bag = session.get(models.BeanBag, bag_id)
-        if line and (not bag or line.bean_id != bag.bean_id):
+        if line and line.bean_id != bag.bean_id:
             line = None
         # A named recipe brings its own gear; anything chosen explicitly wins
         brewer_id = brewer_id or (line.brewer_id if line else None)
@@ -553,8 +709,10 @@ def create_plan(
 
 
 @app.post("/lines/{line_id}/rename")
-def rename_line(line_id: int, name: str = Form(...)):
+def rename_line(request: Request, line_id: int, name: str = Form(...)):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.RecipeLine, line_id)
         line = session.get(models.RecipeLine, line_id)
         if not line:
             raise HTTPException(status_code=404, detail="Recipe not found")
@@ -573,9 +731,9 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
     timer that follows the times written in the method, and the log form."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        line = session.get(models.RecipeLine, line_id)
-        latest = crud.get_latest_recipe(session, line_id) if line else None
-        if not line or not latest or not latest.bean or not latest.grinder:
+        line = _owned(session, user, models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        if not latest or not latest.bean or not latest.grinder:
             raise HTTPException(status_code=404, detail="Recipe not found")
         # Logging needs a bag of this bean; a stale or foreign one just hides the form
         bag = session.get(models.BeanBag, bag_id) if bag_id else None
@@ -610,10 +768,9 @@ def export_line(line_id: int, request: Request, download: bool = False):
     """The named recipe as Markdown: shown as plain text (to copy into a chat),
     or with ?download=1 as a .md file."""
     with Session(db.engine) as session:
-        _require_user(request, session)
-        line = session.get(models.RecipeLine, line_id)
-        latest = crud.get_latest_recipe(session, line_id) if line else None
-        if not line or not latest or not latest.bean:
+        line = _owned(session, _require_user(request, session), models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        if not latest or not latest.bean:
             raise HTTPException(status_code=404, detail="Recipe not found")
         text = export.to_markdown(line, latest, crud.get_line_history(session, line_id))
         if download:
@@ -623,8 +780,10 @@ def export_line(line_id: int, request: Request, download: bool = False):
 
 
 @app.post("/lines/{line_id}/delete")
-def delete_line(line_id: int):
+def delete_line(request: Request, line_id: int):
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.RecipeLine, line_id)
         crud.delete_line(session, line_id)
     return RedirectResponse(url="/", status_code=303)
 
@@ -632,13 +791,14 @@ def delete_line(line_id: int):
 @app.post("/plan/{plan_id}/cancel")
 def cancel_plan(plan_id: int, request: Request):
     with Session(db.engine) as session:
-        _require_user(request, session)
+        _owned(session, _require_user(request, session), models.PlannedBrew, plan_id)
         crud.delete_plan(session, plan_id)
     return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/brews")
 def create_brew(
+    request: Request,
     recipe_id: int = Form(...),
     bag_id: int = Form(...),
     notes: str = Form(None),
@@ -655,6 +815,11 @@ def create_brew(
         except ValueError:
             pass
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Recipe, recipe_id)
+        _owned(session, user, models.BeanBag, bag_id)
+        if planned_brew_id:
+            _owned(session, user, models.PlannedBrew, planned_brew_id)
         crud.create_brew(
             session,
             recipe_id=recipe_id,
@@ -672,6 +837,7 @@ def create_brew(
 
 @app.post("/recipes")
 def create_recipe(
+    request: Request,
     bean_id: int = Form(...),
     brewer_id: int = Form(...),
     grinder_id: int = Form(...),
@@ -708,6 +874,16 @@ def create_recipe(
             pass
 
     with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.Bean, bean_id)
+        _owned(session, user, models.Brewer, brewer_id)
+        _owned(session, user, models.Grinder, grinder_id)
+        if previous_recipe_id and session.get(models.Recipe, previous_recipe_id):
+            _owned(session, user, models.Recipe, previous_recipe_id)
+        if bag_id:
+            _owned(session, user, models.BeanBag, bag_id)
+        if planned_brew_id:
+            _owned(session, user, models.PlannedBrew, planned_brew_id)
         if previous_recipe_id:
             prev = session.get(models.Recipe, previous_recipe_id)
             if not prev:

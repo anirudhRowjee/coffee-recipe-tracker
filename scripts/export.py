@@ -33,9 +33,10 @@ def export_all(engine: Engine, out: Path) -> None:
         # Users
         with open(out / "users.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "name"])
+            # password hashes included so a restore keeps accounts working; signed-in sessions are not
+            w.writerow(["id", "name", "password_hash", "is_admin", "must_change_password"])
             for u in session.exec(select(User).order_by(User.id)).all():
-                w.writerow([u.id, u.name])
+                w.writerow([u.id, u.name, u.password_hash, u.is_admin, u.must_change_password])
 
         # Beans
         with open(out / "beans.csv", "w", newline="") as f:

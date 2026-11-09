@@ -60,7 +60,7 @@ def test_stale_user_cookie_redirects_and_is_cleared(app_on):
     a = app_on(user_id=999)
     r = a.client.get("/browse", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/select-user"
-    assert 'user_id=""' in r.headers["set-cookie"] and "Max-Age=0" in r.headers["set-cookie"]
+    assert 'session=""' in r.headers["set-cookie"] and "Max-Age=0" in r.headers["set-cookie"]
 
 
 def test_incomplete_selection_prompts(app):

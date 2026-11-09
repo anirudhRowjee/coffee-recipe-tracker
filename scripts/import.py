@@ -128,7 +128,13 @@ def import_all(engine: Engine, src: Path) -> None:
         # 1. Users (absent in pre-multi-user snapshots)
         rows = read_csv(src / "users.csv", required=False)
         for r in rows:
-            session.add(User(id=_int(r["id"]), name=r["name"]))
+            session.add(User(
+                id=_int(r["id"]),
+                name=r["name"],
+                password_hash=_str(r.get("password_hash")),
+                is_admin=_bool(r.get("is_admin")),
+                must_change_password=_bool(r.get("must_change_password")),
+            ))
         session.commit()
         print(f"  users:    {len(rows)}")
 

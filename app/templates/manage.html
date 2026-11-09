@@ -272,6 +272,7 @@
         {% endif %}
     </section>
 
+    {% if current_user.is_admin %}
     <section class="card">
         <h2>Users</h2>
         <button onclick="toggleForm('user-form')">+ Add User</button>
@@ -292,10 +293,20 @@
                         {% if u.id == current_user.id %}<span class="muted"> (you)</span>{% endif %}
                     </td>
                     <td class="row-actions">
-                        <form method="post" action="/users/{{ u.id }}/delete" style="display:inline"
-                            onsubmit="return confirm('Delete {{ u.name }} and all their beans, brewers, grinders, recipes and brews? This cannot be undone.')">
-                            <button type="submit" class="btn-action btn-danger">Delete</button>
+                        {% if u.id != current_user.id %}
+                        <form method="post" action="/users/{{ u.id }}/reset-password" style="display:inline"
+                            onsubmit="return confirm('Give {{ u.name }} a new temporary password? Their current one will stop working.')">
+                            <button type="submit" class="btn-action">Reset password</button>
                         </form>
+                        <details class="delete-account">
+                            <summary class="btn-action btn-danger">Delete</summary>
+                            <form method="post" action="/users/{{ u.id }}/delete" class="stacked-form"
+                                onsubmit="return confirm('Delete {{ u.name }} and all their beans, brewers, grinders, recipes and brews? This cannot be undone.')">
+                                <label>Your password, to confirm <input name="admin_password" type="password" autocomplete="current-password" required /></label>
+                                <button type="submit" class="btn-danger">Delete {{ u.name }}</button>
+                            </form>
+                        </details>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -303,6 +314,7 @@
         </table>
         {% endif %}
     </section>
+    {% endif %}
 
     <section class="card">
         <h2>Grinders</h2>

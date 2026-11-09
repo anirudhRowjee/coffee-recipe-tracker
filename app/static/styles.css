@@ -999,3 +999,37 @@ details[open] > .history-summary::before {
 .bean-colours-form button {
     width: auto;
 }
+
+/* Accounts */
+.form-error {
+    margin: 0 0 8px;
+    color: #b91c1c;
+}
+
+.temporary-password {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 1.3rem;
+    margin: 8px 0;
+    user-select: all;
+}
+
+.delete-account {
+    display: inline-block;
+}
+
+.delete-account > summary {
+    display: inline-block;
+    list-style: none;
+}
+
+.delete-account[open] {
+    display: block;
+    margin-top: 8px;
+    min-width: 180px;
+    white-space: normal;
+}
+
+.delete-account input {
+    display: block;
+    width: 100%;
+}

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlmodel import SQLModel
 from app import db
-from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta  # noqa: F401 — registers models
+from app.models import User, UserSession, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta  # noqa: F401 — registers models
 
 confirm = input("This will DELETE ALL DATA. Type 'yes' to continue: ")
 if confirm.strip().lower() != "yes":

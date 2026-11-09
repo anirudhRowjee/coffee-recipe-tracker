@@ -120,7 +120,7 @@ def test_every_combination_renders(app_on, reference_db, original):
     for c in _combos(original):
         if c["bag_id"] is None:
             continue
-        app.client.cookies.set("user_id", str(c["user_id"]))
+        app.sign_in(c["user_id"])
         r = app.client.get("/recipes/latest", params={
             "bag_id": c["bag_id"], "brewer_id": c["brewer_id"], "grinder_id": c["grinder_id"]})
         assert r.status_code == 200
@@ -143,7 +143,7 @@ def test_browse_shows_newest_recipe_per_bean(app_on, reference_db, original):
 def test_every_page_renders_for_every_user(app_on, reference_db, original):
     app = app_on(reference_db)
     for user in original.execute("SELECT id FROM user"):
-        app.client.cookies.set("user_id", str(user["id"]))
+        app.sign_in(user["id"])
         for page in ["/", "/browse", "/manage"]:
             assert app.client.get(page).status_code == 200, (page, user["id"])
 
@@ -157,7 +157,7 @@ def test_every_named_recipe_exports(app_on, reference_db):
     """)
     assert lines
     for line in lines:
-        app.client.cookies.set("user_id", str(line["user_id"]))
+        app.sign_in(line["user_id"])
         r = app.client.get(f"/lines/{line['id']}/export.md")
         assert r.status_code == 200, line
         assert f"\n- Grind: {line['grind']} on " in r.text, line
@@ -181,7 +181,7 @@ def test_startup_keeps_existing_rows_intact(app_on, reference_db, original):
 
 
 def test_startup_migrations_are_idempotent(app_on, reference_db):
-    once = app_on(reference_db)
-    twice = app_on(once.path)  # copy of the migrated DB, migrated again
+    once = app_on(reference_db, user_id=None)
+    twice = app_on(once.path, user_id=None)  # copy of the migrated DB, migrated again
     dump = lambda p: list(sqlite3.connect(p).iterdump())  # noqa: E731
     assert dump(once.path) == dump(twice.path)

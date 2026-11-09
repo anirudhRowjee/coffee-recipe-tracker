@@ -7,10 +7,20 @@ from sqlmodel import Field, Relationship, SQLModel
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
+    password_hash: Optional[str] = None  # no password yet = can't sign in
+    is_admin: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
+    must_change_password: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
 
     beans: List["Bean"] = Relationship(back_populates="user")
     brewers: List["Brewer"] = Relationship(back_populates="user")
     grinders: List["Grinder"] = Relationship(back_populates="user")
+
+
+class UserSession(SQLModel, table=True):
+    """One signed-in browser. Stores a hash of the cookie's token, never the token."""
+    token_hash: str = Field(primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Bean(SQLModel, table=True):

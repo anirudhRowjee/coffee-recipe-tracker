@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>{{ current_user.name }}</h2>
+        {% if current_user.must_change_password %}
+        <p>Welcome! Please choose your own password to finish signing in.</p>
+        {% endif %}
+        {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+        <form method="post" action="/account/password" class="stacked-form">
+            {% if not current_user.must_change_password %}
+            <label>Current password <input name="current_password" type="password" autocomplete="current-password" required /></label>
+            {% endif %}
+            <label>New password <input name="new_password" type="password" autocomplete="new-password" minlength="{{ min_length }}" required /></label>
+            <label>New password again <input name="confirm_password" type="password" autocomplete="new-password" minlength="{{ min_length }}" required /></label>
+            <button type="submit" style="margin-top:8px">{{ 'Set password' if current_user.must_change_password else 'Change password' }}</button>
+        </form>
+        <form method="post" action="/logout" style="margin-top:14px">
+            <button type="submit" class="btn-secondary">Sign out</button>
+        </form>
+    </section>
+</div>
+{% endblock %}

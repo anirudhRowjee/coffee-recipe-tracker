@@ -60,6 +60,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_recipe_lines(conn)
         _migrate_brew_ratings(conn)
         _migrate_bean_art(conn)
+        _migrate_accounts(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -81,6 +82,20 @@ def _migrate_bean_art(conn) -> None:
         conn.execute(text("ALTER TABLE bean ADD COLUMN image_version INTEGER"))
     if "mesh_colors" not in bean_columns:
         conn.execute(text("ALTER TABLE bean ADD COLUMN mesh_colors VARCHAR"))
+
+
+def _migrate_accounts(conn) -> None:
+    """Passwords and admin flags on users; the first user becomes the admin if
+    there is none. The usersession table itself comes from create_all."""
+    user_columns = _columns(conn, "user")
+    if "password_hash" not in user_columns:
+        conn.execute(text("ALTER TABLE user ADD COLUMN password_hash VARCHAR"))
+    if "is_admin" not in user_columns:
+        conn.execute(text("ALTER TABLE user ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+    if "must_change_password" not in user_columns:
+        conn.execute(text("ALTER TABLE user ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"))
+    if not conn.execute(text("SELECT COUNT(*) FROM user WHERE is_admin = 1")).scalar():
+        conn.execute(text("UPDATE user SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM user)"))
 
 
 DEFAULT_LINE_NAME = "Default"

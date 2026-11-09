@@ -4,15 +4,52 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from . import models
+from . import auth, models
 
 
 def get_users(session: Session) -> List[models.User]:
     return list(session.exec(select(models.User).order_by(models.User.name)).all())
 
 
-def create_user(session: Session, name: str) -> models.User:
-    user = models.User(name=name)
+def get_user_by_session_token(session: Session, token: str) -> Optional[models.User]:
+    row = session.get(models.UserSession, auth.session_token_hash(token))
+    return session.get(models.User, row.user_id) if row else None
+
+
+def create_user_session(session: Session, user_id: int) -> str:
+    token = auth.new_session_token()
+    session.add(models.UserSession(token_hash=auth.session_token_hash(token), user_id=user_id))
+    session.commit()
+    return token
+
+
+def delete_user_session(session: Session, token: str) -> None:
+    row = session.get(models.UserSession, auth.session_token_hash(token))
+    if row:
+        session.delete(row)
+    session.commit()
+
+
+def delete_sessions_for_user(session: Session, user_id: int, except_token: Optional[str] = None) -> None:
+    keep = auth.session_token_hash(except_token) if except_token else None
+    for row in session.exec(select(models.UserSession).where(models.UserSession.user_id == user_id)).all():
+        if row.token_hash != keep:
+            session.delete(row)
+    session.commit()
+
+
+def set_user_password(session: Session, user: models.User, password: str, must_change: bool) -> None:
+    user.password_hash = auth.hash_password(password)
+    user.must_change_password = must_change
+    session.commit()
+
+
+def name_taken(session: Session, name: str) -> bool:
+    return any(u.name.strip().lower() == name.strip().lower() for u in get_users(session))
+
+
+def create_user(session: Session, name: str, password: str) -> models.User:
+    user = models.User(name=name, password_hash=auth.hash_password(password), must_change_password=True)
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -26,6 +63,9 @@ def delete_user(session: Session, user_id: int) -> None:
         delete_brewer(session, brewer.id)  # type: ignore[arg-type]
     for grinder in session.exec(select(models.Grinder).where(models.Grinder.user_id == user_id)).all():
         delete_grinder(session, grinder.id)  # type: ignore[arg-type]
+    delete_sessions_for_user(session, user_id)
+    for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.user_id == user_id)).all():
+        session.delete(plan)
     user = session.get(models.User, user_id)
     if user:
         session.delete(user)
