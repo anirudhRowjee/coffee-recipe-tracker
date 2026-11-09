@@ -279,6 +279,7 @@ GET_ATTACKS = [
     ("/recipes/latest", {"bag_id": 2, "brewer_id": 2, "grinder_id": 1}),
     ("/lines/1/brew", {}),
     ("/lines/1/export.md", {}),
+    ("/lines/1/tidy", {}),
     ("/beans/1/image", {}),
 ]
 
@@ -298,6 +299,7 @@ POST_ATTACKS = [
     ("/grinders/1/delete", {}),
     ("/lines/1/rename", {"name": "Hacked"}),
     ("/lines/1/delete", {}),
+    ("/lines/1/tidy", {"recipe_text": "0:00 — Pour"}),
     ("/plan/1/cancel", {}),
     ("/plan", {"bag_id": 1, "brewer_id": 2, "grinder_id": 3}),
     ("/plan", {"bag_id": 2, "brewer_id": 1, "grinder_id": 3}),

@@ -16,6 +16,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["bean_theme"] = theme.bean_style
+templates.env.filters["needs_tidy"] = brew.needs_tidy
+templates.env.filters["step_editor_data"] = brew.step_editor_data
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
@@ -317,7 +319,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
     lines = crud.get_lines_for_combo(session, bean_id, brewer_id_int, grinder_id_int)
     line = next((ln for ln in lines if ln.id == line_id_int), lines[0] if lines else None)
     latest = crud.get_latest_recipe(session, line.id) if line and line.id else None  # type: ignore[arg-type]
-    recent_brews = crud.get_recent_brews(session, latest.id) if latest and latest.id else []
+    recent_brews = crud.get_recent_brews_for_panel(session, latest) if latest and latest.id else []
     recent_deltas = crud.get_recent_deltas(session, line.id) if line and line.id else []  # type: ignore[arg-type]
 
     # A plan without a line (made from the browse page) means "the default one"
@@ -758,9 +760,60 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
                 ("Grind", latest.grind_size),
             ],
             "steps": brew.parse_steps(latest.recipe_text),
+            "prep": brew.prep_text(latest.recipe_text),
+            "auto_stop": brew.ends_timer(latest.recipe_text),
             "bag": bag,
             "plan_id": plan.id if plan else None,
         })
+
+
+@app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)
+def tidy_line(line_id: int, request: Request, bag_id: Optional[int] = None):
+    """Suggest steps for a free-text method, for the person to correct and save."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        back_url = f"/lines/{line_id}/brew?bag_id={bag_id}" if bag_id else "/"
+        if not latest or not latest.bean:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        if not brew.needs_tidy(latest.recipe_text):
+            return RedirectResponse(url=back_url, status_code=303)
+        return templates.TemplateResponse("tidy_recipe.html", {
+            "request": request,
+            "current_user": user,
+            "line": line,
+            "latest": latest,
+            "title": export.title(line, latest.bean),
+            "suggestion": brew.suggest_steps(latest.recipe_text),
+            "bag_id": bag_id,
+            "back_url": back_url,
+        })
+
+
+@app.post("/lines/{line_id}/tidy")
+def save_tidied_line(line_id: int, request: Request, recipe_text: str = Form(""), bag_id: int = Form(None)):
+    """Save tidied steps as a new version, recorded as a recipe_text change."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        if not latest:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        text = "\n".join(line_text.rstrip() for line_text in recipe_text.splitlines()).strip()
+        if not brew.is_standard(text):
+            raise HTTPException(status_code=400, detail='Each line must look like "1:40 — Pour (to 200g)", with optional "Prep:" lines first')
+        if text != "\n".join((latest.recipe_text or "").splitlines()).strip():
+            tidied = crud.create_recipe(
+                session, bean_id=latest.bean_id, brewer_id=latest.brewer_id, grinder_id=latest.grinder_id,
+                line_id=line_id, dose_g=latest.dose_g, water_ml=latest.water_ml, temp_c=latest.temp_c,
+                grind_size=latest.grind_size, recipe_text=text, previous_recipe_id=latest.id,
+            )
+            crud.create_delta(session, from_recipe_id=latest.id, to_recipe_id=tidied.id, changed_param="recipe_text",  # type: ignore[arg-type]
+                              delta_amount=0.0, rationale=brew.TIDY_RATIONALE)
+        bag = session.get(models.BeanBag, bag_id) if bag_id else None
+        destination = f"/lines/{line_id}/brew?bag_id={bag.id}" if bag and bag.bean_id == line.bean_id else "/"
+    return RedirectResponse(url=destination, status_code=303)
 
 
 @app.get("/lines/{line_id}/export.md")

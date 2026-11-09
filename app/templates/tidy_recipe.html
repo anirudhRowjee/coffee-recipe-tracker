@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>Tidy into steps</h2>
+        <p class="muted">{{ title }}</p>
+        <h4>Your current method</h4>
+        <pre class="recipe-text tidy-original">{{ latest.recipe_text }}</pre>
+        <h4>Suggested steps</h4>
+        <p class="muted">Correct anything that's wrong, especially rows marked "check this". Saving records a new version of this recipe, so your history stays.</p>
+        <form method="post" action="/lines/{{ line.id }}/tidy" class="stacked-form">
+            {% if bag_id %}<input type="hidden" name="bag_id" value="{{ bag_id }}" />{% endif %}
+            {% with field_value=suggestion.text, field_checks=suggestion.checks|join(','), allow_free_text=false %}
+            {% include 'partials/recipe_text_field.html' %}
+            {% endwith %}
+            <button type="submit" style="margin-top:8px">Save as a new version</button>
+        </form>
+        <p style="margin-top:10px"><a href="{{ back_url }}">Keep it as it is</a></p>
+    </section>
+</div>
+{% endblock %}

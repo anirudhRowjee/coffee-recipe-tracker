@@ -1,0 +1,7 @@
+{# The recipe's method: a plain textarea, which static/step_editor.js covers with
+   rows of steps when the text is in the step format (or empty). Without
+   JavaScript, or for free text, the textarea is simply used as it always was.
+   Expects field_value; optional field_checks (row numbers to flag) and
+   allow_free_text. #}
+<div class="step-editor" data-step-editor="{{ field_value|step_editor_data }}" data-checks="{{ field_checks|default('') }}" data-free-text="{{ '1' if allow_free_text|default(true) else '0' }}" hidden></div>
+<textarea name="recipe_text" rows="4" placeholder="Long-form recipe instructions">{{ field_value or '' }}</textarea>

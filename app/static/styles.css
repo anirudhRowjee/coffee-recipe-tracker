@@ -1033,3 +1033,100 @@ details[open] > .history-summary::before {
     display: block;
     width: 100%;
 }
+
+/* Step editor (static/step_editor.js) */
+.step-editor {
+    display: grid;
+    gap: 8px;
+}
+
+/* these elements set display elsewhere, which would otherwise beat the hidden attribute */
+.step-editor[hidden],
+textarea[hidden] {
+    display: none;
+}
+
+.step-editor > .btn-secondary {
+    justify-self: start;
+}
+
+.step-prep {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.step-rows {
+    display: grid;
+    gap: 8px;
+}
+
+.step-row {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr) 30px;
+    gap: 6px;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f5ebe0;
+}
+
+.step-row input {
+    padding: 8px 6px;
+}
+
+.step-row .step-bad {
+    border-color: #b91c1c;
+    background: #fff5f5;
+}
+
+.step-remove {
+    width: auto;
+    padding: 6px 0;
+    border: 0;
+    background: none;
+    color: #5c3520;
+    font-size: 1.1rem;
+}
+
+.step-pour {
+    grid-column: 2 / span 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.step-pour input {
+    width: 76px;
+}
+
+.step-check {
+    margin-left: 4px;
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: #fef3e2;
+    color: #92400e;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.step-hint {
+    font-size: 0.8rem;
+}
+
+.step-plain {
+    justify-self: start;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #6b3d2e;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+.tidy-original {
+    padding: 8px 10px;
+    background: #faf4ec;
+    border-radius: 6px;
+}

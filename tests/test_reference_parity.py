@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app import crud, main
+from app import brew, crud, main
 from conftest import copy_db
 
 ORIGINAL_TABLES = ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", "plannedbrew", "delta"]
@@ -164,6 +164,29 @@ def test_every_named_recipe_exports(app_on, reference_db):
         r = app.client.get(f"/lines/{line['id']}/brew")
         assert r.status_code == 200, line
         assert f"<dt>Grind</dt>\n            <dd>{line['grind']}</dd>" in r.text, line
+
+
+def test_every_real_method_stays_usable_and_can_be_tidied(app_on, reference_db):
+    """Backward compatibility: nothing needs converting, and everything can be."""
+    app = app_on(reference_db, user_id=None)
+    lines = app.rows("""
+        SELECT l.id, b.user_id,
+               (SELECT recipe_text FROM recipe WHERE line_id = l.id ORDER BY created_at DESC LIMIT 1) AS method
+        FROM recipeline l JOIN bean b ON b.id = l.bean_id
+    """)
+    for line in lines:
+        app.sign_in(line["user_id"])
+        assert app.client.get(f"/lines/{line['id']}/brew").status_code == 200, line
+        if not brew.needs_tidy(line["method"]):
+            continue
+        assert brew.is_standard(brew.suggest_steps(line["method"]).text), line
+        before = app.scalar("select count(*) from recipe where line_id = :l", l=line["id"])
+        page = app.client.get(f"/lines/{line['id']}/tidy", follow_redirects=False)
+        assert page.status_code == 200, line
+        saved = app.client.post(f"/lines/{line['id']}/tidy", data={"recipe_text": brew.suggest_steps(line["method"]).text}, follow_redirects=False)
+        assert saved.status_code == 303, line
+        assert app.scalar("select count(*) from recipe where line_id = :l", l=line["id"]) == before + 1
+        assert app.client.get(f"/lines/{line['id']}/brew").status_code == 200, line
 
 
 def test_startup_keeps_existing_rows_intact(app_on, reference_db, original):

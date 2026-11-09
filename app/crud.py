@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from . import auth, models
+from . import auth, brew, models
 
 
 def get_users(session: Session) -> List[models.User]:
@@ -224,6 +224,29 @@ def get_line_history(session: Session, line_id: int) -> List[Tuple[models.Delta,
         if before and after:
             rows.append((delta, before, after))
     return rows
+
+
+def _version_it_was_tidied_from(session: Session, recipe: models.Recipe) -> Optional[models.Recipe]:
+    delta = session.exec(
+        select(models.Delta)
+        .where(models.Delta.to_recipe_id == recipe.id)
+        .where(models.Delta.changed_param == "recipe_text")
+        .where(models.Delta.rationale == brew.TIDY_RATIONALE)
+    ).first()
+    return session.get(models.Recipe, delta.from_recipe_id) if delta else None
+
+
+def get_recent_brews_for_panel(session: Session, recipe: models.Recipe) -> List[models.Brew]:
+    """The version's brews. Tidying only reformats a method, so a freshly tidied
+    version shows the brews (and recommendation) of the version it came from."""
+    brews = get_recent_brews(session, recipe.id)  # type: ignore[arg-type]
+    while not brews:
+        source = _version_it_was_tidied_from(session, recipe)
+        if not source:
+            break
+        recipe = source
+        brews = get_recent_brews(session, recipe.id)  # type: ignore[arg-type]
+    return brews
 
 
 def get_recent_deltas(session: Session, line_id: int, limit: int = 10) -> List[models.Delta]:
@@ -497,8 +520,9 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
             except (TypeError, ValueError):
                 if old_value != new_value:
                     changed.append(f)
-    old_text = base.recipe_text or ""
-    new_text = new_values.get("recipe_text") or ""
+    # browsers submit textareas with \r\n, and the step editor's text is stored with \n
+    old_text = "\n".join((base.recipe_text or "").splitlines()).strip()
+    new_text = "\n".join((new_values.get("recipe_text") or "").splitlines()).strip()
     if old_text != new_text:
         changed.append("recipe_text")
     return (len(changed) == 1, changed)

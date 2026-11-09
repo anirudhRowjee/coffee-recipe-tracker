@@ -22,6 +22,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
 - **Star ratings** — rate each brew from 1 to 5 when you log it; stars appear in the brew history.
 - **Bag artwork and colours** — add a photo of the bag from the Manage page. It appears on the brew, browse, and bag-picker views, an accent colour picked from it tints that coffee's buttons and highlights, and its cards get a gradient border of the bag's main colours (a thin strip along the top in brew mode). Retake the photo any time, or adjust the colours by hand under "Edit colours".
+- **Step editor** — write a method as rows of time, action and target weight (type `140` for 1:40). Older free-text recipes keep working, and "Tidy into steps" proposes a conversion for you to correct; saving records it as a new version.
 - **Brew mode** — "▶ Brew" on the recipe card opens the recipe in large type with a big timer. Times written in the method ("Swirl at 1:00", "0:40 — pour to 200g") become steps: the current one is highlighted, the next one counts down, and the phone beeps at each (not in silent mode) and stays awake while the timer runs. Stopping puts "Brewed 3:12" into the log form below it.
 - **Share a recipe as text** — "Share as text" on the recipe card opens the current named recipe as plain Markdown to copy into a chat ("Download .md" saves a file): bean, gear, dose/water/ratio/temp, grind on which grinder, method, and how it got there. Tasting notes, bags, and other personal details are left out.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
@@ -126,7 +127,7 @@ app/
 ├── crud.py          # All database read/write operations
 ├── export.py        # Named recipe → shareable Markdown (no personal data)
 ├── theme.py         # Bean accent colour → readable CSS variables
-├── brew.py          # Brew mode: method → steps with the m:ss times in them
+├── brew.py          # The step format, brew-mode steps, and tidy suggestions
 ├── db.py            # Engine setup, DB initialisation, startup migrations
 ├── auth.py          # Password hashing and session tokens
 ├── templates/
@@ -145,6 +146,7 @@ app/
 └── static/
     ├── styles.css
     ├── bean_art.js  # Shrinks bag photos and picks their accent colour in the browser
+    ├── step_editor.js  # Step rows over the recipe text box
     └── htmx.min.js
 
 scripts/

@@ -60,7 +60,7 @@ def test_brew_page_shows_recipe_large_with_timed_steps(app):
         ("", "Close the switch"), ("", "Add all the grounds"),
         ("60,120", "Swirl at 1:00 and 2:00"), ("180", "Release at 3:00"),
     ]
-    assert '<div class="brew-timer" id="brew-timer" hidden>' in html  # only shown with JavaScript
+    assert re.search(r'<div class="brew-timer" id="brew-timer"[^>]* hidden>', html)  # only shown with JavaScript
     assert html.index('id="brew-current"') < html.index('id="brew-clock"')  # current step sits above the clock
     assert "<h1>" not in html and "<h1>" in app.client.get("/browse").text  # no site header: it has to fit one screen
 

@@ -22,7 +22,7 @@
     </dl>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
-    <div class="brew-timer" id="brew-timer" hidden>
+    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}" hidden>
         <p class="brew-current" id="brew-current" hidden></p>
         <div class="brew-clock" id="brew-clock">0:00</div>
         <p class="brew-next" id="brew-next"></p>
@@ -39,6 +39,9 @@
         <li data-times="{{ step.times|join(',') }}">{{ step.text }}</li>
         {% endfor %}
     </ul>
+    {% endif %}
+    {% if latest.recipe_text|needs_tidy %}
+    <p class="share-links"><a href="/lines/{{ line.id }}/tidy{% if bag %}?bag_id={{ bag.id }}{% endif %}">Tidy this method into steps</a></p>
     {% endif %}
 </section>
 
@@ -61,6 +64,8 @@
 
         var clock = document.getElementById('brew-clock');
         var currentBox = document.getElementById('brew-current');
+        var prep = timer.getAttribute('data-prep');
+        var autoStop = timer.getAttribute('data-auto-stop') === '1';
         var next = document.getElementById('brew-next');
         var startBtn = document.getElementById('brew-start');
         var resetBtn = document.getElementById('brew-reset');
@@ -119,11 +124,16 @@
                 currentBox.textContent = stepText(steps[events[current].i]);
             }
             currentBox.hidden = current < 0;
+            if (prep && startedAt === null && stoppedAt === 0) {
+                currentBox.textContent = 'Before you start: ' + prep;
+                currentBox.hidden = false;
+            }
             if (upcoming) {
                 next.textContent = 'Next in ' + fmt(upcoming.t - s) + ': ' + stepText(steps[upcoming.i]);
             } else {
                 next.textContent = events.length && current >= 0 ? 'That was the last timed step' : '';
             }
+            if (autoStop && startedAt !== null && current === events.length - 1 && events[current].t > 0) stop();
         }
 
         function stop() {
