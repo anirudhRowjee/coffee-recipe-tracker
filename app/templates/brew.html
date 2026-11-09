@@ -22,9 +22,15 @@
     </dl>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
-    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}" hidden>
+    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}"{% if animation %} data-animation="{{ animation }}"{% endif %} hidden>
         <p class="brew-current" id="brew-current" hidden></p>
-        <div class="brew-clock" id="brew-clock">0:00</div>
+        <div class="brew-clock-row">
+            <div class="brew-anim" id="brew-anim" hidden></div>
+            <div>
+                <div class="brew-clock" id="brew-clock">0:00</div>
+                <label class="brew-anim-toggle" id="brew-anim-toggle" for="brew-anim-on" hidden><input id="brew-anim-on" type="checkbox" checked /> Animation</label>
+            </div>
+        </div>
         <p class="brew-next" id="brew-next"></p>
         <div class="brew-controls">
             <button type="button" id="brew-start">Start</button>
@@ -54,6 +60,7 @@
 </section>
 {% endif %}
 
+<script src="/static/brew_animation.js"></script>
 <script>
     // ES5 on purpose: the Kindle's browser is old. Times come from data-times
     // on each step (seconds, parsed server-side by app/brew.py).
@@ -82,6 +89,7 @@
         var startedAt = null;   // Date.now() at start, so backgrounding can't drift it
         var stoppedAt = 0;      // elapsed seconds while stopped
         var tick = null, lastEvent = -1, audio = null, wakeLock = null;
+        var animation = window.BrewAnimation ? window.BrewAnimation(timer) : null;
 
         function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
         function elapsed() { return startedAt === null ? stoppedAt : Math.floor((Date.now() - startedAt) / 1000); }
@@ -118,6 +126,7 @@
             }
             if (startedAt !== null && current > lastEvent && events[current].t > 0) beep();
             lastEvent = current;
+            if (animation) animation.update(current, s, startedAt !== null);
             steps.forEach(function (li) { li.className = ''; });
             if (current >= 0) {
                 steps[events[current].i].className = 'brew-step-now';

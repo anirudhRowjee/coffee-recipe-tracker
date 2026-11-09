@@ -138,6 +138,96 @@ def step_editor_data(text: Optional[str]) -> str:
     return json.dumps({"editable": not (text or "").strip(), "prep": "", "steps": []})
 
 
+# --- what brew mode's animation shows for each step ---------------------------------
+
+# Checked in order; the first that matches names the step. "idle" (no match) draws
+# the brewer with nothing happening, so an unfamiliar step is never shown wrongly.
+_ACTIONS = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
+    ("done", r"\bdone\b|^finish|^serve|^enjoy"),
+    ("plunge", r"plunge|\bpress\b"),
+    ("open", r"\bopen\b|\brelease\b|\bdrain\b"),
+    ("drawdown", r"draw\s?down"),
+    ("bloom", r"bloom"),
+    ("stir", r"\bstir|nsew|nsns"),
+    ("swirl", r"swirl"),
+    ("pour", r"\bpour|top up|\bwater\b"),
+    ("add", r"\b(coffee|grounds)\b"),
+    ("close", r"\bclose"),
+    ("wait", r"\bwait\b|\bsteep|immersion|\brest\b"),
+)]
+_DRAINS = ("open", "drawdown", "plunge")
+_CLOSES_VALVE = re.compile(r"\bclose", re.IGNORECASE)
+_LAST_STEP_SECONDS = 30  # how long to play a last step that isn't "Done": nothing says
+
+
+def action_kind(action: str, grams: Optional[float] = None) -> str:
+    kind = next((name for name, pattern in _ACTIONS if pattern.search(action)), "idle")
+    # a target weight means water is going in, whatever else the step says
+    return "pour" if grams is not None and kind in ("stir", "swirl", "wait", "idle", "add", "close") else kind
+
+
+def brewer_shape(name: Optional[str], method: Optional[str] = None) -> Optional[str]:
+    """Which drawing suits this brewer; None (espresso, "No Brewer") means no animation."""
+    text = (name or "").lower()
+    if "aeropress" in text:
+        return "aeropress"
+    if "switch" in text:  # before v60: "Hario Switch v60"
+        return "switch"
+    if "kalita" in text or "wave" in text:
+        return "flat"
+    if "v60" in text or "pour over" in (method or "").lower():
+        return "cone"
+    return None
+
+
+def animation_data(text: Optional[str], brewer_name: Optional[str], brewer_method: Optional[str] = None) -> str:
+    """A step-by-step plan for static/brew_animation.js as JSON, or "" if there's nothing
+    to animate. Only standard-format methods: free text has no reliable step lengths.
+
+    Walks the recipe once tracking the water level (the pour-to weight as a share of
+    the largest), the Switch's valve, and how full the cup is (shared out across the
+    time coffee is dripping through)."""
+    shape = brewer_shape(brewer_name, brewer_method)
+    parts = _standard_parts(text)
+    if not shape or not parts:
+        return ""
+    rows = sorted(parts[1], key=lambda row: _seconds(row[0]))  # the order the timer uses
+    kinds = [action_kind(action, grams) for _, action, grams in rows]
+    total = max((grams or 0 for _, _, grams in rows), default=0)
+
+    steps = []
+    level, valve = 0.0, "open"
+    for i, (time, action, grams) in enumerate(rows):
+        kind, before, valve_before = kinds[i], level, valve
+        if _CLOSES_VALVE.search(action):
+            valve = "closed"
+        if kind == "open":
+            valve = "open"
+        if kind in ("pour", "bloom"):
+            level = grams / total if grams and total else 1.0
+        if kind in _DRAINS:
+            level = level * 0.4 if any(later in _DRAINS for later in kinds[i + 1:]) else 0.0
+        if i + 1 < len(rows):
+            seconds = _seconds(rows[i + 1][0]) - _seconds(time)
+        else:
+            seconds = 0 if kind == "done" else _LAST_STEP_SECONDS
+        percolates = shape != "aeropress" and (shape != "switch" or valve == "open")
+        steps.append({
+            "kind": kind, "at": _seconds(time), "seconds": seconds,
+            "from": round(before, 3), "to": round(level, 3),
+            "valve": valve, "flip": valve != valve_before,
+            "flow": kind in _DRAINS or (percolates and kind != "done" and (before > 0 or level > 0)),
+        })
+
+    flowing = sum(step["seconds"] for step in steps if step["flow"]) or 1
+    so_far = 0
+    for step in steps:
+        step["cup_from"] = 1.0 if step["kind"] == "done" else round(so_far / flowing, 3)
+        so_far += step["seconds"] if step["flow"] else 0
+        step["cup_to"] = 1.0 if step["kind"] == "done" else round(so_far / flowing, 3)
+    return json.dumps({"shape": shape, "steps": steps})
+
+
 # --- suggesting steps for free text -------------------------------------------------
 
 _BULLET = re.compile(r"^(?:[•*\-–—]\s*|\d+[.)]\s*)+")

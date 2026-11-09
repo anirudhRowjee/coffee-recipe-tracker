@@ -762,6 +762,7 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
             "steps": brew.parse_steps(latest.recipe_text),
             "prep": brew.prep_text(latest.recipe_text),
             "auto_stop": brew.ends_timer(latest.recipe_text),
+            "animation": brew.animation_data(latest.recipe_text, latest.brewer.name, latest.brewer.method),
             "bag": bag,
             "plan_id": plan.id if plan else None,
         })
