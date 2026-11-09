@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app import brew, crud, main
+from app import brew, crud, main, models
 from conftest import copy_db
 
 ORIGINAL_TABLES = ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", "plannedbrew", "delta"]
@@ -37,6 +37,16 @@ def original(reference_db: Path, tmp_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     yield conn
     conn.close()
+
+
+def _sign_in_past_temporary_password(app, user_id: int) -> None:
+    """Friends who haven't signed in yet would only ever be shown the change-password page."""
+    with app.session() as session:
+        user = session.get(models.User, user_id)
+        user.must_change_password = False
+        session.add(user)
+        session.commit()
+    app.sign_in(user_id)
 
 
 def _combos(original: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -120,7 +130,7 @@ def test_every_combination_renders(app_on, reference_db, original):
     for c in _combos(original):
         if c["bag_id"] is None:
             continue
-        app.sign_in(c["user_id"])
+        _sign_in_past_temporary_password(app, c["user_id"])
         r = app.client.get("/recipes/latest", params={
             "bag_id": c["bag_id"], "brewer_id": c["brewer_id"], "grinder_id": c["grinder_id"]})
         assert r.status_code == 200
@@ -143,7 +153,7 @@ def test_browse_shows_newest_recipe_per_bean(app_on, reference_db, original):
 def test_every_page_renders_for_every_user(app_on, reference_db, original):
     app = app_on(reference_db)
     for user in original.execute("SELECT id FROM user"):
-        app.sign_in(user["id"])
+        _sign_in_past_temporary_password(app, user["id"])
         for page in ["/", "/browse", "/manage"]:
             assert app.client.get(page).status_code == 200, (page, user["id"])
 
@@ -157,7 +167,7 @@ def test_every_named_recipe_exports(app_on, reference_db):
     """)
     assert lines
     for line in lines:
-        app.sign_in(line["user_id"])
+        _sign_in_past_temporary_password(app, line["user_id"])
         r = app.client.get(f"/lines/{line['id']}/export.md")
         assert r.status_code == 200, line
         assert f"\n- Grind: {line['grind']} on " in r.text, line
@@ -175,7 +185,7 @@ def test_every_real_method_stays_usable_and_can_be_tidied(app_on, reference_db):
         FROM recipeline l JOIN bean b ON b.id = l.bean_id
     """)
     for line in lines:
-        app.sign_in(line["user_id"])
+        _sign_in_past_temporary_password(app, line["user_id"])
         assert app.client.get(f"/lines/{line['id']}/brew").status_code == 200, line
         if not brew.needs_tidy(line["method"]):
             continue
