@@ -1,12 +1,12 @@
 {# Bag photo controls for one bean on the manage page. Expects `bean`;
-   static/bean_art.js does the upload. #}
+   static/bean_art.js does the upload and the reset. #}
 <div class="bean-art" data-bean-id="{{ bean.id }}">
     {% if bean.image_version %}
     <img class="bean-art-preview" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" loading="lazy" />
     {% endif %}
     <div class="bean-art-actions">
         <label class="btn-action bean-art-pick">
-            {{ 'Change bag photo' if bean.image_version else 'Add bag photo' }}
+            {{ 'Retake photo' if bean.image_version else 'Add bag photo' }}
             <input type="file" accept="image/*" onchange="uploadBeanImage(this)" />
         </label>
         {% if bean.image_version %}
@@ -16,4 +16,20 @@
         {% endif %}
         <span class="muted bean-art-status"></span>
     </div>
+    {% if bean.image_version %}
+    {% set fallback = bean.accent_color or '#6b3d2e' %}
+    {% set mesh = bean.mesh_colors.split(',') if bean.mesh_colors else [fallback, fallback, fallback, fallback] %}
+    <details class="bean-colours">
+        <summary>Edit colours</summary>
+        <div class="bean-mesh-swatch" style="{{ bean|bean_theme }}"></div>
+        <form method="post" action="/beans/{{ bean.id }}/colors" class="bean-colours-form">
+            <label>Accent <input type="color" name="accent" value="{{ fallback }}" /></label>
+            {% for corner in ['Top left', 'Top right', 'Bottom left', 'Bottom right'] %}
+            <label>{{ corner }} <input type="color" name="mesh{{ loop.index }}" value="{{ mesh[loop.index0] }}" /></label>
+            {% endfor %}
+            <button type="submit">Save colours</button>
+            <button type="button" class="btn-secondary" onclick="resetBeanColours(this)">Reset to photo</button>
+        </form>
+    </details>
+    {% endif %}
 </div>

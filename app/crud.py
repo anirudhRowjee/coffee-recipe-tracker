@@ -284,7 +284,7 @@ def _delete_lines(session: Session, line_ids: List[int]) -> None:
         session.delete(line)
 
 
-def set_bean_image(session: Session, bean_id: int, data: bytes, content_type: str, accent_color: Optional[str]) -> Optional[models.Bean]:
+def set_bean_image(session: Session, bean_id: int, data: bytes, content_type: str, accent_color: Optional[str], mesh_colors: Optional[str] = None) -> Optional[models.Bean]:
     bean = session.get(models.Bean, bean_id)
     if not bean:
         return None
@@ -295,9 +295,20 @@ def set_bean_image(session: Session, bean_id: int, data: bytes, content_type: st
     else:
         session.add(models.BeanImage(bean_id=bean_id, data=data, content_type=content_type))
     bean.accent_color = accent_color
+    bean.mesh_colors = mesh_colors
     # A timestamp, not a counter: photo URLs are cached forever, so a version
     # must never come round again after a photo is removed and re-added
     bean.image_version = max(int(time.time()), (bean.image_version or 0) + 1)
+    session.commit()
+    return bean
+
+
+def set_bean_colors(session: Session, bean_id: int, accent_color: Optional[str], mesh_colors: Optional[str]) -> Optional[models.Bean]:
+    bean = session.get(models.Bean, bean_id)
+    if not bean:
+        return None
+    bean.accent_color = accent_color
+    bean.mesh_colors = mesh_colors
     session.commit()
     return bean
 
@@ -309,6 +320,7 @@ def delete_bean_image(session: Session, bean_id: int) -> None:
     bean = session.get(models.Bean, bean_id)
     if bean:
         bean.accent_color = None
+        bean.mesh_colors = None
         bean.image_version = None
     session.commit()
 

@@ -144,6 +144,7 @@ def import_all(engine: Engine, src: Path) -> None:
                 flavor_notes=_str(r["flavor_notes"]),
                 notes=_str(r["notes"]),
                 accent_color=_str(r.get("accent_color")),
+                mesh_colors=_str(r.get("mesh_colors")),
                 image_version=_int(r.get("image_version")),
             ))
         session.commit()

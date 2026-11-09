@@ -41,10 +41,10 @@ def export_all(engine: Engine, out: Path) -> None:
         with open(out / "beans.csv", "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["id", "user_id", "name", "origin", "roast_level", "flavor_notes", "notes",
-                        "accent_color", "image_version"])
+                        "accent_color", "mesh_colors", "image_version"])
             for b in session.exec(select(Bean).order_by(Bean.id)).all():
                 w.writerow([b.id, b.user_id, b.name, b.origin, b.roast_level, b.flavor_notes, b.notes,
-                            b.accent_color, b.image_version])
+                            b.accent_color, b.mesh_colors, b.image_version])
 
         # Bag photos (base64, so a snapshot stays plain CSV)
         with open(out / "bean_images.csv", "w", newline="") as f:

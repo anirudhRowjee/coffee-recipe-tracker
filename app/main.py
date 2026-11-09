@@ -15,7 +15,7 @@ app = FastAPI(title="Coffee Recipe Tracker")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
-templates.env.filters["bean_theme"] = theme.bean_theme
+templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
@@ -342,15 +342,36 @@ def create_bean(request: Request, name: str = Form(...), origin: str = Form(None
 
 
 @app.post("/beans/{bean_id}/image")
-def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str = Form(None)):
-    """Takes the JPEG and accent colour that static/bean_art.js prepared in the browser."""
+def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str = Form(None), mesh: str = Form(None)):
+    """Takes the JPEG and colours that static/bean_art.js prepared in the browser."""
     data = image.file.read(MAX_BEAN_IMAGE_BYTES + 1)
     if len(data) > MAX_BEAN_IMAGE_BYTES:
         raise HTTPException(status_code=400, detail="That image is too large")
     if not data.startswith(b"\xff\xd8\xff"):
         raise HTTPException(status_code=400, detail="The image must be a JPEG")
     with Session(db.engine) as session:
-        if not crud.set_bean_image(session, bean_id, data, "image/jpeg", theme.clean_accent(accent)):
+        if not crud.set_bean_image(session, bean_id, data, "image/jpeg", theme.clean_accent(accent), theme.clean_mesh(mesh)):
+            raise HTTPException(status_code=404, detail="Bean not found")
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/beans/{bean_id}/colors")
+def edit_bean_colors(
+    bean_id: int,
+    accent: str = Form(None),
+    mesh1: str = Form(None),
+    mesh2: str = Form(None),
+    mesh3: str = Form(None),
+    mesh4: str = Form(None),
+):
+    """Save hand-picked colours. Sending none clears them (a photo with no real colour in it)."""
+    mesh_parts = [mesh1, mesh2, mesh3, mesh4]
+    accent_color = theme.clean_accent(accent)
+    mesh_colors = theme.clean_mesh(",".join(part or "" for part in mesh_parts))
+    if (accent and not accent_color) or (any(mesh_parts) and not mesh_colors):
+        raise HTTPException(status_code=400, detail="Colours must be #rrggbb")
+    with Session(db.engine) as session:
+        if not crud.set_bean_colors(session, bean_id, accent_color, mesh_colors):
             raise HTTPException(status_code=404, detail="Bean not found")
     return RedirectResponse(url="/manage", status_code=303)
 

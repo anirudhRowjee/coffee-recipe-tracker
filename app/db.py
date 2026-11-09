@@ -79,6 +79,8 @@ def _migrate_bean_art(conn) -> None:
         conn.execute(text("ALTER TABLE bean ADD COLUMN accent_color VARCHAR"))
     if "image_version" not in bean_columns:
         conn.execute(text("ALTER TABLE bean ADD COLUMN image_version INTEGER"))
+    if "mesh_colors" not in bean_columns:
+        conn.execute(text("ALTER TABLE bean ADD COLUMN mesh_colors VARCHAR"))
 
 
 DEFAULT_LINE_NAME = "Default"

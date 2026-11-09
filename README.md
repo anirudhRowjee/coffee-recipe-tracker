@@ -21,7 +21,7 @@ Built with FastAPI + SQLite (via SQLModel) + htmx. No JavaScript frameworks — 
 - **Browse page** — see the latest recipe and bag inventory for every bean at a glance, with collapsible brew and change history per bean.
 - **Full edit/delete UI** — edit or delete beans, bags, brewers, grinders, and named recipes; deletes cascade automatically. Mark a bag as completed when it's finished.
 - **Star ratings** — rate each brew from 1 to 5 when you log it; stars appear in the brew history.
-- **Bag artwork and colours** — add a photo of the bag from the Manage page. It appears on the brew, browse, and bag-picker views, and an accent colour picked from it tints that coffee's buttons and highlights.
+- **Bag artwork and colours** — add a photo of the bag from the Manage page. It appears on the brew, browse, and bag-picker views, an accent colour picked from it tints that coffee's buttons and highlights, and its cards get a gradient border of the bag's main colours (a thin strip along the top in brew mode). Retake the photo any time, or adjust the colours by hand under "Edit colours".
 - **Brew mode** — "▶ Brew" on the recipe card opens the recipe in large type with a big timer. Times written in the method ("Swirl at 1:00", "0:40 — pour to 200g") become steps: the current one is highlighted, the next one counts down, and the phone beeps at each (not in silent mode) and stays awake while the timer runs. Stopping puts "Brewed 3:12" into the log form below it.
 - **Share a recipe as text** — "Share as text" on the recipe card opens the current named recipe as plain Markdown to copy into a chat ("Download .md" saves a file): bean, gear, dose/water/ratio/temp, grind on which grinder, method, and how it got there. Tasting notes, bags, and other personal details are left out.
 - **CSV backup & restore** — export all data to CSV, restore from a snapshot with `scripts/import.py`.
@@ -84,7 +84,7 @@ Open http://127.0.0.1:8000 and pick (or add) a user.
 1. **Manage** (`/manage`) — add, edit, and delete beans, bags, brewers, grinders, and users
    - Add a bean first (coffee type), then add one or more bags to it
    - Each bag gets its own roast date and quantity
-   - Open a bean and use "Add bag photo" to give it its artwork and colours
+   - Open a bean and use "Add bag photo" to give it its artwork and colours; "Retake photo" and "Edit colours" change them later
    - Mark a bag as "Done" when it's finished — it disappears from the brew picker but stays in the history
    - Edit any field inline; delete cascades to all linked recipes, brews, and deltas
 2. **Brew** (`/`) — select a bag + brewer + grinder to load the latest recipe

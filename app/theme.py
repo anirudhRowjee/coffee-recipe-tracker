@@ -1,11 +1,12 @@
 """
-Per-bean colours. The browser picks one accent colour from the bag photo
-(app/static/bean_art.js); this turns it into CSS variables that stay readable:
---accent is dark enough for white text, and --accent-soft is a pale tint for
-highlights behind the app's dark text.
+Per-bean colours. The browser picks an accent colour and four mesh colours
+from the bag photo (app/static/bean_art.js); this turns them into CSS variables
+that stay readable: --accent is dark enough for white text, --accent-soft is
+pale enough to sit behind the app's dark text, and --mesh-strip / --mesh-strong
+are full-colour gradients for places with no text on them.
 """
 import re
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 RGB = Tuple[int, int, int]
 
@@ -61,3 +62,35 @@ def bean_theme(accent: Optional[str]) -> str:
     strong = _accent_for_white_text(_rgb(cleaned))
     soft = _mix(strong, _PARCHMENT, 0.82)
     return f"--accent:{_hex(strong)};--accent-soft:{_hex(soft)}"
+
+
+def clean_mesh(value: Optional[str]) -> Optional[str]:
+    """Four comma-separated #rrggbb colours, normalised, or None."""
+    parts = [clean_accent(part) for part in (value or "").split(",")]
+    return ",".join(parts) if len(parts) == 4 and all(parts) else None  # type: ignore[arg-type]
+
+
+def _gradient(colors: List[RGB], base: RGB) -> str:
+    """A corner of colour each, fading out over a base colour."""
+    corners = ("0% 0%", "100% 0%", "0% 100%", "100% 100%")
+    layers = [
+        "radial-gradient(at {pos},rgba({r},{g},{b},1) 0,rgba({r},{g},{b},0) 75%)".format(pos=pos, r=c[0], g=c[1], b=c[2])
+        for pos, c in zip(corners, colors)
+    ]
+    return ",".join(layers + [_hex(base)])
+
+
+def bean_mesh(mesh: Optional[str]) -> str:
+    cleaned = clean_mesh(mesh)
+    if not cleaned:
+        return ""
+    colors = [_rgb(part) for part in cleaned.split(",")]
+    n = len(colors)
+    average: RGB = (sum(c[0] for c in colors) // n, sum(c[1] for c in colors) // n, sum(c[2] for c in colors) // n)
+    strip = "linear-gradient(90deg," + ",".join(_hex(c) for c in colors) + ")"
+    return f"--mesh-strip:{strip};--mesh-strong:{_gradient(colors, average)}"
+
+
+def bean_style(bean) -> str:
+    """Everything a bean's colours set, for a style attribute."""
+    return ";".join(part for part in (bean_theme(bean.accent_color), bean_mesh(bean.mesh_colors)) if part)

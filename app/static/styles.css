@@ -891,7 +891,7 @@ details[open] > .history-summary::before {
     object-fit: contain;
     border-radius: 8px;
     margin-bottom: 10px;
-    background: var(--accent-soft, #f5ebe0);
+    background: var(--mesh-strong, var(--accent-soft, #f5ebe0));
 }
 
 .bag-art-thumb {
@@ -901,11 +901,6 @@ details[open] > .history-summary::before {
     margin: 0 0 6px 10px;
     object-fit: cover;
     border-radius: 8px;
-}
-
-.card[style*="--accent"],
-.recipe-card[style*="--accent"] {
-    border-top: 4px solid var(--accent);
 }
 
 .bean-art {
@@ -937,4 +932,70 @@ details[open] > .history-summary::before {
 
 .bean-art-pick input {
     display: none;
+}
+
+/* The bag's colours as a border around its cards; never behind text. The
+   padding-box layer repeats each card's own background colour. */
+.card[style*="--mesh-strip"]:not(.brew-mode) {
+    border: 3px solid transparent;
+    background: linear-gradient(#fffcf7, #fffcf7) padding-box, var(--mesh-strip) border-box;
+}
+
+.recipe-card[style*="--mesh-strip"] {
+    border: 3px solid transparent;
+    background: linear-gradient(#faf4ec, #faf4ec) padding-box, var(--mesh-strip) border-box;
+}
+
+/* Brew mode has enough going on: a thin strip along the top instead */
+.brew-mode[style*="--mesh-strip"] {
+    position: relative;
+    overflow: hidden;
+}
+
+.brew-mode[style*="--mesh-strip"]::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: var(--mesh-strip);
+}
+
+.bean-art {
+    flex-wrap: wrap;
+}
+
+.bean-colours {
+    flex-basis: 100%;
+}
+
+.bean-mesh-swatch {
+    height: 56px;
+    margin: 8px 0;
+    border-radius: 8px;
+    background: var(--mesh-strong, #f5ebe0);
+}
+
+.bean-colours-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.bean-colours-form label {
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.bean-colours-form input {
+    display: block;
+    width: 52px;
+    height: 36px;
+    padding: 2px;
+}
+
+.bean-colours-form button {
+    width: auto;
 }

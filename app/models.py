@@ -22,6 +22,7 @@ class Bean(SQLModel, table=True):
     notes: Optional[str] = None
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     accent_color: Optional[str] = None  # "#rrggbb" picked from the bag photo
+    mesh_colors: Optional[str] = None  # four comma-separated "#rrggbb", one per corner of the gradient
     image_version: Optional[int] = None  # set when a photo exists; bumps on each upload to bust caches
 
     user: Optional["User"] = Relationship(back_populates="beans")

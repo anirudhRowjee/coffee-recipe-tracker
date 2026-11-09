@@ -218,7 +218,7 @@ def test_round_trip_keeps_photos_and_colours(app_on, tmp_path: Path):
     photo = bytes(range(256)) * 1200  # bigger than the csv module's default field limit once encoded
     with app.engine.begin() as conn:
         conn.exec_driver_sql("INSERT INTO beanimage (bean_id, data, content_type) VALUES (1, ?, 'image/jpeg')", (photo,))
-        conn.exec_driver_sql("UPDATE bean SET accent_color = '#d9541e', image_version = 3")
+        conn.exec_driver_sql("UPDATE bean SET accent_color = '#d9541e', mesh_colors = '#d9541e,#123456,#abcdef,#00ff88', image_version = 3")
     actual = _round_trip(app, tmp_path)
     assert actual["beanimage"][0]["data"] == photo
     assert (actual["bean"][0]["accent_color"], actual["bean"][0]["image_version"]) == ("#d9541e", 3)
