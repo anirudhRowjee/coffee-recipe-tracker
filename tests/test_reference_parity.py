@@ -79,9 +79,18 @@ def _expected(original: sqlite3.Connection, where: str, params: tuple) -> dict:
     """Latest recipe, its recent brews and the recent deltas among the recipes matching `where`."""
     latest = original.execute(
         f"SELECT id FROM recipe r WHERE {where} ORDER BY created_at DESC LIMIT 1", params).fetchone()["id"]
-    brews = [r["id"] for r in original.execute(
-        "SELECT id FROM brew WHERE recipe_id=? ORDER BY brewed_at DESC LIMIT 5", (latest,))]
-    deltas = [r["id"] for r in original.execute(f"""
+    shown, brews = latest, []
+    while shown is not None:
+        brews = [r["id"] for r in original.execute(
+            "SELECT id FROM brew WHERE recipe_id=? ORDER BY brewed_at DESC LIMIT 5", (shown,))]
+        if brews:
+            break
+        # a version that was only tidied keeps showing the brews of the one it came from
+        tidied_from = original.execute(
+            "SELECT from_recipe_id FROM delta WHERE to_recipe_id=? AND changed_param='recipe_text' AND rationale=?",
+            (shown, brew.TIDY_RATIONALE)).fetchone()
+        shown = tidied_from["from_recipe_id"] if tidied_from else None
+    deltas =[r["id"] for r in original.execute(f"""
         SELECT d.id FROM delta d JOIN recipe r ON r.id = d.to_recipe_id
         WHERE {where} ORDER BY d.created_at DESC LIMIT 10""", params)]
     return {"latest": latest, "brews": brews, "deltas": deltas}
