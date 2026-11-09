@@ -212,6 +212,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `app/templates/temporary_password.html` | Shows a new temporary password once, to the admin. |
 | `app/templates/brew.html` | Brew mode (`GET /lines/{id}/brew?bag_id=&plan_id=`): large parameters, timer (current step above the clock, so nothing needs scrolling mid-brew; no site header and compact tiles so everything down to Start fits one phone screen, and the page must not scroll itself), steps with `data-times`, and the log form when the bag belongs to this bean. `plan_id` is only honoured if it is the current user's plan for this bag/brewer/grinder/line, so logging from here clears the schedule like the panel does. |
 | `app/templates/partials/log_brew_form.html` | The "Log a brew" form, included by the recipe panel and brew mode with `log_recipe_id` / `log_bag_id` / `log_plan_id`. One per page: it uses fixed ids (`log-notes`, `rec-delta-row`). |
+| `app/templates/partials/welcome.html` | One-time welcome popup on the brew page, for anyone with no recipes yet. Dismissal is remembered per user in `localStorage`, so no schema change; it can show once more on a second device. |
 | `app/templates/partials/star_input.html` | 1-5 star picker, CSS only (reversed radios). Expects `star_name`; used by the log form (`rating`) and variation form (`brew_rating`). |
 | `app/templates/partials/bean_art_form.html` | Bag photo controls on the manage page (add/retake, remove, edit colours); `static/bean_art.js` does the upload and "Reset to photo". |
 | `app/templates/partials/recipe_text_field.html` | The method field: a real `<textarea name="recipe_text">` that `static/step_editor.js` covers with rows when the text is standard or empty. It stays the form field, so no JavaScript (Kindle) or free text just means the plain box. The script only rewrites it after an actual edit, so an untouched recipe can't change. |
@@ -237,6 +238,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
 | `tests/test_accounts.py` | Sign-in, passwords, admin tools, one user attacking another's data on every route, and sign-in required everywhere. |
 | `tests/test_brew_animation.py` | What each step is read as, brewer drawings, the water/valve/cup plan, real prod methods, and free text getting no animation. The drawing itself is checked by hand. |
+| `tests/test_welcome.py` | Who gets the welcome popup and what it says. |
 | `tests/test_step_editor.py` | The step format, suggestions from real recipes, tidy flow, and free text staying exactly as it was. |
 | `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |
 | `tests/test_bean_art.py` | Bag photo upload/serve/replace/remove and validation, per-bean colours and their contrast. Colour picking itself runs in the browser and is checked by hand. |

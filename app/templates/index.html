@@ -60,6 +60,8 @@
     {% endif %}
 </div>
 
+{% if show_welcome %}{% include 'partials/welcome.html' %}{% endif %}
+
 {# Bag picker modal #}
 <div id="bag-modal-overlay" class="bag-modal-overlay hidden" onclick="closeBagModalOnOverlay(event)">
     <div class="bag-modal">

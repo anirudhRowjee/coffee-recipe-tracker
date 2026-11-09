@@ -1247,3 +1247,22 @@ textarea[hidden] {
     .brew-scene * { animation: none !important; }
     .brew-scene .bubble, .brew-scene .fall, .brew-scene .grain, .brew-scene .steam { opacity: 0.6; }
 }
+
+/* The welcome popup reuses .bag-modal */
+.welcome-body {
+    padding: 12px 18px 18px;
+    overflow-y: auto;
+}
+
+.welcome-body p {
+    margin: 0 0 8px;
+}
+
+.welcome-steps {
+    margin: 0 0 14px;
+    padding-left: 22px;
+}
+
+.welcome-steps li {
+    margin-bottom: 8px;
+}

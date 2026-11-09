@@ -367,6 +367,7 @@ def index(request: Request):
             "grinders": grinders,
             "current_user": user,
             "pending_plan": pending_plan,
+            "show_welcome": not crud.user_has_recipes(session, user.id),  # type: ignore[arg-type]
             "pixel_art_svg": _generate_pixel_art_svg(),
             "morning_quote": random.choice(QUOTES),
         }

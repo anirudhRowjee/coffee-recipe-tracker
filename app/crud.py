@@ -88,6 +88,12 @@ def get_brewers(session: Session, user_id: int) -> List[models.Brewer]:
     ).all())
 
 
+def user_has_recipes(session: Session, user_id: int) -> bool:
+    return session.exec(
+        select(models.Recipe.id).join(models.Bean).where(models.Bean.user_id == user_id).limit(1)  # type: ignore[arg-type]
+    ).first() is not None
+
+
 def get_grinders(session: Session, user_id: int) -> List[models.Grinder]:
     return list(session.exec(
         select(models.Grinder)
