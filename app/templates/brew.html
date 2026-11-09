@@ -4,7 +4,10 @@
 {% block site_header %}{% endblock %}
 
 {% block content %}
-<section class="card brew-mode">
+<section class="card brew-mode" style="{{ latest.bean.accent_color|bean_theme }}">
+    {% if latest.bean.image_version %}
+    <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
+    {% endif %}
     <p class="brew-back"><a href="/">← Back</a></p>
     <h2 class="brew-title">{{ title }}</h2>
     <p class="muted brew-gear">{{ latest.brewer.name }} · {{ latest.grinder.name }}</p>

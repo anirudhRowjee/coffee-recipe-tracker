@@ -21,10 +21,21 @@ class Bean(SQLModel, table=True):
     flavor_notes: Optional[str] = None
     notes: Optional[str] = None
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    accent_color: Optional[str] = None  # "#rrggbb" picked from the bag photo
+    image_version: Optional[int] = None  # set when a photo exists; bumps on each upload to bust caches
 
     user: Optional["User"] = Relationship(back_populates="beans")
     bags: List["BeanBag"] = Relationship(back_populates="bean")
     recipes: List["Recipe"] = Relationship(back_populates="bean")
+
+
+class BeanImage(SQLModel, table=True):
+    """The bag photo. Its own table, with no relationship from Bean, so that
+    loading beans never loads image bytes. In the database rather than on disk
+    so backups, deploys and rollbacks cover it."""
+    bean_id: int = Field(primary_key=True, foreign_key="bean.id")
+    data: bytes
+    content_type: str = "image/jpeg"
 
 
 class BeanBag(SQLModel, table=True):

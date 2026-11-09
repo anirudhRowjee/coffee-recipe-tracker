@@ -78,6 +78,9 @@
                 data-id="{{ bag.id }}"
                 data-label="{{ bag_label }}"
                 onclick="selectBag(this.dataset.id, this.dataset.label)">
+                {% if bag.bean.image_version %}
+                <img class="bag-art-thumb" src="/beans/{{ bag.bean_id }}/image?v={{ bag.bean.image_version }}" alt="" loading="lazy" />
+                {% endif %}
                 <div class="bag-card-title">{{ bag.bean.name }}</div>
                 {% if bag.bean.flavor_notes %}
                 <div class="bag-card-flavor">{{ bag.bean.flavor_notes }}</div>

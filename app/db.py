@@ -59,6 +59,7 @@ def run_migrations(target: Optional[Engine] = None):
     with target.begin() as conn:
         _migrate_recipe_lines(conn)
         _migrate_brew_ratings(conn)
+        _migrate_bean_art(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -68,6 +69,16 @@ def _columns(conn, table: str) -> set:
 def _migrate_brew_ratings(conn) -> None:
     if "rating" not in _columns(conn, "brew"):
         conn.execute(text("ALTER TABLE brew ADD COLUMN rating INTEGER"))
+
+
+def _migrate_bean_art(conn) -> None:
+    """Accent colour and photo version on beans. The beanimage table itself
+    comes from create_all."""
+    bean_columns = _columns(conn, "bean")
+    if "accent_color" not in bean_columns:
+        conn.execute(text("ALTER TABLE bean ADD COLUMN accent_color VARCHAR"))
+    if "image_version" not in bean_columns:
+        conn.execute(text("ALTER TABLE bean ADD COLUMN image_version INTEGER"))
 
 
 DEFAULT_LINE_NAME = "Default"

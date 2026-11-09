@@ -20,7 +20,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 ## Design philosophy
 
-**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel and its named-recipe picker), the searchable bag-picker modal on the brew page, the ± sign button on signed amounts, the brew-mode timer (`brew.html`, ES5 so the Kindle's old browser doesn't choke; without JavaScript the page is still the full recipe), and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
+**Minimal dependencies, minimal JavaScript.** The stack is FastAPI + SQLite + Jinja2 + htmx. No JS framework. The only interactivity is htmx partial loading (the brew page recipe panel and its named-recipe picker), the searchable bag-picker modal on the brew page, the ± sign button on signed amounts, the bag-photo upload (`static/bean_art.js`, which shrinks the photo and picks its accent colour in the browser so the server needs no imaging library), the brew-mode timer (`brew.html`, ES5 so the Kindle's old browser doesn't choke; without JavaScript the page is still the full recipe), and a handful of inline `<script>` snippets for show/hide logic. New features should follow this pattern — reach for htmx before reaching for JS, and avoid adding npm/bundling.
 
 **Server-rendered, not API-first.** Routes return HTML, not JSON. Forms POST to endpoints that redirect. This keeps the Kindle-compatibility high and the codebase small.
 
@@ -34,7 +34,7 @@ The app is used during actual brewing sessions — UI must be legible on e-ink /
 
 **Trusted network, a few household users.** The app runs on a trusted LAN/VPS with no external users. Multiple people share it via a `user_id` cookie picked on `/select-user` — there are no passwords and no auth. Beans, brewers, and grinders are owned by a user (`user_id`); bags, recipes, brews, and deltas inherit ownership through their bean. Routes filter *list* views by the current user but do not check ownership on edit/delete/create-by-ID routes. That is deliberate for this deployment — do not add auth/ownership checks unless asked.
 
-**Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line, and (`_migrate_brew_ratings`) adds `brew.rating`. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
+**Lightweight migrations only.** There is no alembic. `db.run_migrations()` (called on startup, by `scripts/migrate.py`, and by the export/import scripts) first creates missing *tables* via `SQLModel.metadata.create_all`, then applies additive `ALTER TABLE ... ADD COLUMN` statements for columns added after the DB was first created, seeds user 1 if the `user` table is empty, assigns ownerless beans/brewers/grinders to user 1, (`_migrate_recipe_lines`) puts every recipe without a `line_id` into its combination's "Default" line, (`_migrate_brew_ratings`) adds `brew.rating`, and (`_migrate_bean_art`) adds `bean.accent_color` and `bean.image_version`. Every step is idempotent and must stay so — it runs on every startup and on every deploy. The older steps use try/except around `ALTER TABLE`; new steps should check `PRAGMA table_info` (`db._columns`) instead, so real errors aren't swallowed. For a new nullable or defaulted column, add a step there. `tests/test_reference_parity.py` checks every step against real data: existing rows unchanged, idempotent, same answers as before. For anything non-additive (renames, type changes, dropped columns), use the export → drop → import cycle (`scripts/export.py`, `scripts/drop_tables.py`, `scripts/import.py`). If the app grows, `alembic` is the right next step.
 
 ---
 
@@ -46,9 +46,12 @@ User
 ├── brewers: List[Brewer]
 └── grinders: List[Grinder]
 
-Bean                          (user_id → User)
+Bean                          (user_id → User; accent_color, image_version)
 ├── bags: List[BeanBag]
 └── recipes: List[Recipe]
+
+BeanImage                     ← the bag photo, one per bean (bean_id is the key)
+└── data: bytes               ← JPEG; no relationship from Bean, so loading beans never loads it
 
 BeanBag
 ├── bean: Bean
@@ -89,6 +92,8 @@ Delta
 ```
 
 **PlannedBrew:** created from the brew page ("Plan for next time") or the browse page ("Schedule next brew"). `crud.create_plan` replaces any existing plan for that user. When a plan exists, the home page renders the planned recipe first with "Log a brew" open; logging a brew or saving a variation with `planned_brew_id` deletes the plan. Deleting a bag, brewer, grinder, or named recipe also deletes plans that reference it. Plans from the brew page record the named recipe (`line_id`); plans from the browse page leave it `None`, meaning "whichever line is the default when opened". `/plan` drops a `line_id` that doesn't belong to the submitted combination. `is_current_plan` is computed in `main._latest_recipe_context`, not in the template.
+
+**Bag photos:** one per `Bean` (artwork belongs to the coffee; re-buys share it), stored in the database so backups, deploys and rollbacks cover it. `image_version` says one exists and is the `?v=` on its URL, so templates never touch the bytes. The upload route only accepts JPEG bytes under `MAX_BEAN_IMAGE_BYTES`; browsers convert and shrink first. Do not add an imaging library for this: `deploy.sh` runs `pip install -r requirements.txt` when that file changes, which would re-pin prod's packages, and a failed deploy's rollback does not undo that.
 
 **Quantity formula:**
 ```
@@ -189,6 +194,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `app/models.py` | SQLModel ORM definitions. All schema changes start here. |
 | `app/crud.py` | All DB reads and writes. No business logic in routes — it belongs here. |
 | `app/brew.py` | Brew mode: `parse_steps` splits a method into lines and picks out `m:ss` times (skipping ratios like "1:16" and the end of ranges like "3:30–4:00"). Server-side so it's tested in pytest; the page's script only keeps time. |
+| `app/theme.py` | Bean accent colour → `--accent` / `--accent-soft` CSS variables (the `bean_theme` template filter). Validates the colour and guarantees readable contrast. |
 | `app/export.py` | Named recipe → shareable Markdown (`GET /lines/{id}/export.md`, `?download=1` for a file). Whitelists what it shows; see "Sharing recipes". |
 | `app/db.py` | Engine (path overridable with `COFFEE_DB`), session factory, `create_db_and_tables()`, `run_migrations()` (creates missing tables, additive column adds, user seeding, Default named-recipe backfill). |
 | `app/main.py` | FastAPI routes. Thin — calls crud, returns TemplateResponse. Also user-cookie helpers, the morning banner's pixel art and quotes. |
@@ -197,6 +203,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `app/templates/brew.html` | Brew mode (`GET /lines/{id}/brew?bag_id=&plan_id=`): large parameters, timer (current step above the clock, so nothing needs scrolling mid-brew; no site header and compact tiles so everything down to Start fits one phone screen, and the page must not scroll itself), steps with `data-times`, and the log form when the bag belongs to this bean. `plan_id` is only honoured if it is the current user's plan for this bag/brewer/grinder/line, so logging from here clears the schedule like the panel does. |
 | `app/templates/partials/log_brew_form.html` | The "Log a brew" form, included by the recipe panel and brew mode with `log_recipe_id` / `log_bag_id` / `log_plan_id`. One per page: it uses fixed ids (`log-notes`, `rec-delta-row`). |
 | `app/templates/partials/star_input.html` | 1-5 star picker, CSS only (reversed radios). Expects `star_name`; used by the log form (`rating`) and variation form (`brew_rating`). |
+| `app/templates/partials/bean_art_form.html` | Bag photo controls on the manage page; `static/bean_art.js` does the upload. |
 | `app/templates/index.html` | Brew page. Morning banner, bag-picker modal, picker form with htmx (`hx-get="/recipes/latest"`). Shows the scheduled brew first if one exists. |
 | `app/templates/partials/latest_recipe.html` | htmx partial. Named-recipe picker (only with 2+ lines), recipe display, plan-for-next-time form, recommendation banner, and collapsed sections: log a brew, create variation, new named recipe, rename/delete the current one. |
 | `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders, users. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. Beans whose bags are all completed are listed separately as archived. |
@@ -214,6 +221,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/test_named_recipes.py` | Several named recipes per combination: separate histories, picker, default choice, scheduling, rename/delete. |
 | `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
 | `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |
+| `tests/test_bean_art.py` | Bag photo upload/serve/replace/remove and validation, per-bean colours and their contrast. Colour picking itself runs in the browser and is checked by hand. |
 | `tests/test_export_recipe.py` | Recipe export: exact output, no personal data (marker strings planted in every private field), per-line history, CRLF normalisation, download headers. |
 | `tests/test_reference_parity.py` | On a copy of the reference DB: every combination shows the same latest recipe / brews / deltas as the original rules (computed in plain SQL), every page renders, existing rows untouched, migrations idempotent. |
 | `tests/test_export_import.py` | Export→import round-trip against a temp copy of the reference DB, plus named recipes, legacy-snapshot and non-empty-DB checks. |
@@ -239,6 +247,7 @@ If you add new htmx interactions, keep them similarly self-contained with gracef
 
 - **Collapsibles:** use `<details>/<summary>` — no JS needed, already styled with `.bean-block`, `.history-block` classes. The arrow indicator is a CSS `::before` pseudo-element that rotates on `[open]`.
 - **Low stock:** rows with `remaining ≤ low_threshold_g` get class `low-stock` (amber background).
+- **Per-bean colours:** set `style="{{ bean.accent_color|bean_theme }}"` on a container, then use `var(--accent, <default>)` / `var(--accent-soft, <default>)` in CSS so beans without a photo keep the normal palette.
 - **Muted text:** class `.muted` for secondary/empty-state text.
 - **Buttons:** default button is dark brown (`#6b3d2e`). Secondary actions use `.btn-secondary` (parchment `#f0e4d4`). The apply-recommendation button uses `.btn-apply-rec` (amber). Destructive actions add `.btn-danger`.
 - **Phone width:** the page must never be wider than the screen, or iOS zooms everything out ("the recipe got tiny"). `.grid` uses `minmax(0, 1fr)` — never a bare `1fr`/auto column, which grows to its widest content and widens every card; rows of inputs + buttons need `flex-wrap`/`min-width: 0`; `.delta-table` scrolls inside its card under 600px. Check new UI at 375px wide (`document.documentElement.scrollWidth` must equal the viewport). The manage page is still too wide on phones.

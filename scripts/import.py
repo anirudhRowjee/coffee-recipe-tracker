@@ -28,6 +28,7 @@ would: user 1 is created and owns everything ownerless, and each
 bean/brewer/grinder's recipes go into a "Default" named recipe.
 """
 
+import base64
 import csv
 import sys
 from datetime import date, datetime, timezone
@@ -39,7 +40,7 @@ from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,7 @@ def read_csv(path: Path, required: bool = True) -> list[dict]:
         if required:
             abort(f"{path} not found. Are you pointing at the right snapshot directory?")
         return []
+    csv.field_size_limit(sys.maxsize)  # bean_images.csv holds whole photos
     with open(path, newline="") as f:
         return list(csv.DictReader(f))
 
@@ -101,7 +103,7 @@ def read_csv(path: Path, required: bool = True) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def check_empty(session: Session) -> None:
-    for model in [User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta]:
+    for model in [User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta]:
         count = session.exec(select(func.count()).select_from(model)).one()
         if count:
             abort(
@@ -141,9 +143,22 @@ def import_all(engine: Engine, src: Path) -> None:
                 roast_level=_str(r["roast_level"]),
                 flavor_notes=_str(r["flavor_notes"]),
                 notes=_str(r["notes"]),
+                accent_color=_str(r.get("accent_color")),
+                image_version=_int(r.get("image_version")),
             ))
         session.commit()
         print(f"  beans:    {len(rows)}")
+
+        # Bag photos (absent in older snapshots)
+        rows = read_csv(src / "bean_images.csv", required=False)
+        for r in rows:
+            session.add(BeanImage(
+                bean_id=_int(r["bean_id"]),
+                content_type=r["content_type"],
+                data=base64.b64decode(r["data_base64"]),
+            ))
+        session.commit()
+        print(f"  photos:   {len(rows)}")
 
         # 3. Brewers
         rows = read_csv(src / "brewers.csv")

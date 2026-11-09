@@ -1,21 +1,25 @@
 import random
 from datetime import date as date_type
 
-from fastapi import FastAPI, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 from typing import Optional
 
-from . import brew, crud, db, export, models
+from . import brew, crud, db, export, models, theme
 
 app = FastAPI(title="Coffee Recipe Tracker")
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
+templates.env.filters["bean_theme"] = theme.bean_theme
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
+
+# The browser shrinks photos to about 1000px before uploading, so this is generous
+MAX_BEAN_IMAGE_BYTES = 3_000_000
 
 PIXEL_ART_COLORS = [
     # coffee browns
@@ -335,6 +339,39 @@ def create_bean(request: Request, name: str = Form(...), origin: str = Form(None
         user = _require_user(request, session)
         crud.create_bean(session, user_id=user.id, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)  # type: ignore[arg-type]
     return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/beans/{bean_id}/image")
+def upload_bean_image(bean_id: int, image: UploadFile = File(...), accent: str = Form(None)):
+    """Takes the JPEG and accent colour that static/bean_art.js prepared in the browser."""
+    data = image.file.read(MAX_BEAN_IMAGE_BYTES + 1)
+    if len(data) > MAX_BEAN_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="That image is too large")
+    if not data.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(status_code=400, detail="The image must be a JPEG")
+    with Session(db.engine) as session:
+        if not crud.set_bean_image(session, bean_id, data, "image/jpeg", theme.clean_accent(accent)):
+            raise HTTPException(status_code=404, detail="Bean not found")
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.post("/beans/{bean_id}/image/delete")
+def delete_bean_image(bean_id: int):
+    with Session(db.engine) as session:
+        crud.delete_bean_image(session, bean_id)
+    return RedirectResponse(url="/manage", status_code=303)
+
+
+@app.get("/beans/{bean_id}/image")
+def bean_image(bean_id: int, request: Request):
+    with Session(db.engine) as session:
+        _require_user(request, session)
+        image = session.get(models.BeanImage, bean_id)
+        if not image:
+            raise HTTPException(status_code=404, detail="No photo for this bean")
+        # image URLs carry ?v=<image_version>, so a new upload gets a new URL
+        return Response(content=image.data, media_type=image.content_type,
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @app.post("/bags")

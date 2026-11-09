@@ -4,7 +4,10 @@
 <div class="grid">
     {% for bean, recipe, bags_with_remaining, brews, deltas in bean_recipes %}
     {% set active_bags = active_bags_by_bean.get(bean.id, []) %}
-    <section class="card">
+    <section class="card" style="{{ bean.accent_color|bean_theme }}">
+        {% if bean.image_version %}
+        <img class="bag-art" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" loading="lazy" />
+        {% endif %}
         <div class="card-header">
             <h2>{{ bean.name }}</h2>
             {% if active_bags and brewers and grinders %}

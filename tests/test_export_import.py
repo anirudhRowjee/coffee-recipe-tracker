@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DB = Path(os.environ.get("COFFEE_REFERENCE_DB", ROOT / "data" / "coffee.db")).expanduser()
 LEGACY_SNAPSHOT = ROOT / "export"
 
-TABLES = ["user", "bean", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "plannedbrew", "delta"]
+TABLES = ["user", "bean", "beanimage", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "plannedbrew", "delta"]
 
 
 def _load_script(name: str):
@@ -44,7 +44,7 @@ def _dump(path: Path) -> dict[str, list[dict]]:
     conn.row_factory = sqlite3.Row
     try:
         return {
-            t: [dict(r) for r in conn.execute(f'SELECT * FROM "{t}" ORDER BY id')]
+            t: [dict(r) for r in conn.execute(f'SELECT * FROM "{t}" ORDER BY 1')]
             for t in TABLES
         }
     finally:
@@ -210,3 +210,15 @@ def test_round_trip_keeps_ratings(app_on, tmp_path: Path):
     app = app_on()
     _seed_one_brew(app)
     assert _round_trip(app, tmp_path)["brew"][0]["rating"] == 4
+
+
+def test_round_trip_keeps_photos_and_colours(app_on, tmp_path: Path):
+    app = app_on()
+    _seed_one_brew(app)
+    photo = bytes(range(256)) * 1200  # bigger than the csv module's default field limit once encoded
+    with app.engine.begin() as conn:
+        conn.exec_driver_sql("INSERT INTO beanimage (bean_id, data, content_type) VALUES (1, ?, 'image/jpeg')", (photo,))
+        conn.exec_driver_sql("UPDATE bean SET accent_color = '#d9541e', image_version = 3")
+    actual = _round_trip(app, tmp_path)
+    assert actual["beanimage"][0]["data"] == photo
+    assert (actual["bean"][0]["accent_color"], actual["bean"][0]["image_version"]) == ("#d9541e", 3)

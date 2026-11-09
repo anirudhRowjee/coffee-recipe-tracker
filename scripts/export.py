@@ -7,6 +7,7 @@ Usage:
 
 Restore with scripts/import.py.
 """
+import base64
 import csv
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
 from app import crud
 
 
@@ -39,9 +40,18 @@ def export_all(engine: Engine, out: Path) -> None:
         # Beans
         with open(out / "beans.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "user_id", "name", "origin", "roast_level", "flavor_notes", "notes"])
+            w.writerow(["id", "user_id", "name", "origin", "roast_level", "flavor_notes", "notes",
+                        "accent_color", "image_version"])
             for b in session.exec(select(Bean).order_by(Bean.id)).all():
-                w.writerow([b.id, b.user_id, b.name, b.origin, b.roast_level, b.flavor_notes, b.notes])
+                w.writerow([b.id, b.user_id, b.name, b.origin, b.roast_level, b.flavor_notes, b.notes,
+                            b.accent_color, b.image_version])
+
+        # Bag photos (base64, so a snapshot stays plain CSV)
+        with open(out / "bean_images.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["bean_id", "content_type", "data_base64"])
+            for image in session.exec(select(BeanImage).order_by(BeanImage.bean_id)).all():
+                w.writerow([image.bean_id, image.content_type, base64.b64encode(image.data).decode("ascii")])
 
         # Bags (with remaining quantity)
         with open(out / "bags.csv", "w", newline="") as f:

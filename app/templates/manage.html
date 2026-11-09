@@ -53,6 +53,8 @@
             <p class="bean-flavor">{{ bean.flavor_notes }}</p>
             {% endif %}
 
+            {% include 'partials/bean_art_form.html' %}
+
             <button onclick="toggleForm('bag-form-{{ bean.id }}')" class="btn-secondary" style="margin-top:8px">+ Add Bag</button>
             <div id="bag-form-{{ bean.id }}" class="hidden" style="margin-top:8px">
                 <form method="post" action="/bags" class="stacked-form" novalidate>
@@ -175,6 +177,8 @@
                         </div>
                     </form>
                 </div>
+
+                {% include 'partials/bean_art_form.html' %}
 
                 <button onclick="toggleForm('bag-form-archived-{{ bean.id }}')" class="btn-secondary" style="margin-top:8px">+ Add Bag</button>
                 <div id="bag-form-archived-{{ bean.id }}" class="hidden" style="margin-top:8px">
@@ -343,4 +347,5 @@
     </section>
 
 </div>
+<script src="/static/bean_art.js"></script>
 {% endblock %}

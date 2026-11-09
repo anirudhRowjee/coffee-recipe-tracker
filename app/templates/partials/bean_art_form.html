@@ -1,0 +1,19 @@
+{# Bag photo controls for one bean on the manage page. Expects `bean`;
+   static/bean_art.js does the upload. #}
+<div class="bean-art" data-bean-id="{{ bean.id }}">
+    {% if bean.image_version %}
+    <img class="bean-art-preview" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" loading="lazy" />
+    {% endif %}
+    <div class="bean-art-actions">
+        <label class="btn-action bean-art-pick">
+            {{ 'Change bag photo' if bean.image_version else 'Add bag photo' }}
+            <input type="file" accept="image/*" onchange="uploadBeanImage(this)" />
+        </label>
+        {% if bean.image_version %}
+        <form method="post" action="/beans/{{ bean.id }}/image/delete" onsubmit="return confirm('Remove this bag photo?')">
+            <button type="submit" class="btn-action btn-danger">Remove photo</button>
+        </form>
+        {% endif %}
+        <span class="muted bean-art-status"></span>
+    </div>
+</div>
