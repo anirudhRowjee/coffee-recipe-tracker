@@ -322,6 +322,13 @@ def browse(request: Request):
             bean.id: [(bag, rem) for bag, rem in bags_with_remaining if not bag.is_completed]
             for bean, _, bags_with_remaining, _, _ in bean_recipes
         }
+        recipe_options_by_bean = {
+            bean.id: [
+                (line.id, f"{line.name} · {session.get(models.Brewer, line.brewer_id).name} · {session.get(models.Grinder, line.grinder_id).name}")  # type: ignore[union-attr]
+                for line in crud.get_lines_for_bean(session, bean.id)  # type: ignore[arg-type]
+            ]
+            for bean, _, _, _, _ in bean_recipes
+        }
         return templates.TemplateResponse("browse.html", {
             "request": request,
             "bean_recipes": bean_recipes,
@@ -329,6 +336,7 @@ def browse(request: Request):
             "brewers": brewers,
             "grinders": grinders,
             "active_bags_by_bean": active_bags_by_bean,
+            "recipe_options_by_bean": recipe_options_by_bean,
             "current_user": user,
         })
 
@@ -522,19 +530,25 @@ def create_grinder(request: Request, name: str = Form(...), notes: str = Form(No
 def create_plan(
     request: Request,
     bag_id: int = Form(...),
-    brewer_id: int = Form(...),
-    grinder_id: int = Form(...),
+    brewer_id: int = Form(None),
+    grinder_id: int = Form(None),
     notes: str = Form(None),
     line_id: int = Form(None),
 ):
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        if line_id:
-            line = session.get(models.RecipeLine, line_id)
-            bag = session.get(models.BeanBag, bag_id)
-            if not line or not bag or (line.bean_id, line.brewer_id, line.grinder_id) != (bag.bean_id, brewer_id, grinder_id):
-                line_id = None  # stale or mismatched: fall back to the default line
-        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line_id)  # type: ignore[arg-type]
+        line = session.get(models.RecipeLine, line_id) if line_id else None
+        bag = session.get(models.BeanBag, bag_id)
+        if line and (not bag or line.bean_id != bag.bean_id):
+            line = None
+        # A named recipe brings its own gear; anything chosen explicitly wins
+        brewer_id = brewer_id or (line.brewer_id if line else None)
+        grinder_id = grinder_id or (line.grinder_id if line else None)
+        if not brewer_id or not grinder_id:
+            raise HTTPException(status_code=400, detail="Choose a brewer and grinder")
+        if line and (line.brewer_id, line.grinder_id) != (brewer_id, grinder_id):
+            line = None  # different gear: fall back to that combination's default recipe
+        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line.id if line else None)  # type: ignore[arg-type,union-attr]
     return RedirectResponse(url="/", status_code=303)
 
 

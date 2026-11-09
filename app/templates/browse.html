@@ -4,6 +4,7 @@
 <div class="grid">
     {% for bean, recipe, bags_with_remaining, brews, deltas in bean_recipes %}
     {% set active_bags = active_bags_by_bean.get(bean.id, []) %}
+    {% set recipe_options = recipe_options_by_bean.get(bean.id, []) %}
     <section class="card" style="{{ bean|bean_theme }}">
         {% if bean.image_version %}
         <img class="bag-art" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" loading="lazy" />
@@ -33,6 +34,34 @@
                         {% endfor %}
                     </select>
                 </label>
+                {% if recipe_options %}
+                <label>Recipe
+                    <select name="line_id" required>
+                        {% for line_id, label in recipe_options %}
+                        <option value="{{ line_id }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <details class="schedule-gear">
+                    <summary>Use a different brewer or grinder</summary>
+                    <label>Brewer
+                        <select name="brewer_id">
+                            <option value="" selected>Same as the recipe</option>
+                            {% for brewer in brewers %}
+                            <option value="{{ brewer.id }}">{{ brewer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>Grinder
+                        <select name="grinder_id">
+                            <option value="" selected>Same as the recipe</option>
+                            {% for grinder in grinders %}
+                            <option value="{{ grinder.id }}">{{ grinder.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </details>
+                {% else %}
                 <label>Brewer
                     <select name="brewer_id" required>
                         <option value="" disabled selected>Choose</option>
@@ -49,6 +78,7 @@
                         {% endfor %}
                     </select>
                 </label>
+                {% endif %}
                 <label>Note <input name="notes" placeholder="Optional note (e.g. want it stronger)" /></label>
                 <button type="submit" style="margin-top:8px">📅 Schedule this brew</button>
             </form>
@@ -109,6 +139,8 @@
                 <div class="brew-entry">
                     <span class="brew-date">
                         {{ brew.brewed_at.strftime('%b %d, %Y') }}
+                        {% if brew.recipe.line %}· {{ brew.recipe.line.name }}{% endif %}
+                        · {{ brew.recipe.grinder.name }}
                         · {{ brew.recipe.dose_g }}g dose · grind {{ brew.recipe.grind_size }}
                     </span>
                     {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}

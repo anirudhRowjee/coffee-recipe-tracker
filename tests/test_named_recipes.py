@@ -3,6 +3,8 @@ Named recipes: several independent recipes ("Default", "2 cup") for the same
 bean/brewer/grinder, each with its own versions, brews, deltas,
 recommendations and scheduling.
 """
+import re
+
 from app import crud, models
 from test_flows import BASELINE, COMBO, app, latest, post, variation  # noqa: F401 — app is a fixture
 
@@ -163,6 +165,52 @@ def test_logging_planned_named_recipe_clears_plan(app):
     plan_id = app.scalar("select id from plannedbrew")
     post(app, "/brews", {"recipe_id": 2, "bag_id": 1, "planned_brew_id": plan_id})
     assert app.scalar("select count(*) from plannedbrew") == 0
+
+
+def test_browse_schedule_form_offers_each_recipe_with_its_gear(app):
+    two_lines(app)
+    post(app, "/recipes", {**BASELINE, "grinder_id": 2, "line_name": "Budan one"})
+    html = app.client.get("/browse").text
+    assert '<select name="line_id" required>' in html
+    for label in ("Default · Hario Switch · Timemore C2", "2 cup · Hario Switch · Timemore C2", "Budan one · Hario Switch · Budan"):
+        assert label in html, label
+
+
+def test_plan_takes_gear_from_the_chosen_recipe(app):
+    default, two_cup = two_lines(app)
+    post(app, "/recipes", {**BASELINE, "grinder_id": 2, "line_name": "Budan one"})
+    budan = line_id(app, "Budan one")
+    # blank selects, exactly what the browse form posts
+    post(app, "/plan", {"bag_id": 1, "brewer_id": "", "grinder_id": "", "line_id": budan})
+    assert app.rows("select brewer_id, grinder_id, line_id from plannedbrew") == [
+        {"brewer_id": 1, "grinder_id": 2, "line_id": budan}]
+    assert "<strong>Grind:</strong> 13" in app.client.get("/").text
+
+
+def test_plan_with_other_gear_uses_that_combinations_default(app):
+    default, two_cup = two_lines(app)
+    post(app, "/plan", {"bag_id": 1, "brewer_id": "", "grinder_id": 2, "line_id": two_cup})
+    assert app.rows("select brewer_id, grinder_id, line_id from plannedbrew") == [
+        {"brewer_id": 1, "grinder_id": 2, "line_id": None}]
+
+
+def test_plan_with_neither_recipe_nor_gear_is_rejected(app):
+    post(app, "/plan", {"bag_id": 1}, status=400)
+    assert app.scalar("select count(*) from plannedbrew") == 0
+
+
+def test_plan_ignores_a_recipe_for_another_bean(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/beans", {"name": "Other bean"})
+    post(app, "/bags", {"bean_id": 2, "initial_quantity_g": 250})
+    post(app, "/plan", {"bag_id": 2, "line_id": line_id(app, "Default")}, status=400)
+
+
+def test_browse_history_shows_recipe_and_grinder(app):
+    two_lines(app)
+    post(app, "/brews", {"recipe_id": 2, "bag_id": 1, "notes": "two cups"})
+    entry = re.search(r'<span class="brew-date">(.*?)</span>', app.client.get("/browse").text, re.S).group(1)
+    assert "2 cup" in entry and "Timemore C2" in entry and "30.0g dose" in entry and "grind 14" in entry
 
 
 # --- rename / delete ------------------------------------------------------------

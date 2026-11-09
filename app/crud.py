@@ -95,7 +95,16 @@ def get_lines_for_combo(session: Session, bean_id: int, brewer_id: int, grinder_
         .where(models.RecipeLine.brewer_id == brewer_id)
         .where(models.RecipeLine.grinder_id == grinder_id)
     ).all()
+    return _most_recently_used_first(session, lines)
 
+
+def get_lines_for_bean(session: Session, bean_id: int) -> List[models.RecipeLine]:
+    """Every named recipe for a bean, across all its brewers and grinders, most recently used first."""
+    lines = session.exec(select(models.RecipeLine).where(models.RecipeLine.bean_id == bean_id)).all()
+    return _most_recently_used_first(session, lines)
+
+
+def _most_recently_used_first(session: Session, lines) -> List[models.RecipeLine]:
     def last_used(line: models.RecipeLine):
         recipe_at = session.exec(
             select(func.max(models.Recipe.created_at)).where(models.Recipe.line_id == line.id)
