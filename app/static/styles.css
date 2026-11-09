@@ -731,7 +731,7 @@ details[open] > .history-summary::before {
 }
 
 .brew-back {
-    margin: 0 0 6px;
+    margin: 0 0 2px;
     font-size: 0.9rem;
 }
 
@@ -741,24 +741,26 @@ details[open] > .history-summary::before {
 
 .brew-title {
     margin: 0;
-    font-size: 1.6rem;
+    font-size: 1.3rem;
+    line-height: 1.25;
 }
 
 .brew-gear {
-    margin: 4px 0 12px;
+    margin: 2px 0 8px;
+    font-size: 0.9rem;
 }
 
 .brew-params {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(6.5em, 1fr));
-    gap: 8px;
-    margin: 0 0 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 8px;
 }
 
 .brew-params div {
     background: #f5ebe0;
     border-radius: 8px;
-    padding: 8px 10px;
+    padding: 4px 8px;
 }
 
 .brew-params dt {
@@ -769,6 +771,7 @@ details[open] > .history-summary::before {
 .brew-params dd {
     margin: 0;
     font-size: 1.5rem;
+    line-height: 1.25;
     font-weight: 600;
     color: #3b1f0e;
 }
@@ -776,6 +779,19 @@ details[open] > .history-summary::before {
 .brew-timer {
     text-align: center;
     margin: 6px 0 14px;
+}
+
+.brew-current {
+    box-sizing: border-box;
+    min-height: calc(2.7em + 16px); /* two lines, so the clock doesn't jump between steps */
+    margin: 0 0 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fef3e2;
+    font-size: 1.5rem; /* same as .brew-params dd */
+    font-weight: 700;
+    line-height: 1.35;
+    color: #3b1f0e;
 }
 
 .brew-clock {

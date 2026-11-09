@@ -1,5 +1,8 @@
 {% extends 'base.html' %}
 
+{# No site header here: everything down to the Start button has to fit on one phone screen #}
+{% block site_header %}{% endblock %}
+
 {% block content %}
 <section class="card brew-mode">
     <p class="brew-back"><a href="/">← Back</a></p>
@@ -17,6 +20,7 @@
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
     <div class="brew-timer" id="brew-timer" hidden>
+        <p class="brew-current" id="brew-current" hidden></p>
         <div class="brew-clock" id="brew-clock">0:00</div>
         <p class="brew-next" id="brew-next"></p>
         <div class="brew-controls">
@@ -53,6 +57,7 @@
         timer.hidden = false;
 
         var clock = document.getElementById('brew-clock');
+        var currentBox = document.getElementById('brew-current');
         var next = document.getElementById('brew-next');
         var startBtn = document.getElementById('brew-start');
         var resetBtn = document.getElementById('brew-reset');
@@ -72,6 +77,9 @@
 
         function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
         function elapsed() { return startedAt === null ? stoppedAt : Math.floor((Date.now() - startedAt) / 1000); }
+
+        // the step without the bullet or number the method may start it with
+        function stepText(li) { return li.textContent.replace(/^\s*(?:[\u2022*-]|\d+[.)])\s+/, ''); }
 
         function beep() {
             if (!audio) return;
@@ -103,9 +111,13 @@
             if (startedAt !== null && current > lastEvent && events[current].t > 0) beep();
             lastEvent = current;
             steps.forEach(function (li) { li.className = ''; });
-            if (current >= 0) steps[events[current].i].className = 'brew-step-now';
+            if (current >= 0) {
+                steps[events[current].i].className = 'brew-step-now';
+                currentBox.textContent = stepText(steps[events[current].i]);
+            }
+            currentBox.hidden = current < 0;
             if (upcoming) {
-                next.textContent = 'Next in ' + fmt(upcoming.t - s) + ': ' + steps[upcoming.i].textContent;
+                next.textContent = 'Next in ' + fmt(upcoming.t - s) + ': ' + stepText(steps[upcoming.i]);
             } else {
                 next.textContent = events.length && current >= 0 ? 'That was the last timed step' : '';
             }
