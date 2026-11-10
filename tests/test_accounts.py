@@ -279,6 +279,7 @@ GET_ATTACKS = [
     ("/recipes/latest", {"bag_id": 2, "brewer_id": 2, "grinder_id": 1}),
     ("/lines/1/brew", {}),
     ("/lines/1/export.md", {}),
+    ("/lines/1/share-image", {}),
     ("/lines/1/tidy", {}),
     ("/beans/1/image", {}),
 ]

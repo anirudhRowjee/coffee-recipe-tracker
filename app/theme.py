@@ -91,6 +91,17 @@ def bean_mesh(mesh: Optional[str]) -> str:
     return f"--mesh-strip:{strip};--mesh-strong:{_gradient(colors, average)}"
 
 
+def card_colors(bean) -> dict:
+    """Plain colours for the share image (drawn on a canvas, so no CSS variables):
+    an accent dark enough for text on parchment, a pale tile colour, and the four
+    mesh corners or None."""
+    cleaned = clean_accent(bean.accent_color)
+    strong = _accent_for_white_text(_rgb(cleaned)) if cleaned else (107, 61, 46)
+    mesh = clean_mesh(bean.mesh_colors)
+    return {"accent": _hex(strong), "soft": _hex(_mix(strong, _PARCHMENT, 0.82)),
+            "mesh": mesh.split(",") if mesh else None}
+
+
 def bean_style(bean) -> str:
     """Everything a bean's colours set, for a style attribute."""
     return ";".join(part for part in (bean_theme(bean.accent_color), bean_mesh(bean.mesh_colors)) if part)

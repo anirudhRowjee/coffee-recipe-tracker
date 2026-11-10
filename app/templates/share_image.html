@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card">
+        <h2>Share as image</h2>
+        <p class="muted">{{ title }}: sized for an Instagram post (4:5). No tasting notes or ratings are on it.</p>
+        <div id="share-card" data-card="{{ card }}">
+            <p class="muted" id="share-status">Drawing the image…</p>
+            <img class="share-preview" id="share-preview" alt="Recipe card for {{ title }}" hidden />
+            <div class="share-actions">
+                <button type="button" id="share-button" hidden>Share…</button>
+                <a class="btn-secondary" id="share-save" hidden>Save image</a>
+            </div>
+            <p class="muted" id="share-hint" hidden style="text-align:center">On a phone you can also press and hold the image to save it.</p>
+        </div>
+        <p><a href="/">← Back</a></p>
+    </section>
+</div>
+<script src="/static/share_image.js"></script>
+{% endblock %}

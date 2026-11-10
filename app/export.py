@@ -10,7 +10,7 @@ so adding a column elsewhere never leaks into an export.
 import re
 from typing import List, Tuple
 
-from . import db, models
+from . import brew, db, models, theme
 
 LABELS = {"dose_g": "Dose", "water_ml": "Water", "temp_c": "Temp", "grind_size": "Grind"}
 UNITS = {"dose_g": " g", "water_ml": " ml", "temp_c": " °C", "grind_size": ""}
@@ -37,6 +37,44 @@ def title(line: models.RecipeLine, bean: models.Bean) -> str:
 def filename(line: models.RecipeLine, bean: models.Bean) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title(line, bean).lower()).strip("-")
     return f"{slug or 'recipe'}.md"
+
+
+def image_filename(line: models.RecipeLine, bean: models.Bean) -> str:
+    return filename(line, bean).removesuffix(".md") + ".png"
+
+
+def card_data(line: models.RecipeLine, latest: models.Recipe) -> dict:
+    """What the share image shows, from the same whitelist as the Markdown: the bean,
+    the gear, every parameter of the current version, and its method."""
+    bean, brewer, grinder = latest.bean, latest.brewer, latest.grinder
+    assert bean and brewer and grinder
+    standard = brew.is_standard(latest.recipe_text)
+    steps = []
+    for step in brew.parse_steps(latest.recipe_text):
+        if standard and step.times:  # "0:40 — Pour · to 200 g" → time and action apart
+            steps.append({"time": brew.mmss(step.times[0]), "text": step.text.split(" — ", 1)[1]})
+        else:
+            steps.append({"time": "", "text": step.text})
+    params = [
+        ["Dose", _value(latest, "dose_g")], ["Water", _value(latest, "water_ml")], ["Ratio", ratio(latest)],
+        ["Temp", _value(latest, "temp_c")], ["Grind", _value(latest, "grind_size")],
+    ]
+    timed = [step.times[0] for step in brew.parse_steps(latest.recipe_text) if standard and step.times]
+    if timed and max(timed) > 0:
+        params.append(["Brew time", brew.mmss(max(timed))])
+    made = latest.created_at
+    return {
+        "title": title(line, bean),
+        "gear": f"{brewer.name} · {grinder.name}",
+        "about": " · ".join(x for x in (bean.origin, bean.roast_level) if x),
+        "flavour": bean.flavor_notes or "",
+        "params": [p for p in params if p[1]],
+        "steps": steps,
+        "photo": f"/beans/{bean.id}/image?v={bean.image_version}" if bean.image_version else "",
+        "colors": theme.card_colors(bean),
+        "date": f"{made.day} {made:%b %Y}",
+        "filename": image_filename(line, bean),
+    }
 
 
 def to_markdown(

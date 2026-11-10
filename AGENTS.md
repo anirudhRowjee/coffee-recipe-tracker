@@ -189,6 +189,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 
 - **Privacy is a whitelist.** `export.py` reads only bean name/origin/roast/flavour notes, brewer and grinder names, the latest version's parameters and method, and the line's deltas with their rationales. Tasting notes, ratings, recommendations, bags/quantities, `Bean.notes`, plans, and user names must never appear; `tests/test_export_recipe.py` plants marker strings in all of them. Keep new fields out unless they are clearly meant for friends.
 - **History shows real values** (`before → after` read from the two versions), never `Delta.delta_amount`, which is typed by hand and can be wrong (prod change #22 records −1 for 21 → 19).
+- **Share as image** (`/lines/{id}/share-image`) uses the same whitelist: `export.card_data` gives the bean, gear, every parameter and the method, and `static/share_image.js` draws a 1080×1350 (Instagram 4:5) PNG on a canvas in the browser, with the bag photo and colours (text only ever on the plain card, never on the colours), then offers the phone's share sheet and a download. No imaging library on the server, for the reason under "Bag photos". `tests/test_share_image.py` plants the same marker strings.
 - "Default" is not shown as a recipe name; grind is always printed with the grinder's name, since a setting means nothing on another grinder.
 - A public link (`/s/<token>`) was planned as a second step: a `RecipeShare` table with revocable random tokens, a self-contained read-only page reusing `export.py`'s data, and a Caddy `handle /s/*` placed before `basicauth`. Not built; it needs the user's go-ahead for the Caddy change.
 
@@ -222,6 +223,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `app/templates/manage.html` | Add/edit/delete beans+bags, brewers, grinders, users. Inline edit forms toggled by `toggleForm()`. Bag rows have Edit/Done/Delete actions. Beans whose bags are all completed are listed separately as archived. |
 | `app/templates/browse.html` | Bean overview with bag inventory, collapsible history, and "Schedule next brew" form. |
 | `app/static/brew_animation.js` | Draws brew mode's animation from the plan in `data-animation`, and the on/off checkbox. Its CSS is at the end of `styles.css`, with every selector under `.brew-scene` and keyframes prefixed `ba-`. |
+| `app/static/share_image.js` | Draws the "Share as image" card on a canvas from `data-card` and hands it to the share sheet. |
 | `app/static/styles.css` | All styles. No external CSS framework. |
 | `scripts/export.py` | Exports every table (incl. users, named recipes, planned brews, owner `user_id`s) to CSV. Brings the DB up to the current schema first. Default `export/`, or pass a directory. `export_all(engine, out_dir)` is importable. |
 | `scripts/import.py` | Restores from a CSV snapshot. Two-pass recipe insert for `previous_recipe_id`. Requires every table to be empty. Also accepts older snapshots (no `users.csv` / `planned_brews.csv` / `recipe_lines.csv`) and fills the gaps via `run_migrations`. `import_all(engine, src_dir)` is importable. |
@@ -238,6 +240,7 @@ From your Mac, with `main` committed and pushed: `scripts/deploy.sh`. It backs u
 | `tests/test_brew_mode.py` | Step-time parsing (real prod method texts), the brew page, logging from it (incl. a scheduled brew), bag/plan validation. |
 | `tests/test_accounts.py` | Sign-in, passwords, admin tools, one user attacking another's data on every route, and sign-in required everywhere. |
 | `tests/test_brew_animation.py` | What each step is read as, brewer drawings, the water/valve/cup plan, real prod methods, and free text getting no animation. The drawing itself is checked by hand. |
+| `tests/test_share_image.py` | The share image's data: every parameter, method steps, colours, and no private fields. The drawing is checked by hand. |
 | `tests/test_welcome.py` | Who gets the welcome popup and what it says. |
 | `tests/test_step_editor.py` | The step format, suggestions from real recipes, tidy flow, and free text staying exactly as it was. |
 | `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |

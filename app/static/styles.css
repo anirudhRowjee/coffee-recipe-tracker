@@ -1266,3 +1266,40 @@ textarea[hidden] {
 .welcome-steps li {
     margin-bottom: 8px;
 }
+
+/* Share as image */
+.share-preview {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+    margin: 12px auto;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(44, 24, 16, 0.18);
+}
+
+.share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.share-actions > * {
+    flex: 1 1 10em;
+    max-width: 16em;
+    text-align: center;
+}
+
+.share-actions a.btn-secondary {
+    display: inline-block;
+    padding: 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #3b1f0e;
+    background: #f0e4d4;
+}
+
+.share-actions [hidden] {
+    display: none;
+}

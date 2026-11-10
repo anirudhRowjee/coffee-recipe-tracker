@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import date as date_type
 
@@ -832,6 +833,24 @@ def export_line(line_id: int, request: Request, download: bool = False):
             return PlainTextResponse(text, media_type="text/markdown; charset=utf-8", headers={
                 "Content-Disposition": f'attachment; filename="{export.filename(line, latest.bean)}"'})
         return PlainTextResponse(text)
+
+
+@app.get("/lines/{line_id}/share-image", response_class=HTMLResponse)
+def share_image(line_id: int, request: Request):
+    """The named recipe as an Instagram-sized image, drawn in the browser from
+    export.card_data (the server has no imaging library)."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        if not latest or not latest.bean:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        return templates.TemplateResponse("share_image.html", {
+            "request": request,
+            "current_user": user,
+            "title": export.title(line, latest.bean),
+            "card": json.dumps(export.card_data(line, latest)),
+        })
 
 
 @app.post("/lines/{line_id}/delete")
