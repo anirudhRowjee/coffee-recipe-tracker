@@ -1303,3 +1303,17 @@ textarea[hidden] {
 .share-actions [hidden] {
     display: none;
 }
+
+/* Lifetime savings on the manage page */
+.savings-amount {
+    margin: 0;
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    font-size: 2.6rem;
+    line-height: 1.1;
+    color: #6b3d2e;
+    font-variant-numeric: tabular-nums;
+}
+
+.savings-card .muted {
+    margin: 6px 0 0;
+}

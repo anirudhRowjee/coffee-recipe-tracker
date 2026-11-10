@@ -19,6 +19,22 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["needs_tidy"] = brew.needs_tidy
 templates.env.filters["step_editor_data"] = brew.step_editor_data
+# What a cup costs at a café: every cup brewed at home is that much saved
+CAFE_CUP_PRICE_INR = 300
+
+
+def inr(amount: int) -> str:
+    """Rupees with Indian digit grouping: ₹1,23,456."""
+    digits = str(amount)
+    head, tail = digits[:-3], digits[-3:]
+    groups = []
+    while len(head) > 2:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return "₹" + ",".join(([head] if head else []) + groups + [tail])
+
+
+templates.env.filters["inr"] = inr
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
@@ -419,7 +435,11 @@ def manage(request: Request):
         brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
         grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
         all_users = crud.get_users(session) if user.is_admin else []
+        cups, first_brew = crud.get_brew_totals(session, user.id)  # type: ignore[arg-type]
         return templates.TemplateResponse("manage.html", {
+            "cups": cups,
+            "first_brew": first_brew,
+            "cup_price": CAFE_CUP_PRICE_INR,
             "request": request,
             "beans_with_bags": active_beans_with_bags,
             "archived_beans_with_bags": archived_beans_with_bags,

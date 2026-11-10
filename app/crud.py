@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func
@@ -86,6 +87,17 @@ def get_brewers(session: Session, user_id: int) -> List[models.Brewer]:
         .where(models.Brewer.user_id == user_id)
         .order_by(models.Brewer.name)
     ).all())
+
+
+def get_brew_totals(session: Session, user_id: int) -> Tuple[int, Optional[datetime]]:
+    """How many brews this user has logged, ever, and when the first was."""
+    count, first = session.exec(
+        select(func.count(models.Brew.id), func.min(models.Brew.brewed_at))  # type: ignore[arg-type]
+        .join(models.BeanBag, models.BeanBag.id == models.Brew.bag_id)  # type: ignore[arg-type]
+        .join(models.Bean, models.Bean.id == models.BeanBag.bean_id)  # type: ignore[arg-type]
+        .where(models.Bean.user_id == user_id)
+    ).one()
+    return count, first
 
 
 def user_has_recipes(session: Session, user_id: int) -> bool:

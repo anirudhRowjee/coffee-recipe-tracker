@@ -3,6 +3,16 @@
 {% block content %}
 <div class="grid">
 
+    <section class="card savings-card">
+        <h2>Lifetime savings</h2>
+        <p class="savings-amount">{{ (cups * cup_price)|inr }}</p>
+        {% if cups %}
+        <p class="muted">{{ cups }} cup{{ '' if cups == 1 else 's' }} brewed since {{ first_brew.day }} {{ first_brew.strftime('%b %Y') }}, at {{ cup_price|inr }} a café cup.</p>
+        {% else %}
+        <p class="muted">Every brew you log adds {{ cup_price|inr }}, the price of a café cup.</p>
+        {% endif %}
+    </section>
+
     <section class="card">
         <h2>Beans</h2>
         <button onclick="toggleForm('bean-form')">+ Add Bean</button>
