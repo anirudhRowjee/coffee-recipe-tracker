@@ -1,6 +1,6 @@
 import json
 import random
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 
 from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
@@ -35,6 +35,20 @@ def inr(amount: int) -> str:
 
 
 templates.env.filters["inr"] = inr
+templates.env.filters["days"] = lambda n: f"{n} day" + ("" if n == 1 else "s")
+
+
+def day_range(start: date_type, end: date_type) -> str:
+    """"22–29 Oct 2026", or "30 Oct – 2 Nov 2026" across months; one day is just "9 Nov 2026"."""
+    if start == end:
+        return f"{end.day} {end:%b %Y}"
+    if (start.year, start.month) == (end.year, end.month):
+        return f"{start.day}–{end.day} {end:%b %Y}"
+    first = f"{start.day} {start:%b}" if start.year == end.year else f"{start.day} {start:%b %Y}"
+    return f"{first} – {end.day} {end:%b %Y}"
+
+
+templates.env.globals["day_range"] = day_range
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
@@ -440,6 +454,7 @@ def manage(request: Request):
             "cups": cups,
             "first_brew": first_brew,
             "cup_price": CAFE_CUP_PRICE_INR,
+            "streak": crud.streaks(crud.get_brew_days(session, user.id), datetime.now(crud.IST).date()),  # type: ignore[arg-type]
             "request": request,
             "beans_with_bags": active_beans_with_bags,
             "archived_beans_with_bags": archived_beans_with_bags,

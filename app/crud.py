@@ -1,5 +1,6 @@
 import time
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func
@@ -98,6 +99,59 @@ def get_brew_totals(session: Session, user_id: int) -> Tuple[int, Optional[datet
         .where(models.Bean.user_id == user_id)
     ).one()
     return count, first
+
+
+# Brew times are stored in UTC; days are counted where the app's people live.
+# India has no daylight saving, so a fixed offset is exact.
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def local_day(moment: datetime) -> date:
+    aware = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)  # SQLite returns naive UTC
+    return aware.astimezone(IST).date()
+
+
+def get_brew_days(session: Session, user_id: int) -> List[date]:
+    """Every day (India time) this user brewed at least once, oldest first."""
+    times = session.exec(
+        select(models.Brew.brewed_at)
+        .join(models.BeanBag, models.BeanBag.id == models.Brew.bag_id)  # type: ignore[arg-type]
+        .join(models.Bean, models.Bean.id == models.BeanBag.bean_id)  # type: ignore[arg-type]
+        .where(models.Bean.user_id == user_id)
+    ).all()
+    return sorted({local_day(t) for t in times})
+
+
+@dataclass
+class Streaks:
+    current: int            # days in a row up to today (or yesterday, if today's cup is still to come)
+    brewed_today: bool
+    longest: int
+    longest_start: Optional[date]
+    longest_end: Optional[date]
+    this_month: int         # days brewed this calendar month
+
+
+def streaks(days: List[date], today: date) -> Streaks:
+    """Runs of consecutive brewing days. A streak isn't broken until a whole day passes
+    without a brew, so this morning it still counts yesterday's."""
+    longest, longest_start, longest_end = 0, None, None
+    run_start, previous = None, None
+    for day in days:
+        if previous is None or day != previous + timedelta(days=1):
+            run_start = day
+        length = (day - run_start).days + 1  # type: ignore[operator]
+        if length > longest:
+            longest, longest_start, longest_end = length, run_start, day
+        previous = day
+    current = 0
+    if previous is not None and previous >= today - timedelta(days=1):
+        current = (previous - run_start).days + 1  # type: ignore[operator]
+    return Streaks(
+        current=current, brewed_today=previous == today, longest=longest,
+        longest_start=longest_start, longest_end=longest_end,
+        this_month=sum(1 for day in days if (day.year, day.month) == (today.year, today.month)),
+    )
 
 
 def user_has_recipes(session: Session, user_id: int) -> bool:

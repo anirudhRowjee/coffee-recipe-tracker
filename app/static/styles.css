@@ -1317,3 +1317,41 @@ textarea[hidden] {
 .savings-card .muted {
     margin: 6px 0 0;
 }
+
+/* Brewing streak on the manage page */
+.streak-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.streak-stats div {
+    background: #f5ebe0;
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-width: 0;
+}
+
+.streak-stats dt {
+    font-size: 0.8rem;
+    color: #8c6a4f;
+}
+
+.streak-stats dd {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #3b1f0e;
+    font-variant-numeric: tabular-nums;
+}
+
+.streak-when {
+    display: block;
+    font-size: 0.75rem;
+    color: #8c6a4f;
+}
+
+.streak-card .muted {
+    margin: 8px 0 0;
+}

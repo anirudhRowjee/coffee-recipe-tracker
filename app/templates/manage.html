@@ -13,6 +13,24 @@
         {% endif %}
     </section>
 
+    <section class="card streak-card">
+        <h2>Brewing streak</h2>
+        <dl class="streak-stats">
+            <div><dt>Current</dt><dd>{{ streak.current|days }}</dd></div>
+            <div>
+                <dt>Longest</dt><dd>{{ streak.longest|days }}</dd>
+                {% if streak.longest %}<span class="streak-when">{{ day_range(streak.longest_start, streak.longest_end) }}</span>{% endif %}
+            </div>
+            <div><dt>This month</dt><dd>{{ streak.this_month|days }}</dd></div>
+        </dl>
+        <p class="muted">
+            {% if streak.brewed_today %}Today's cup is in. See you tomorrow.
+            {% elif streak.current %}Brew today to keep it going.
+            {% elif streak.longest %}Brew today to start a new one.
+            {% else %}Log a brew today to start a streak.{% endif %}
+        </p>
+    </section>
+
     <section class="card">
         <h2>Beans</h2>
         <button onclick="toggleForm('bean-form')">+ Add Bean</button>
