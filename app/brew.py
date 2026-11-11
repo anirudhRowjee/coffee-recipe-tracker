@@ -40,6 +40,7 @@ class Step:
     times: List[int] = field(default_factory=list)  # seconds from the start, in order
     grams: Optional[float] = None
     is_prep: bool = False
+    target: Optional[float] = None  # what the scale should read: grams, or "90g bloom" written inline
 
 
 def _seconds(time: str) -> int:
@@ -114,7 +115,8 @@ def parse_steps(recipe_text: Optional[str]) -> List[Step]:
         steps = [Step(text=f"Before you start: {prep}", is_prep=True)] if prep else []
         for time, action, grams in rows:
             target = f" · to {_grams_text(grams)} g" if grams is not None else ""
-            steps.append(Step(text=f"{time} — {action}{target}", times=[_seconds(time)], grams=grams))
+            steps.append(Step(text=f"{time} — {action}{target}", times=[_seconds(time)], grams=grams,
+                              target=_target_grams(action, grams)))
         return steps
 
     # One step per non-empty line (textareas submit \r\n), with any m:ss times in it
@@ -161,6 +163,14 @@ _ENDS_BREW = re.compile(r"\bdone\b|^finish|^serve|^enjoy", re.IGNORECASE)
 _LAST_STEP_SECONDS = 30  # how long to play a last step that isn't "Done": nothing says
 _FLIP_SECONDS = 2        # moving the Switch's lever
 _PHASE_SECONDS = 6       # each action, when a step loops through several
+
+
+def _target_grams(action: str, grams: Optional[float]) -> Optional[float]:
+    """A row's "(to 200g)", or for a pour or bloom without one, grams written in it ("90g bloom")."""
+    if grams is not None:
+        return grams
+    inline = _POUR_GRAMS.search(action) if set(step_actions(action)) & set(_RISES) else None
+    return float(inline.group(1)) if inline else None
 
 
 def step_actions(action: str, grams: Optional[float] = None) -> List[str]:
@@ -223,8 +233,7 @@ def animation_data(text: Optional[str], brewer_name: Optional[str], brewer_metho
     rows = []
     for time, action, grams in sorted(parts[1], key=lambda row: _seconds(row[0])):  # the order the timer uses
         actions = step_actions(action, grams)
-        inline = _POUR_GRAMS.search(action) if grams is None and set(actions) & set(_RISES) else None  # "90g bloom"
-        rows.append((_seconds(time), action, float(inline.group(1)) if inline else grams, actions))
+        rows.append((_seconds(time), action, _target_grams(action, grams), actions))
     total = max((grams or 0 for _, _, grams, _ in rows), default=0)
 
     def drains(actions: List[str]) -> bool:

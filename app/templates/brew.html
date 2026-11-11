@@ -31,10 +31,18 @@
                 <label class="brew-anim-toggle" id="brew-anim-toggle" for="brew-anim-on" hidden><input id="brew-anim-on" type="checkbox" checked /> Animation</label>
             </div>
         </div>
+        {# A Bookoo scale over Web Bluetooth (static/scale.js); hidden where the browser can't #}
+        <div class="brew-scale" id="brew-scale" hidden>
+            <div class="brew-scale-reading"><span id="brew-scale-weight">0.0</span> g<span class="brew-scale-target" id="brew-scale-target"></span></div>
+            <div class="brew-scale-bar"><span id="brew-scale-fill"></span></div>
+            <p class="brew-scale-note" id="brew-scale-note" hidden></p>
+        </div>
         <p class="brew-next" id="brew-next"></p>
         <div class="brew-controls">
             <button type="button" id="brew-start">Start</button>
             <button type="button" id="brew-reset" class="btn-secondary" hidden>Reset</button>
+            <button type="button" id="brew-scale-connect" class="btn-secondary brew-scale-btn" hidden>Scale</button>
+            <button type="button" id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden>Tare</button>
         </div>
     </div>
 
@@ -42,13 +50,24 @@
     {# not an <ol>: methods usually carry their own bullets or numbers #}
     <ul class="brew-steps">
         {% for step in steps %}
-        <li data-times="{{ step.times|join(',') }}">{{ step.text }}</li>
+        <li data-times="{{ step.times|join(',') }}"{% if step.target is not none %} data-grams="{{ step.target }}"{% endif %}>{{ step.text }}</li>
         {% endfor %}
     </ul>
     {% endif %}
     {% if latest.recipe_text|needs_tidy %}
     <p class="share-links"><a href="/lines/{{ line.id }}/tidy{% if bag %}?bag_id={{ bag.id }}{% endif %}">Tidy this method into steps</a></p>
     {% endif %}
+</section>
+
+{# Filled in by static/brew_graphs.js after a brew with the scale connected #}
+<section class="card brew-graphs" id="brew-graphs" style="{{ latest.bean|bean_theme }}" hidden>
+    <h3>This brew</h3>
+    <p class="brew-graphs-summary" id="brew-graphs-summary"></p>
+    <h4>Weight <span class="muted">(dashed: each step's target)</span></h4>
+    <div id="brew-graph-weight"></div>
+    <h4>Flow rate</h4>
+    <div id="brew-graph-flow"></div>
+    <p class="muted brew-graphs-readout" id="brew-graphs-readout"></p>
 </section>
 
 {% if bag %}
@@ -61,6 +80,8 @@
 {% endif %}
 
 <script src="/static/brew_animation.js"></script>
+<script src="/static/brew_graphs.js"></script>
+<script src="/static/scale.js"></script>
 <script>
     // ES5 on purpose: the Kindle's browser is old. Times come from data-times
     // on each step (seconds, parsed server-side by app/brew.py).
@@ -155,9 +176,12 @@
             render();
             var notes = document.getElementById('log-notes');
             if (notes && stoppedAt > 0) {
-                var line = 'Brewed ' + fmt(stoppedAt);
-                notes.value = /^Brewed \d+:\d\d/.test(notes.value)
-                    ? notes.value.replace(/^Brewed \d+:\d\d/, line)
+                // the scale's reading too, when one is connected (static/scale.js)
+                var weighed = window.brewScaleGrams ? window.brewScaleGrams() : '';
+                var line = 'Brewed ' + fmt(stoppedAt) + (weighed ? ' · ' + weighed : '');
+                var brewed = /^Brewed \d+:\d\d(?: · -?[\d.]+ g)?/;
+                notes.value = brewed.test(notes.value)
+                    ? notes.value.replace(brewed, line)
                     : (notes.value ? line + '\n' + notes.value : line);
             }
         }

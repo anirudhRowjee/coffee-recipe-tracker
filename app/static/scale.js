@@ -1,0 +1,234 @@
+// A Bookoo scale (Themis Mini / Ultra) in brew mode, over Web Bluetooth: the live
+// weight against the current step's "to 200g", a Tare button, and the brew timer
+// starting when the scale's own auto-timer does. Only where navigator.bluetooth
+// exists (Chrome, Edge, Android Chrome, Bluefy); everywhere else nothing shows.
+//
+// Protocol: Bookoo's published notes (github.com/BooKooCode/OpenSource, mini and
+// ultra scale). Service 0x0FFE; 0xFF11 notifies 20-byte weight packets, 0xFF12 takes
+// 6-byte commands; automatic-mode events are 03 0D <state>. Every packet ends in the
+// XOR of the bytes before it. ES5 so an old browser can't trip over the syntax.
+//
+// The Ultra ignores timer commands outside timing and ratio mode, and tare while an
+// automatic brew runs or is done, or while charging; an ignored command gets no reply.
+(function () {
+    var timer = document.getElementById('brew-timer');
+    if (!timer || !navigator.bluetooth || !window.isSecureContext) return;
+
+    var SERVICE = 0x0ffe, WEIGHT = 0xff11, COMMAND = 0xff12;
+    // 03 0A <command> 00 00, then the checksum (send adds it)
+    var COMMANDS = { tare: 0x01, start: 0x04, stop: 0x05, reset: 0x06, tareAndStart: 0x07 };
+    var EVENT_STOPPED = 0x00, EVENT_STARTED = 0x01;
+    var CLOSE_G = 2;  // within this of the target counts as there
+
+    var panel = document.getElementById('brew-scale');
+    var weightBox = document.getElementById('brew-scale-weight');
+    var targetBox = document.getElementById('brew-scale-target');
+    var fill = document.getElementById('brew-scale-fill');
+    var connectBtn = document.getElementById('brew-scale-connect');
+    var tareBtn = document.getElementById('brew-scale-tare');
+    var startBtn = document.getElementById('brew-start');
+    var resetBtn = document.getElementById('brew-reset');
+    var note = document.getElementById('brew-scale-note');
+    var fromScale = false;  // the scale started or stopped the brew, so don't echo it back
+    var device = null, command = null, grams = null;
+
+    connectBtn.hidden = false;
+
+    // 20 bytes: 03 0B, ms(3), unit, sign, grams×100 (3), sign, flow×100 (2), battery, ..., XOR checksum
+    function decode(b) {
+        if (b.length !== 20 || b[0] !== 0x03 || b[1] !== 0x0b) return null;
+        var x = 0;
+        for (var i = 0; i < 19; i++) x ^= b[i];
+        if (x !== b[19]) return null;
+        return {
+            grams: (b[6] === 0x2d ? -1 : 1) * ((b[7] << 16) | (b[8] << 8) | b[9]) / 100,
+            flow: (b[10] === 0x2d ? -1 : 1) * ((b[11] << 8) | b[12]) / 100,
+            ms: (b[2] << 16) | (b[3] << 8) | b[4]  // the scale's own timer
+        };
+    }
+
+    // The brew's readings, for the graphs after Stop: [seconds on the brew clock, grams, g/s].
+    // Our own clock, counted only while the timer runs, so a pause doesn't leave a gap.
+    var samples = [], banked = 0, runSince = null, wasRunning = false;
+    // The scale's timer, read from every weight packet: when it starts counting (its
+    // button, or its auto-start) the app's timer starts too, and when it stops the app
+    // stops, but only if the scale's timer ran during this run of the app's: a scale
+    // that ignored our Resume shouldn't stop the brew a moment later.
+    var STILL_MS = 1500;  // no tick for this long: the scale's timer has stopped
+    var scaleMs = null, scaleTickAt = 0, scaleTiming = false, scaleRanThisRun = false;
+    var scaleSeenStill = false;  // a timer already running when we connect isn't a start
+    function followScaleTimer(ms) {
+        var now = Date.now(), label = startBtn.textContent;
+        if (scaleMs !== null && ms > scaleMs) {
+            scaleTickAt = now;
+            if (!scaleTiming) {
+                scaleTiming = true;
+                if (label === 'Start' && scaleSeenStill) press();
+            }
+            if (running()) scaleRanThisRun = true;
+        } else if (scaleMs !== null && ms === scaleMs && !scaleTiming) {
+            scaleSeenStill = true;
+        } else if (scaleTiming && now - scaleTickAt > STILL_MS) {
+            scaleTiming = false;
+            if (running() && scaleRanThisRun) press();
+        }
+        scaleMs = ms;
+    }
+    function press() {  // the timer button, without telling the scale what it just did
+        fromScale = true;
+        startBtn.click();
+        fromScale = false;
+    }
+
+    function brewSeconds() { return banked + (runSince === null ? 0 : (Date.now() - runSince) / 1000); }
+
+    function track() {
+        var now = running();
+        if (now && runSince === null) runSince = Date.now();
+        if (!now && runSince !== null) { banked = brewSeconds(); runSince = null; }
+        if (wasRunning && !now && samples.length > 1 && window.BrewGraphs) {
+            window.BrewGraphs.show(samples, stepTargets());
+        }
+        wasRunning = now;
+    }
+
+    // [seconds, grams] for every step with a target, in time order
+    function stepTargets() {
+        var out = [];
+        Array.prototype.forEach.call(document.querySelectorAll('.brew-steps li[data-grams]'), function (li) {
+            var t = parseInt(li.getAttribute('data-times'), 10);
+            if (!isNaN(t)) out.push([t, parseFloat(li.getAttribute('data-grams'))]);
+        });
+        return out.sort(function (a, b) { return a[0] - b[0]; });
+    }
+
+    // The step whose target is in force: the current one, or the last before it with
+    // a target (a swirl or drawdown still means "you should be at 500 g"); before the
+    // brew starts, the first step with one.
+    function targetStep() {
+        for (var li = document.querySelector('.brew-steps li.brew-step-now'); li; li = li.previousElementSibling) {
+            if (li.getAttribute('data-grams')) return li;
+        }
+        return document.querySelector('.brew-steps li[data-grams]');
+    }
+
+    function running() { return startBtn.textContent === 'Stop'; }
+
+    function show() {
+        if (grams === null) return;
+        weightBox.textContent = grams.toFixed(1);
+        var li = targetStep(), t = li ? parseFloat(li.getAttribute('data-grams')) : null;
+        // Reaching the weight ticks the step off; the clock still decides when the next
+        // one starts, since the method's times are part of the recipe. Only while the
+        // timer runs: before Start the scale may still be weighing beans or the brewer.
+        // (An attribute, not a class: the timer script resets classes four times a second.)
+        if (li && running() && grams >= t - CLOSE_G) li.setAttribute('data-reached', '');
+        var reached = li && li.hasAttribute('data-reached');
+        targetBox.textContent = t ? (reached ? ' ✓ ' : ' → ') + (t % 1 ? t.toFixed(1) : t) + ' g' : '';
+        fill.style.width = (t ? Math.max(0, Math.min(1, grams / t)) * 100 : 0).toFixed(1) + '%';
+        panel.className = 'brew-scale' + (t && grams > t + CLOSE_G ? ' over-target' : reached ? ' at-target' : '');
+    }
+
+    function say(text) { note.textContent = text; note.hidden = !text; }
+
+    function send(name) {
+        if (!command) return;
+        var data = new Uint8Array([0x03, 0x0a, COMMANDS[name], 0x00, 0x00, 0]);
+        data[5] = data[0] ^ data[1] ^ data[2] ^ data[3] ^ data[4];
+        var props = command.properties || {};
+        // write with a response when the scale offers it, so a failure shows up here
+        var write = props.write && command.writeValueWithResponse ? command.writeValueWithResponse(data)
+                  : command.writeValueWithoutResponse ? command.writeValueWithoutResponse(data)
+                  : command.writeValue(data);
+        write.then(function () { say(''); }, function (err) {
+            say('The scale didn’t take “' + name + '”: ' + (err && err.message || err));
+        });
+    }
+
+    // 03 0D <state> …: the scale's automatic mode started or stopped a brew
+    function onEvent(b) {
+        if (b.length < 3 || b[0] !== 0x03 || b[1] !== 0x0d) return;
+        var label = startBtn.textContent;
+        if ((b[2] === EVENT_STARTED && label === 'Start') || (b[2] === EVENT_STOPPED && label === 'Stop')) press();
+    }
+
+    function connected(on) {
+        panel.hidden = !on;
+        connectBtn.hidden = on;
+        tareBtn.hidden = !on;
+        if (!on) { command = null; grams = null; }
+    }
+
+    function bytes(view) { return new Uint8Array(view.buffer, view.byteOffset, view.byteLength); }
+
+    connectBtn.addEventListener('click', function () {
+        connectBtn.disabled = true;
+        connectBtn.textContent = 'Connecting…';
+        navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'BOOKOO' }, { namePrefix: 'Bookoo' }, { services: [SERVICE] }],
+            optionalServices: [SERVICE]
+        }).then(function (d) {
+            device = d;
+            device.addEventListener('gattserverdisconnected', function () { connected(false); });
+            return device.gatt.connect();
+        }).then(function (server) {
+            return server.getPrimaryService(SERVICE);
+        }).then(function (service) {
+            return Promise.all([service.getCharacteristic(WEIGHT), service.getCharacteristic(COMMAND)]);
+        }).then(function (chars) {
+            command = chars[1];
+            // the notes don't say which characteristic carries events, so listen on both
+            chars[0].addEventListener('characteristicvaluechanged', function (e) {
+                var b = bytes(e.target.value), g = decode(b);
+                if (g === null) { onEvent(b); return; }
+                grams = g.grams;
+                followScaleTimer(g.ms);
+                track();
+                if (running()) samples.push([Math.round(brewSeconds() * 10) / 10, g.grams, g.flow]);
+                show();
+            });
+            command.addEventListener('characteristicvaluechanged', function (e) { onEvent(bytes(e.target.value)); });
+            // one at a time: Chrome refuses a second GATT operation while one is running
+            return chars[0].startNotifications().then(function () {
+                if (command.properties && !command.properties.notify) return null;
+                return command.startNotifications()['catch'](function () { /* events are a bonus */ });
+            });
+        }).then(function () {
+            say('');
+            connected(true);
+        })['catch'](function (err) {
+            if (device && device.gatt.connected) device.gatt.disconnect();
+            connected(false);
+            if (err && err.name !== 'NotFoundError') window.alert('Could not connect to the scale: ' + err.message);
+        }).then(function () {
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'Scale';
+        });
+    });
+
+    tareBtn.addEventListener('click', function () { send('tare'); });
+
+    // The scale's own timer follows the app's. This listener runs before the timer
+    // script's (this file loads first), so the label is still the one that was pressed.
+    // Start from zero is Bookoo's recommended "tare and start": grounds in, zero, pour.
+    // It also starts an automatic-mode brew that is ready. Resume doesn't tare.
+    startBtn.addEventListener('click', function () {
+        var label = startBtn.textContent;
+        if (label !== 'Stop') scaleRanThisRun = false;  // a new run of the app's timer
+        if (fromScale) return;
+        send(label === 'Stop' ? 'stop' : label === 'Start' ? 'tareAndStart' : 'start');
+    });
+    resetBtn.addEventListener('click', function () {
+        samples = []; banked = 0; runSince = null;
+        if (window.BrewGraphs) window.BrewGraphs.hide();
+        send('reset');
+        Array.prototype.forEach.call(document.querySelectorAll('.brew-steps li[data-reached]'), function (li) {
+            li.removeAttribute('data-reached');
+        });
+    });
+
+    // the step changes with the clock, not with the scale, so keep the target in step
+    setInterval(function () { track(); show(); }, 500);
+
+    window.brewScaleGrams = function () { return grams === null ? '' : Math.round(grams) + ' g'; };
+})();

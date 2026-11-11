@@ -1355,3 +1355,82 @@ textarea[hidden] {
 .streak-card .muted {
     margin: 8px 0 0;
 }
+
+/* Brew mode's scale (static/scale.js): live weight against the step's target */
+.brew-scale {
+    margin: 6px auto 0;
+    max-width: 22rem;
+}
+
+.brew-scale[hidden],
+.brew-scale-btn[hidden] {
+    display: none;
+}
+
+.brew-scale-reading {
+    text-align: center;
+    font-size: 1.9rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #3b1f0e;
+}
+
+.brew-scale-target {
+    font-weight: 400;
+    color: #5c3520;
+}
+
+.brew-scale-bar {
+    height: 8px;
+    margin-top: 4px;
+    border-radius: 4px;
+    background: var(--accent-soft, #f0e4d4);
+    overflow: hidden;
+}
+
+.brew-scale-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent, #6b3d2e);
+    transition: width 0.2s linear;
+}
+
+.brew-scale.at-target .brew-scale-bar span { background: #2e7d4f; }
+.brew-scale.over-target .brew-scale-bar span { background: #b3261e; }
+
+.brew-controls { flex-wrap: wrap; }
+
+.brew-controls button.brew-scale-btn {
+    min-width: 0;
+}
+
+/* a step whose weight the scale has seen (static/scale.js) */
+.brew-steps li[data-reached]::after {
+    content: " ✓";
+    color: #2e7d4f;
+    font-weight: 700;
+}
+
+.brew-scale-note {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: #b3261e;
+    text-align: center;
+}
+
+.brew-scale-note[hidden] { display: none; }
+
+/* Weight and flow after a brew (static/brew_graphs.js) */
+.brew-graphs[hidden] { display: none; }
+.brew-graphs h4 { margin: 14px 0 2px; font-size: 0.95rem; }
+.brew-graphs-summary { margin: 0; font-weight: 600; color: #3b1f0e; }
+.brew-graphs-readout { margin: 8px 0 0; text-align: center; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.brew-graph { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.brew-graph .bg-grid { stroke: #efe5d8; stroke-width: 1; }
+.brew-graph .bg-base { stroke: #d8c6b0; stroke-width: 1; }
+.brew-graph .bg-label { font-size: 12px; fill: #8c6a4f; font-variant-numeric: tabular-nums; }
+.brew-graph .bg-target { fill: none; stroke: #8c6a4f; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.brew-graph .bg-line { fill: none; stroke: var(--accent, #6b3d2e); stroke-width: 2; stroke-linejoin: round; }
+.brew-graph .bg-cross { stroke: #8c6a4f; stroke-width: 1; }
+.brew-graph .bg-dot { fill: var(--accent, #6b3d2e); stroke: #fff; stroke-width: 2; }
