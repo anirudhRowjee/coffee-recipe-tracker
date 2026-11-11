@@ -144,6 +144,15 @@ class Brew(SQLModel, table=True):
     bag: Optional[BeanBag] = Relationship(back_populates="brews")
 
 
+class BrewCurve(SQLModel, table=True):
+    """The scale's readings through a brew, recorded in brew mode. Its own table, with
+    no relationship from Brew, so loading brews never loads curves. `samples` is JSON:
+    {"t": [seconds on the brew clock], "g": [grams], "f": [g/s]}, about two readings a
+    second (crud.parse_curve checks and normalises it)."""
+    brew_id: int = Field(primary_key=True, foreign_key="brew.id")
+    samples: str
+
+
 class PlannedBrew(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")

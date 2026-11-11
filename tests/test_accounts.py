@@ -261,7 +261,8 @@ def test_accounts_section_is_admin_only(app):
 def owned(app):
     """User 1's coffee, with a signed-in second user looking at it."""
     post(app, "/recipes", BASELINE)                          # recipe 1, line 1
-    post(app, "/brews", {"recipe_id": 1, "bag_id": 1})
+    post(app, "/brews", {"recipe_id": 1, "bag_id": 1,
+                         "curve": '{"t": [0, 1], "g": [0, 10], "f": [0, 10]}'})  # brew 1, with a graph
     post(app, "/plan", COMBO)
     app.client.post("/beans/1/image", files={"image": ("b.jpg", JPEG, "image/jpeg")}, data={"accent": "#123456"})
     uid = add_user(app)
@@ -282,6 +283,8 @@ GET_ATTACKS = [
     ("/lines/1/share-image", {}),
     ("/lines/1/tidy", {}),
     ("/beans/1/image", {}),
+    ("/brews/1/graph", {}),
+    ("/brews/1/curve.csv", {}),
 ]
 
 RECIPE = {"dose_g": 15, "water_ml": 250, "temp_c": 93, "grind_size": "13"}

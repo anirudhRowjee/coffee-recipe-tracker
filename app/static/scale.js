@@ -86,10 +86,25 @@
         var now = running();
         if (now && runSince === null) runSince = Date.now();
         if (!now && runSince !== null) { banked = brewSeconds(); runSince = null; }
-        if (wasRunning && !now && samples.length > 1 && window.BrewGraphs) {
-            window.BrewGraphs.show(samples, stepTargets());
+        if (wasRunning && !now && samples.length > 1) {
+            if (window.BrewGraphs) window.BrewGraphs.show(samples, stepTargets());
+            keepForLog();
         }
         wasRunning = now;
+    }
+
+    // Two readings a second go into the log form, so the graphs are saved with the brew
+    // (crud.parse_curve checks them). Resuming and stopping again replaces them.
+    function keepForLog() {
+        var field = document.getElementById('log-curve');
+        if (!field) return;
+        var t = [], g = [], f = [], last = -1;
+        samples.forEach(function (s, i) {
+            if (s[0] - last < 0.5 && i < samples.length - 1) return;
+            last = s[0];
+            t.push(s[0]); g.push(Math.round(s[1] * 10) / 10); f.push(Math.round(s[2] * 100) / 100);
+        });
+        field.value = JSON.stringify({ t: t, g: g, f: f });
     }
 
     // [seconds, grams] for every step with a target, in time order
@@ -220,6 +235,8 @@
     });
     resetBtn.addEventListener('click', function () {
         samples = []; banked = 0; runSince = null;
+        var field = document.getElementById('log-curve');
+        if (field) field.value = '';
         if (window.BrewGraphs) window.BrewGraphs.hide();
         send('reset');
         Array.prototype.forEach.call(document.querySelectorAll('.brew-steps li[data-reached]'), function (li) {

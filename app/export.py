@@ -8,7 +8,7 @@ bean's private notes, and who brewed it. Reads only the fields listed here,
 so adding a column elsewhere never leaks into an export.
 """
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from . import brew, db, models, theme
 
@@ -43,9 +43,11 @@ def image_filename(line: models.RecipeLine, bean: models.Bean) -> str:
     return filename(line, bean).removesuffix(".md") + ".png"
 
 
-def card_data(line: models.RecipeLine, latest: models.Recipe) -> dict:
+def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[dict] = None) -> dict:
     """What the share image shows, from the same whitelist as the Markdown: the bean,
-    the gear, every parameter of the current version, and its method."""
+    the gear, every parameter of the current version, and its method. A brew's weight
+    curve is personal brew data, so it's only added when the person asks (`curve`), and
+    only the weight over time: no flow, no date, nothing else about that brew."""
     bean, brewer, grinder = latest.bean, latest.brewer, latest.grinder
     assert bean and brewer and grinder
     standard = brew.is_standard(latest.recipe_text)
@@ -74,6 +76,7 @@ def card_data(line: models.RecipeLine, latest: models.Recipe) -> dict:
         "colors": theme.card_colors(bean),
         "date": f"{made.day} {made:%b %Y}",
         "filename": image_filename(line, bean),
+        **({"curve": {"t": curve["t"], "g": curve["g"]}} if curve else {}),
     }
 
 

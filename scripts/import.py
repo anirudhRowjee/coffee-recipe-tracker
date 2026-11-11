@@ -40,7 +40,7 @@ from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def read_csv(path: Path, required: bool = True) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def check_empty(session: Session) -> None:
-    for model in [User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta]:
+    for model in [User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta]:
         count = session.exec(select(func.count()).select_from(model)).one()
         if count:
             abort(
@@ -271,6 +271,13 @@ def import_all(engine: Engine, src: Path) -> None:
             ))
         session.commit()
         print(f"  brews:    {len(rows)}")
+
+        # Scale curves (absent in older snapshots)
+        rows = read_csv(src / "brew_curves.csv", required=False)
+        for r in rows:
+            session.add(BrewCurve(brew_id=_int(r["brew_id"]), samples=r["samples"]))
+        session.commit()
+        print(f"  curves:   {len(rows)}")
 
         # 9. Planned brews (absent in pre-multi-user snapshots)
         rows = read_csv(src / "planned_brews.csv", required=False)

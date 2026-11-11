@@ -1424,8 +1424,6 @@ textarea[hidden] {
 /* Weight and flow after a brew (static/brew_graphs.js) */
 .brew-graphs[hidden] { display: none; }
 .brew-graphs h4 { margin: 14px 0 2px; font-size: 0.95rem; }
-.brew-graphs-summary { margin: 0; font-weight: 600; color: #3b1f0e; }
-.brew-graphs-readout { margin: 8px 0 0; text-align: center; font-variant-numeric: tabular-nums; min-height: 1.4em; }
 .brew-graph { display: block; width: 100%; height: auto; touch-action: pan-y; }
 .brew-graph .bg-grid { stroke: #efe5d8; stroke-width: 1; }
 .brew-graph .bg-base { stroke: #d8c6b0; stroke-width: 1; }
@@ -1434,3 +1432,18 @@ textarea[hidden] {
 .brew-graph .bg-line { fill: none; stroke: var(--accent, #6b3d2e); stroke-width: 2; stroke-linejoin: round; }
 .brew-graph .bg-cross { stroke: #8c6a4f; stroke-width: 1; }
 .brew-graph .bg-dot { fill: var(--accent, #6b3d2e); stroke: #fff; stroke-width: 2; }
+
+/* A logged brew's graph page and the legend when comparing (static/brew_graphs.js) */
+.brew-graphs .bg-summary { margin: 0; font-weight: 600; color: #3b1f0e; }
+.brew-graphs .bg-readout { margin: 8px 0 0; text-align: center; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.bg-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; font-size: 0.9rem; color: #5c3520; }
+.bg-legend[hidden] { display: none; }
+.bg-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bg-legend i { display: inline-block; width: 16px; height: 4px; border-radius: 2px; }
+.bg-key-main { background: var(--accent, #6b3d2e); }
+.bg-key-compare { background: #b9a58f; }
+.brew-graph .bg-compare { fill: none; stroke: #b9a58f; stroke-width: 2; stroke-linejoin: round; }
+.graph-compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.graph-compare label { font-size: 0.95rem; }
+.graph-compare select { width: auto; min-width: 0; max-width: 100%; flex: 1 1 12rem; }
+.brew-graph-link { margin-left: 8px; font-size: 0.9rem; }

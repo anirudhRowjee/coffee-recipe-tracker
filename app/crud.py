@@ -1,3 +1,5 @@
+import json
+import math
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -106,9 +108,13 @@ def get_brew_totals(session: Session, user_id: int) -> Tuple[int, Optional[datet
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
-def local_day(moment: datetime) -> date:
+def local_time(moment: datetime) -> datetime:
     aware = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)  # SQLite returns naive UTC
-    return aware.astimezone(IST).date()
+    return aware.astimezone(IST)
+
+
+def local_day(moment: datetime) -> date:
+    return local_time(moment).date()
 
 
 def get_brew_days(session: Session, user_id: int) -> List[date]:
@@ -364,6 +370,89 @@ def create_brew(session: Session, recipe_id: int, bag_id: int, notes: Optional[s
     return brew
 
 
+# --- scale curves (brew mode's weight and flow readings, one per brew) -------------
+
+MAX_CURVE_CHARS = 300_000   # ~2 readings/s for over an hour; a real brew is ~10 KB
+MAX_CURVE_POINTS = 10_000
+
+
+def parse_curve(raw: Optional[str]) -> Optional[str]:
+    """The curve brew mode sent, checked and re-encoded compactly; None if it's missing
+    or malformed. Malformed means a bug, not the user's fault, so the brew is still
+    logged without it rather than losing the tasting notes."""
+    if not raw or len(raw) > MAX_CURVE_CHARS:
+        return None
+    try:
+        data = json.loads(raw)
+        t, g, f = data["t"], data["g"], data["f"]
+    except (ValueError, TypeError, KeyError):
+        return None
+    if not all(isinstance(xs, list) for xs in (t, g, f)) or not (2 <= len(t) == len(g) == len(f) <= MAX_CURVE_POINTS):
+        return None
+    try:
+        t = [round(float(x), 1) for x in t]
+        g = [round(float(x), 1) for x in g]
+        f = [round(float(x), 2) for x in f]
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(x) for x in t + g + f):
+        return None
+    if t[0] < 0 or t[-1] > 7200 or any(b < a for a, b in zip(t, t[1:])):
+        return None
+    if any(abs(x) > 10_000 for x in g) or any(abs(x) > 1_000 for x in f):
+        return None
+    return json.dumps({"t": t, "g": g, "f": f}, separators=(",", ":"))
+
+
+def save_curve(session: Session, brew_id: int, samples: str) -> None:
+    session.add(models.BrewCurve(brew_id=brew_id, samples=samples))
+    session.commit()
+
+
+def get_curve(session: Session, brew_id: int) -> Optional[dict]:
+    row = session.get(models.BrewCurve, brew_id)
+    return json.loads(row.samples) if row else None
+
+
+def brews_with_curves(session: Session, brew_ids: List[int]) -> set:
+    """Which of these brews have a curve, without loading any of them."""
+    if not brew_ids:
+        return set()
+    return set(session.exec(
+        select(models.BrewCurve.brew_id).where(models.BrewCurve.brew_id.in_(brew_ids))  # type: ignore[attr-defined]
+    ).all())
+
+
+def line_brews_with_curves(session: Session, line_id: int) -> List[models.Brew]:
+    """Brews of any version of this named recipe that have a curve, newest first."""
+    return list(session.exec(
+        select(models.Brew)
+        .join(models.Recipe, models.Brew.recipe_id == models.Recipe.id)  # type: ignore[arg-type]
+        .join(models.BrewCurve, models.BrewCurve.brew_id == models.Brew.id)  # type: ignore[arg-type]
+        .where(models.Recipe.line_id == line_id)
+        .order_by(models.Brew.brewed_at.desc(), models.Brew.id.desc())  # type: ignore[union-attr]
+    ).all())
+
+
+def latest_curve_for_recipe(session: Session, recipe_id: int) -> Optional[dict]:
+    """The newest curve brewed with exactly this version, for the share image."""
+    row = session.exec(
+        select(models.BrewCurve)
+        .join(models.Brew, models.BrewCurve.brew_id == models.Brew.id)  # type: ignore[arg-type]
+        .where(models.Brew.recipe_id == recipe_id)
+        .order_by(models.Brew.brewed_at.desc(), models.Brew.id.desc())  # type: ignore[union-attr]
+    ).first()
+    return json.loads(row.samples) if row else None
+
+
+def _delete_brew(session: Session, brew: models.Brew) -> None:
+    """A brew and its curve. No commit."""
+    curve = session.get(models.BrewCurve, brew.id)
+    if curve:
+        session.delete(curve)
+    session.delete(brew)
+
+
 def create_brewer(session: Session, user_id: int, name: str, method: Optional[str] = None, notes: Optional[str] = None) -> models.Brewer:
     brewer = models.Brewer(user_id=user_id, name=name, method=method, notes=notes)
     session.add(brewer)
@@ -407,7 +496,7 @@ def _delete_recipes(session: Session, recipe_ids: List[int]) -> None:
     for brew in session.exec(
         select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
     ).all():
-        session.delete(brew)
+        _delete_brew(session, brew)
     for recipe in session.exec(
         select(models.Recipe).where(models.Recipe.id.in_(recipe_ids))  # type: ignore[union-attr]
     ).all():
@@ -482,7 +571,7 @@ def delete_bean(session: Session, bean_id: int) -> None:
 
     for bag in session.exec(select(models.BeanBag).where(models.BeanBag.bean_id == bean_id)).all():
         for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag.id)).all():
-            session.delete(brew)
+            _delete_brew(session, brew)
         _delete_plans_for_bag(session, bag.id)  # type: ignore[arg-type]
         session.delete(bag)
 
@@ -518,7 +607,7 @@ def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
 
 def delete_bag(session: Session, bag_id: int) -> None:
     for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():
-        session.delete(brew)
+        _delete_brew(session, brew)
     _delete_plans_for_bag(session, bag_id)
     bag = session.get(models.BeanBag, bag_id)
     if bag:

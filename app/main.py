@@ -50,6 +50,7 @@ def day_range(start: date_type, end: date_type) -> str:
 
 templates.env.globals["day_range"] = day_range
 templates.env.filters["stars"] = lambda n: "★" * n + "☆" * (5 - n)
+templates.env.filters["ist"] = lambda moment, pattern: crud.local_time(moment).strftime(pattern)  # India time
 
 # The browser shrinks photos to about 1000px before uploading, so this is generous
 MAX_BEAN_IMAGE_BYTES = 3_000_000
@@ -161,6 +162,10 @@ def _require_admin(request: Request, session: Session) -> models.User:
 
 
 def _owner_id(session: Session, item) -> Optional[int]:
+    if isinstance(item, models.Brew):
+        item = session.get(models.BeanBag, item.bag_id)
+        if not item:
+            return None
     if isinstance(item, (models.BeanBag, models.RecipeLine, models.Recipe)):
         bean = session.get(models.Bean, item.bean_id)
         return bean.user_id if bean else None
@@ -364,6 +369,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
     return {
         "latest": latest,
         "recent_brews": recent_brews,
+        "curve_ids": crud.brews_with_curves(session, [b.id for b in recent_brews]),  # type: ignore[misc]
         "recent_deltas": recent_deltas,
         "lines": lines,
         "line": line,
@@ -499,6 +505,9 @@ def browse(request: Request):
             "grinders": grinders,
             "active_bags_by_bean": active_bags_by_bean,
             "recipe_options_by_bean": recipe_options_by_bean,
+            "curve_ids": crud.brews_with_curves(session, [  # brews with a scale graph
+                b.id for entry in all_bean_recipes for b in entry[3]  # type: ignore[misc]
+            ]),
             "current_user": user,
         })
 
@@ -871,20 +880,109 @@ def export_line(line_id: int, request: Request, download: bool = False):
 
 
 @app.get("/lines/{line_id}/share-image", response_class=HTMLResponse)
-def share_image(line_id: int, request: Request):
+def share_image(line_id: int, request: Request, curve: Optional[int] = None):
     """The named recipe as an Instagram-sized image, drawn in the browser from
-    export.card_data (the server has no imaging library)."""
+    export.card_data (the server has no imaging library). `curve=1` adds the weight
+    curve of the newest brew of this version that has one; it's off unless asked for."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
         line = _owned(session, user, models.RecipeLine, line_id)
         latest = crud.get_latest_recipe(session, line_id)
         if not latest or not latest.bean:
             raise HTTPException(status_code=404, detail="Recipe not found")
+        last_curve = crud.latest_curve_for_recipe(session, latest.id)  # type: ignore[arg-type]
         return templates.TemplateResponse("share_image.html", {
             "request": request,
             "current_user": user,
+            "line": line,
             "title": export.title(line, latest.bean),
-            "card": json.dumps(export.card_data(line, latest)),
+            "has_curve": last_curve is not None,
+            "with_curve": bool(curve and last_curve),
+            "card": json.dumps(export.card_data(line, latest, last_curve if curve else None)),
+        })
+
+
+def _curve_page_data(curve: dict, recipe: models.Recipe) -> dict:
+    """A curve plus the step targets of the version it was brewed with."""
+    targets = [[step.times[0], step.target] for step in brew.parse_steps(recipe.recipe_text)
+               if step.times and step.target is not None]
+    return {**curve, "targets": targets}
+
+
+@app.get("/brews/{brew_id}/graph", response_class=HTMLResponse)
+def brew_graph(brew_id: int, request: Request, compare: Optional[int] = None):
+    """A logged brew's weight and flow curves, optionally over another brew of the same
+    named recipe, with PNG and CSV downloads."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        this = _owned(session, user, models.Brew, brew_id)
+        curve = crud.get_curve(session, brew_id)
+        recipe = session.get(models.Recipe, this.recipe_id)
+        if curve is None or not recipe or not recipe.bean:
+            raise HTTPException(status_code=404, detail="This brew has no graph")
+        others = [b for b in crud.line_brews_with_curves(session, recipe.line_id) if b.id != brew_id] if recipe.line_id else []  # type: ignore[arg-type]
+        compare_brew = None
+        if compare is None:  # by default, the one brewed just before it
+            compare_brew = next((b for b in others if (b.brewed_at, b.id) < (this.brewed_at, this.id)), None)
+        elif compare:  # compare=0 means "compare with nothing"
+            compare_brew = next((b for b in others if b.id == compare), None)
+            if compare_brew is None:
+                raise HTTPException(status_code=404, detail="Not found")
+        compare_data = None
+        if compare_brew:
+            compare_recipe = session.get(models.Recipe, compare_brew.recipe_id)
+            compare_data = {**crud.get_curve(session, compare_brew.id),  # type: ignore[dict-item]
+                            "label": _brew_label(compare_brew, compare_recipe, recipe)}
+        line = session.get(models.RecipeLine, recipe.line_id) if recipe.line_id else None
+        return templates.TemplateResponse("brew_graph.html", {
+            "request": request,
+            "current_user": user,
+            "brew": this,
+            "recipe": recipe,
+            "title": export.title(line, recipe.bean) if line else recipe.bean.name,
+            "others": [(b, _brew_label(b, session.get(models.Recipe, b.recipe_id), recipe)) for b in others],
+            "compare_brew": compare_brew,
+            "graph": json.dumps({
+                "brew": {**_curve_page_data(curve, recipe), "label": _brew_label(this, recipe, recipe)},
+                "compare": compare_data,
+                "filename": f"brew-{brew_id}-{this.brewed_at:%Y-%m-%d}.png",
+                "title": export.title(line, recipe.bean) if line else recipe.bean.name,
+            }),
+        })
+
+
+_LABEL_PARAMS = (("dose", "dose_g"), ("water", "water_ml"), ("temp", "temp_c"), ("grind", "grind_size"))
+
+
+def _brew_label(b: models.Brew, recipe: Optional[models.Recipe], current: models.Recipe) -> str:
+    """'12 Nov, 08:14' (India time), plus what differed from the version being viewed,
+    which by the one-parameter rule is usually exactly one thing ("grind 12")."""
+    when = crud.local_time(b.brewed_at)
+    label = f"{when.day} {when:%b, %H:%M}"
+    if recipe and recipe.id != current.id:
+        changed = [f"{name} {getattr(recipe, attr)}" for name, attr in _LABEL_PARAMS
+                   if getattr(recipe, attr) != getattr(current, attr)]
+        if recipe.recipe_text != current.recipe_text:
+            changed.append("other method")
+        if changed:
+            label += " (" + ", ".join(changed) + ")"
+    return label
+
+
+@app.get("/brews/{brew_id}/curve.csv")
+def brew_curve_csv(brew_id: int, request: Request):
+    """The raw readings, for a spreadsheet."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        this = _owned(session, user, models.Brew, brew_id)
+        curve = crud.get_curve(session, brew_id)
+        if curve is None:
+            raise HTTPException(status_code=404, detail="This brew has no graph")
+        lines = ["seconds,grams,grams_per_second"] + [
+            f"{t:g},{g:g},{f:g}" for t, g, f in zip(curve["t"], curve["g"], curve["f"])
+        ]
+        return Response("\n".join(lines) + "\n", media_type="text/csv", headers={
+            "Content-Disposition": f'attachment; filename="brew-{brew_id}-{this.brewed_at:%Y-%m-%d}.csv"',
         })
 
 
@@ -916,6 +1014,7 @@ def create_brew(
     recommended_delta: str = Form(None),
     recommended_rationale: str = Form(None),
     planned_brew_id: int = Form(None),
+    curve: str = Form(None),
 ):
     rec_delta: Optional[float] = None
     if recommended_delta and recommended_delta.strip():
@@ -929,7 +1028,7 @@ def create_brew(
         _owned(session, user, models.BeanBag, bag_id)
         if planned_brew_id:
             _owned(session, user, models.PlannedBrew, planned_brew_id)
-        crud.create_brew(
+        new_brew = crud.create_brew(
             session,
             recipe_id=recipe_id,
             bag_id=bag_id,
@@ -939,6 +1038,9 @@ def create_brew(
             recommended_delta=rec_delta,
             recommended_rationale=recommended_rationale or None,
         )
+        samples = crud.parse_curve(curve)  # brew mode's scale readings, if any
+        if samples:
+            crud.save_curve(session, new_brew.id, samples)  # type: ignore[arg-type]
         if planned_brew_id:
             crud.delete_plan(session, planned_brew_id)
     return RedirectResponse(url="/", status_code=303)

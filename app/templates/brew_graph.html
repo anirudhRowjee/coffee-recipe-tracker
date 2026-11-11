@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="grid">
+    <section class="card brew-graphs" style="{{ recipe.bean|bean_theme }}" id="brew-graph-page" data-graph="{{ graph }}">
+        <p class="brew-back"><a href="/">← Back</a></p>
+        <h2>{{ title }}</h2>
+        <p class="muted">{{ brew.brewed_at|ist('%-d %b %Y, %H:%M') }}{% if brew.rating %} · <span aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
+            · {{ '%g'|format(recipe.dose_g) }} g · {{ '%g'|format(recipe.water_ml) }} ml · {{ '%g'|format(recipe.temp_c) }} °C · grind {{ recipe.grind_size }}</p>
+        {% if brew.notes %}<p class="brew-notes">{{ brew.notes }}</p>{% endif %}
+
+        {% if others %}
+        <form method="get" class="graph-compare">
+            <label for="compare">Compare with</label>
+            <select name="compare" id="compare" onchange="this.form.submit()">
+                <option value="0"{% if not compare_brew %} selected{% endif %}>— nothing —</option>
+                {% for other, label in others %}
+                <option value="{{ other.id }}"{% if compare_brew and compare_brew.id == other.id %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit" class="btn-secondary">Show</button></noscript>
+        </form>
+        {% endif %}
+
+        {% include 'partials/brew_graph_body.html' %}
+        <div class="share-actions">
+            <button type="button" class="btn-secondary" id="brew-graph-png">Save as image</button>
+            <a class="btn-secondary" href="/brews/{{ brew.id }}/curve.csv">Download CSV</a>
+        </div>
+    </section>
+</div>
+<script src="/static/brew_graphs.js"></script>
+{% endblock %}

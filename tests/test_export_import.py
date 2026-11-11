@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DB = Path(os.environ.get("COFFEE_REFERENCE_DB", ROOT / "data" / "coffee.db")).expanduser()
 LEGACY_SNAPSHOT = ROOT / "export"
 
-TABLES = ["user", "bean", "beanimage", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "plannedbrew", "delta"]
+TABLES = ["user", "bean", "beanimage", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "brewcurve", "plannedbrew", "delta"]
 
 
 def _load_script(name: str):

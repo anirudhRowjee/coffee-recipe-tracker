@@ -149,13 +149,18 @@
         y += Math.ceil(card.params.length / cols) * (tileH + gap) + 26;
 
         var footerY = H - BORDER - PAD + 12;
+        var stepsBottom = footerY - 34;
+        if (card.curve) {  // only when asked for (?curve=1): the weight through one brew
+            stepsBottom -= CURVE_H + 20;
+            drawCurve(X, CW, stepsBottom + 20);
+        }
         if (card.steps.length) {
             font('normal', 38, SERIF);
             ctx.fillStyle = INK;
             y += 38;
             ctx.fillText('Method', X, y);
             y += 22;
-            drawSteps(X, CW, y, footerY - 34);
+            drawSteps(X, CW, y, stepsBottom);
         }
 
         ctx.strokeStyle = '#e3d5c3';
@@ -170,6 +175,38 @@
         ctx.textAlign = 'right';
         ctx.fillText(card.date, X + CW, footerY + 8);
         ctx.textAlign = 'left';
+    }
+
+    var CURVE_H = 200;
+    function drawCurve(X, CW, top) {
+        var t = card.curve.t, g = card.curve.g, end = t[t.length - 1] || 1;
+        var max = Math.max.apply(null, g.concat([1]));
+        var plotTop = top + 44, plotH = CURVE_H - 56, plotW = CW - 120;
+        font('normal', 24, SANS);
+        ctx.fillStyle = LABEL;
+        ctx.fillText('Weight through a brew', X, top + 26);
+        ctx.strokeStyle = '#e3d5c3';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(X, plotTop + plotH);
+        ctx.lineTo(X + plotW, plotTop + plotH);
+        ctx.stroke();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 5;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        t.forEach(function (s, i) {
+            var px = X + s / end * plotW, py = plotTop + plotH - Math.max(0, g[i]) / max * plotH;
+            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+        });
+        ctx.stroke();
+        var last = g[g.length - 1], secs = Math.round(end);
+        font('bold', 36, SANS);
+        ctx.fillStyle = VALUE;
+        ctx.fillText(Math.round(last) + ' g', X + plotW + 20, plotTop + plotH - Math.max(0, last) / max * plotH + 12);
+        font('normal', 24, SANS);
+        ctx.fillStyle = LABEL;
+        ctx.fillText(Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2), X + plotW + 20, plotTop + plotH);
     }
 
     // The method, at the largest size that fits; any steps that still don't are counted

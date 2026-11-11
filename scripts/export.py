@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta
 from app import crud
 
 
@@ -108,6 +108,13 @@ def export_all(engine: Engine, out: Path) -> None:
                 bean_name = b.recipe.bean.name if b.recipe and b.recipe.bean else ""
                 w.writerow([b.id, b.recipe_id, bean_name, b.bag_id, b.brewed_at,
                             b.notes, b.rating, b.recommended_param, b.recommended_delta, b.recommended_rationale])
+
+        # Scale curves (brew mode's readings, JSON as stored)
+        with open(out / "brew_curves.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["brew_id", "samples"])
+            for c in session.exec(select(BrewCurve).order_by(BrewCurve.brew_id)).all():
+                w.writerow([c.brew_id, c.samples])
 
         # Planned (scheduled) brews
         with open(out / "planned_brews.csv", "w", newline="") as f:

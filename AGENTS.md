@@ -62,6 +62,9 @@ BeanBag
 ├── bean: Bean
 └── brews: List[Brew]         ← quantity tracked via brews, not directly
 
+BrewCurve                     ← brew mode's scale readings, one per brew (brew_id is the key)
+└── samples: str              ← JSON {"t","g","f"}; no relationship from Brew, so loading brews never loads it
+
 Brewer                        (user_id → User)
 └── recipes: List[Recipe]
 
@@ -194,7 +197,9 @@ Brew mode can connect a Bookoo Themis (Mini or Ultra; the protocol was tried on 
 - **Reaching a weight ticks the step off; the clock still moves on.** Once the reading is within 2 g of the target while the timer runs, the step gets `data-reached` (a ✓). It stays ticked if the weight dips, and Reset clears it. Never advance a step by weight: the method's times are part of the recipe. Use an attribute, not a class, since the timer script rewrites every step's `className` four times a second.
 - **Coupling with the timer:** the scale's started event clicks Start while the clock is still at Start (never Resume) and its stopped event clicks Stop while running; Start sends tare-and-start (Bookoo's recommended command; it also starts a ready automatic brew), Resume start, Stop stop, Reset reset (`scale.js` loads before the timer script, so its click listener sees the label that was pressed, and a start that came from the scale isn't echoed back); and `stop()` appends `window.brewScaleGrams()` to the "Brewed m:ss" line.
 - **The scale's own timer drives the app's too.** Every weight packet carries the scale's timer (ms). When it starts counting (its button, or its auto-start) while the clock shows Start, the app starts; when it stops ticking for 1.5 s, the app stops, but only if the scale's timer ran during this run of the app's, since the scale ignores a start that would resume a stopped timer. A timer already running at connect is not a start. Presses that come from the scale go through `press()` so they aren't sent back.
-- **Graphs after the brew** (`static/brew_graphs.js`): while the timer runs, `scale.js` records `[brew seconds, grams, g/s]` from every packet (its own clock, paused with the timer), and on Stop draws weight and flow as two SVG charts on one time axis (never one chart with two y-scales), the step targets dashed on the weight chart, a summary line, and a crosshair readout on hover/touch. Reset hides them. Nothing is saved; storing curves with the brew would need a table and export/import changes.
+- **Graphs after the brew** (`static/brew_graphs.js`): while the timer runs, `scale.js` records `[brew seconds, grams, g/s]` from every packet (its own clock, paused with the timer), and on Stop draws weight and flow as two SVG charts on one time axis (never one chart with two y-scales), the step targets dashed on the weight chart, a summary line, and a crosshair readout on hover/touch. Reset hides them. The same file draws a logged brew's graph page and saves either as a PNG on a canvas (charts serialised with their CSS written in, since a standalone SVG has no stylesheet).
+- **Curves are saved with the brew** (`BrewCurve`, one row per brew, JSON `{"t","g","f"}` at ~2 readings/s, ~5-10 KB for a 4-minute brew). Stopping the timer fills the log form's hidden `curve` field; `/brews` stores it through `crud.parse_curve`, which validates and re-encodes it and returns None for anything malformed: a bad curve is dropped, the brew is still logged, so a bug never costs someone their tasting notes. Brews are deleted only through `crud._delete_brew`, which removes the curve too. `/brews/{id}/graph` (owned via the brew's bag) compares with the previous brew of the same named recipe by default (`?compare=<id>`, `0` for none; brews of other named recipes are a 404), labelling the other brew with what differed from this version; `/brews/{id}/curve.csv` is the raw readings. History rows link "Graph" when a curve exists (`curve_ids`).
+- **Curves are private brew data.** The Markdown export never has them. The share image gets one only with `?curve=1` (a link on the share page), only the weight over time (no flow, no date), and only from a brew of the current version, since an older version's curve isn't this recipe.
 - Static files have no `?v=`, so after changing `scale.js` reload hard (Cmd+Shift+R) or the browser may keep the old one.
 
 ---
@@ -240,7 +245,8 @@ Brew mode can connect a Bookoo Themis (Mini or Ultra; the protocol was tried on 
 | `app/templates/browse.html` | Bean overview with bag inventory, collapsible history, and "Schedule next brew" form. |
 | `app/static/brew_animation.js` | Draws brew mode's animation from the plan in `data-animation`, and the on/off checkbox. Its CSS is at the end of `styles.css`, with every selector under `.brew-scene` and keyframes prefixed `ba-`. |
 | `app/static/scale.js` | Brew mode's Bookoo scale: connect, live weight against the step's `data-grams`, tare, auto-start. See "Bookoo scale". |
-| `app/static/brew_graphs.js` | Weight and flow graphs after a brew with the scale, from readings `scale.js` hands over. |
+| `app/static/brew_graphs.js` | Weight and flow graphs: after a brew in brew mode, and on a logged brew's graph page (with comparison); PNG export. |
+| `app/templates/brew_graph.html` | A logged brew's graph page (`/brews/{id}/graph`): compare picker, PNG and CSV. Slots come from `partials/brew_graph_body.html`. |
 | `app/static/share_image.js` | Draws the "Share as image" card on a canvas from `data-card` and hands it to the share sheet. |
 | `app/static/styles.css` | All styles. No external CSS framework. |
 | `scripts/export.py` | Exports every table (incl. users, named recipes, planned brews, owner `user_id`s) to CSV. Brings the DB up to the current schema first. Default `export/`, or pass a directory. `export_all(engine, out_dir)` is importable. |
@@ -259,6 +265,7 @@ Brew mode can connect a Bookoo Themis (Mini or Ultra; the protocol was tried on 
 | `tests/test_accounts.py` | Sign-in, passwords, admin tools, one user attacking another's data on every route, and sign-in required everywhere. |
 | `tests/test_brew_animation.py` | What each step is read as, brewer drawings, the water/valve/cup plan, real prod methods, and free text getting no animation. The drawing itself is checked by hand. |
 | `tests/test_scale.py` | What brew mode gives the scale script: step targets (incl. inline grams), hidden controls, the script. The Bluetooth side is checked by hand with a real scale. |
+| `tests/test_brew_curves.py` | Saving curves from the log form, validation (a bad curve never loses the brew), graph page and comparison, CSV, history links, the share image's opt-in curve, delete cascades, export/import. |
 | `tests/test_share_image.py` | The share image's data: every parameter, method steps, colours, and no private fields. The drawing is checked by hand. |
 | `tests/test_savings.py` | Lifetime savings on Manage: brews × ₹300 (`main.CAFE_CUP_PRICE_INR`), Indian digit grouping (`main.inr`), only your own brews. |
 | `tests/test_streaks.py` | Brewing streaks: runs of days, a streak surviving until today ends, India-time day boundaries, this month, the card. |

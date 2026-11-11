@@ -5,6 +5,11 @@
     <section class="card">
         <h2>Share as image</h2>
         <p class="muted">{{ title }}: sized for an Instagram post (4:5). No tasting notes or ratings are on it.</p>
+        {% if has_curve %}
+        {# off unless asked for: the curve is from one of your brews, not the recipe #}
+        <p class="share-links">{% if with_curve %}<a href="/lines/{{ line.id }}/share-image">Remove the weight curve</a>
+            {% else %}<a href="/lines/{{ line.id }}/share-image?curve=1">Add the weight curve of my last brew</a>{% endif %}</p>
+        {% endif %}
         <div id="share-card" data-card="{{ card }}">
             <p class="muted" id="share-status">Drawing the image…</p>
             <img class="share-preview" id="share-preview" alt="Recipe card for {{ title }}" hidden />
