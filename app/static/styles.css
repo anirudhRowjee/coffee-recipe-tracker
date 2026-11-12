@@ -1864,3 +1864,9 @@ a[data-back], .back-to-list a { color: #6b3d2e; text-decoration: none; font-weig
 p:has(> a[data-back]), .back-to-list { margin: -6px 0 0; }
 p:has(> a[data-back]) + h2, p:has(> a[data-back]) + .saved-banner + h2, .back-to-list + .recipe-head h2 { margin-top: 2px; }
 .change-main h2, .versions-layout h2, .edit-cup h2 { margin-bottom: 4px; }
+button.coffee-card { padding: 0; text-align: left; font: inherit; min-height: 150px; width: 100%; }
+.coffee-recipes h3 { margin: 4px 0 0; }
+.coffee-recipes .muted { margin: 2px 0 8px; }
+.link-back { width: auto; min-height: 36px; padding: 0; background: none; border: 0; color: #6b3d2e; font-weight: 600; font-size: 0.9rem; }
+.action-list > button { cursor: pointer; }
+dialog.sheet .sheet-close { margin-left: auto; }

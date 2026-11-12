@@ -88,3 +88,14 @@ def test_copying_onto_another_grinder_asks_for_the_grind(app):
     post(app, "/lines/1/copy", {"bean_id": bean, "brewer_id": 1, "grinder_id": 2, "bag_id": bag}, status=400)
     post(app, "/lines/1/copy", {"bean_id": bean, "brewer_id": 1, "grinder_id": 2, "bag_id": bag, "grind_size": "20"})
     assert app.scalar(f"select grind_size from recipe where bean_id = {bean}") == "20"
+
+
+def test_another_coffee_lets_you_pick_the_recipe_and_so_the_gear(app):
+    post(app, "/recipes", BASELINE)                                         # brewer 1, grinder 1
+    post(app, "/recipes", {**BASELINE, "grinder_id": 2})                    # same coffee, grinder 2
+    page = home(app, pick=1)
+    assert 'data-coffee="1"' in page  # the card opens the coffee's recipes, not a fixed gear
+    panel = page[page.index('class="coffee-recipes" data-for="1"'):]
+    assert "/lines/1/brew?bag_id=1" in panel and "/lines/2/brew?bag_id=1" in panel
+    assert "/?bag_id=1&amp;gear=pick" in panel
+    assert "What are you brewing it with?" in home(app, bag_id=1, gear="pick")

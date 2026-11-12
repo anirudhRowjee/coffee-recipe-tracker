@@ -1,0 +1,22 @@
+{# Step two of "Another coffee", inside the coffee sheet: the coffee's recipes, each on its own
+   brewer and grinder (picking one picks the gear), or other gear to start something new. #}
+{% for bag, remaining, last in coffees %}
+{% set choices = coffee_recipes.get(bag.bean_id) %}
+{% if choices %}
+<div class="coffee-recipes" data-for="{{ bag.bean_id }}" hidden>
+    <button type="button" class="link-back" data-coffee-back>‹ All coffees</button>
+    <h3>{{ bag.bean.name }}</h3>
+    <p class="muted">Brew it with</p>
+    <nav class="action-list">
+        {% for c in choices %}
+        <a href="/lines/{{ c.line_id }}/brew?bag_id={{ bag.id }}">
+            <span class="row-text"><b>{{ c.brewer }} · {{ c.grinder }}</b>
+                <span class="muted">{% if c.name %}{{ c.name }} · {% endif %}{{ c.summary }} · version {{ c.version }}</span></span>
+            <span class="chev">▶</span>
+        </a>
+        {% endfor %}
+        <a href="/?bag_id={{ bag.id }}&amp;gear=pick"><span class="row-text"><b>Another brewer or grinder</b><span class="muted">start a recipe for other gear</span></span><span class="chev">›</span></a>
+    </nav>
+</div>
+{% endif %}
+{% endfor %}

@@ -1,20 +1,21 @@
 {# Coffees with coffee left, as big cards; most recently brewed first. Expects coffees: (bag, grams
-   left, last brewed), and coffee_lines (bean id → its last-used recipe): a card for a coffee with
-   one goes straight to brew mode; one without opens it on Brew to pick gear or a recipe.
-   skip_bag: leave that bag out (the one already up next). #}
+   left, last brewed) and coffee_recipes (bean id → its recipes). A coffee with recipes opens the
+   coffee sheet on its recipes, so the gear follows the recipe you pick; one without goes to Brew
+   to choose a brewer and grinder. #}
 <div class="coffee-cards">
-    {% for bag, remaining, last in coffees if not (skip_bag is defined and skip_bag and bag.id == skip_bag) %}
-    {% set line_id = coffee_lines.get(bag.bean_id) if coffee_lines is defined else none %}
-    <a class="coffee-card" href="{% if line_id %}/lines/{{ line_id }}/brew?bag_id={{ bag.id }}{% else %}/?bag_id={{ bag.id }}{% endif %}" style="{{ bag.bean|bean_theme }}"
-        data-search="{{ (bag.bean.name ~ ' ' ~ (bag.bean.flavor_notes or ''))|lower }}">
+    {% for bag, remaining, last in coffees %}
+    {% set has_recipes = coffee_recipes is defined and coffee_recipes.get(bag.bean_id) %}
+    <{{ 'button type="button"' if has_recipes else 'a' }} class="coffee-card"
+        {% if has_recipes %}data-coffee="{{ bag.bean_id }}"{% else %}href="/?bag_id={{ bag.id }}"{% endif %}
+        style="{{ bag.bean|bean_theme }}" data-search="{{ (bag.bean.name ~ ' ' ~ (bag.bean.flavor_notes or ''))|lower }}">
         {% if bag.bean.image_version %}
         <img src="/beans/{{ bag.bean_id }}/image?v={{ bag.bean.image_version }}" alt="" loading="lazy" />
         {% else %}<span class="coffee-card-swatch"></span>{% endif %}
         <span class="coffee-card-text">
             <b>{{ bag.bean.name }}</b>
             <span>{{ remaining|int }} g left{% if remaining <= bag.low_threshold_g %} · low{% endif %}{% if bag.is_frozen %} · frozen{% endif %}</span>
-            <span class="muted">{% if line_id %}▶ brew{% else %}set up{% endif %}{% if last %} · {{ last|ist('%b %d') }}{% endif %}</span>
+            <span class="muted">{% if has_recipes %}{{ has_recipes|length }} recipe{{ 's' if has_recipes|length != 1 }}{% else %}no recipe yet{% endif %}{% if last %} · {{ last|ist('%b %d') }}{% endif %}</span>
         </span>
-    </a>
+    </{{ 'button' if has_recipes else 'a' }}>
     {% endfor %}
 </div>

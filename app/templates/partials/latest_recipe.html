@@ -108,12 +108,12 @@
         <div class="side-head"><h3>Brew another coffee</h3><button type="button" class="chip small" data-sheet="coffee-sheet">All</button></div>
         <nav class="action-list other-coffees">
             {% for b, rem, last in coffees if b.id != bag_id %}{% if loop.index <= 4 %}
-            {% set other_line = coffee_lines.get(b.bean_id) %}
-            <a href="{% if other_line %}/lines/{{ other_line }}/brew?bag_id={{ b.id }}{% else %}/?bag_id={{ b.id }}{% endif %}" style="{{ b.bean|bean_theme }}">
+            {% set has_recipes = coffee_recipes.get(b.bean_id) %}
+            <{{ 'button type="button"' if has_recipes else 'a' }} {% if has_recipes %}data-coffee="{{ b.bean_id }}"{% else %}href="/?bag_id={{ b.id }}"{% endif %} style="{{ b.bean|bean_theme }}">
                 {% if b.bean.image_version %}<img class="row-art" src="/beans/{{ b.bean_id }}/image?v={{ b.bean.image_version }}" alt="" loading="lazy" />{% else %}<span class="row-art"></span>{% endif %}
                 <span class="row-text"><b>{{ b.bean.name }}</b><span class="muted">{{ rem|int }} g left{% if last %} · {{ last|ist('%b %d') }}{% endif %}</span></span>
-                <span class="chev">{% if other_line %}▶{% else %}›{% endif %}</span>
-            </a>
+                <span class="chev">›</span>
+            </{{ 'button' if has_recipes else 'a' }}>
             {% endif %}{% endfor %}
         </nav>
     </section>

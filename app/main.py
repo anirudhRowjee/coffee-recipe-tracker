@@ -402,6 +402,23 @@ def _is_pre_ground(grinder: Optional[models.Grinder]) -> bool:
     return "pre-ground" in name or "preground" in name or name in ("no grinder", "none")
 
 
+def _recipe_choices(session: Session, bean_id: int) -> list:
+    """A coffee's named recipes as choices for "Another coffee", most recently used first:
+    which gear each is on, how many versions, so the gear follows the recipe picked."""
+    lines = crud.get_lines_for_bean(session, bean_id)
+    out = []
+    for ln in lines:
+        brewer, grinder = session.get(models.Brewer, ln.brewer_id), session.get(models.Grinder, ln.grinder_id)
+        latest = crud.get_latest_recipe(session, ln.id)  # type: ignore[arg-type]
+        if not latest:
+            continue
+        out.append({"line_id": ln.id, "name": None if ln.name == "Default" else ln.name,
+                    "brewer": brewer.name if brewer else "", "grinder": grinder.name if grinder else "",
+                    "summary": f"{words.num(latest.dose_g)} g · {words.num(latest.water_ml)} ml · {words.num(latest.temp_c)} °C · grind {latest.grind_size}",
+                    "version": crud.version_number(session, latest)})
+    return out
+
+
 def _copy_sources(session: Session, user_id: Optional[int]) -> list:
     """Every named recipe of yours, newest first, as something to copy onto a coffee and gear that has none."""
     if not user_id:
@@ -504,7 +521,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[str] = None,
-          grinder_id: Optional[str] = None, line_id: Optional[str] = None, pick: int = 0):
+          grinder_id: Optional[str] = None, line_id: Optional[str] = None, pick: int = 0, gear: str = ""):
     """Brew. "Up next" is the brew you planned; otherwise the coffee you brewed most
     recently (with the gear and recipe you used); otherwise, or with ?pick=1, a choice
     of coffees. ?bag_id= (and optionally brewer, grinder, recipe) picks one."""
@@ -530,7 +547,7 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
         combo = None
         if ints["bag"]:
             bag = _owned(session, user, models.BeanBag, ints["bag"])
-            line = crud.gear_for_bean(session, bag.bean_id)
+            line = None if gear == "pick" else crud.gear_for_bean(session, bag.bean_id)  # gear=pick: choose it afresh
             brewer = ints["brewer"] or (line.brewer_id if line else None)
             grinder = ints["grinder"] or (line.grinder_id if line else None)
             if brewer:
@@ -546,8 +563,8 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
             if line:
                 combo = (bag.id, line.brewer_id, line.grinder_id, line.id)
         context["combo"] = combo
-        # one tap from Brew to brewing another coffee: its last-used recipe, if it has one
-        context["coffee_lines"] = {b.bean_id: ln.id for b, _, _ in coffees if (ln := crud.gear_for_bean(session, b.bean_id))}
+        # Another coffee: pick the coffee, then one of its recipes (each on its own gear)
+        context["coffee_recipes"] = {b.bean_id: _recipe_choices(session, b.bean_id) for b, _, _ in coffees}
         if combo and combo[1] and combo[2]:
             context.update(_latest_recipe_context(session, combo[0], combo[1], combo[2], user.id, combo[3]))  # type: ignore[arg-type]
             if context.get("bag"):

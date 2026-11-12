@@ -53,14 +53,44 @@
 <dialog class="sheet" id="coffee-sheet" aria-label="Pick a coffee">
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>Pick a coffee</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
-    {% if coffees|length > 5 %}<input type="search" class="coffee-search" placeholder="Search coffees or flavours" aria-label="Search coffees" />{% endif %}
-    {% include 'partials/coffee_cards.html' %}
-    <button type="button" class="btn-secondary add-coffee-btn" data-sheet="add-coffee-sheet">+ Add a coffee</button>
+    <div class="coffee-step">
+        {% if coffees|length > 5 %}<input type="search" class="coffee-search" placeholder="Search coffees or flavours" aria-label="Search coffees" />{% endif %}
+        {% include 'partials/coffee_cards.html' %}
+        <button type="button" class="btn-secondary add-coffee-btn" data-sheet="add-coffee-sheet">+ Add a coffee</button>
+    </div>
+    {% include 'partials/coffee_recipe_panels.html' %}
 </dialog>
 
 {% with add_next='/' %}{% include 'partials/add_coffee_sheet.html' %}{% endwith %}
 {% with gear_next='/' %}{% include 'partials/add_gear_sheets.html' %}{% endwith %}
 <script>
+    // Another coffee, step two: a coffee with recipes shows them (in the coffee sheet), so the
+    // brewer and grinder come from the recipe you pick instead of whatever was used last
+    document.addEventListener('click', function (e) {
+        var card = e.target.closest('[data-coffee]');
+        var back = e.target.closest('[data-coffee-back]');
+        var sheet = document.getElementById('coffee-sheet');
+        if (!sheet || !(card || back)) return;
+        e.preventDefault();
+        sheet.querySelector('.coffee-step').hidden = !!card;
+        sheet.querySelectorAll('.coffee-recipes').forEach(function (p) {
+            p.hidden = !card || p.getAttribute('data-for') !== card.getAttribute('data-coffee');
+        });
+        var head = sheet.querySelector('.sheet-head h3');
+        if (head) head.hidden = !!card;
+        if (card && !sheet.open) sheet.showModal();
+    });
+    // opening the sheet again starts from the coffees
+    document.addEventListener('click', function (e) {
+        var opener = e.target.closest('[data-sheet="coffee-sheet"]');
+        var sheet = document.getElementById('coffee-sheet');
+        if (!opener || !sheet) return;
+        sheet.querySelector('.coffee-step').hidden = false;
+        sheet.querySelectorAll('.coffee-recipes').forEach(function (p) { p.hidden = true; });
+        var head = sheet.querySelector('.sheet-head h3');
+        if (head) head.hidden = false;
+    }, true);
+
     // Search the coffee sheet by name or flavour notes
     document.addEventListener('input', function (e) {
         if (!e.target.classList.contains('coffee-search')) return;
