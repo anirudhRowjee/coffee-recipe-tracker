@@ -546,6 +546,8 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
             if line:
                 combo = (bag.id, line.brewer_id, line.grinder_id, line.id)
         context["combo"] = combo
+        # one tap from Brew to brewing another coffee: its last-used recipe, if it has one
+        context["coffee_lines"] = {b.bean_id: ln.id for b, _, _ in coffees if (ln := crud.gear_for_bean(session, b.bean_id))}
         if combo and combo[1] and combo[2]:
             context.update(_latest_recipe_context(session, combo[0], combo[1], combo[2], user.id, combo[3]))  # type: ignore[arg-type]
             if context.get("bag"):
@@ -671,6 +673,11 @@ def browse(request: Request, bean: Optional[int] = None):
                                   "rating": round(sum(rated) / len(rated), 1) if rated else None,
                                   "brewer": session.get(models.Brewer, line.brewer_id), "grinder": session.get(models.Grinder, line.grinder_id),
                                   "has_rec": crud.line_recommendation(session, line.id) is not None})  # type: ignore[arg-type]
+            # two recipes of one coffee can share a name on different gear ("Default" on the Kalita
+            # and on the Switch): say which gear, so they don't look like duplicates
+            names = [r["line"].name for r in line_rows]
+            for r in line_rows:
+                r["label"] = f'{r["line"].name} · {r["brewer"].name}' if names.count(r["line"].name) > 1 else r["line"].name
             brews = crud.get_brews_for_bean(session, sb.id)[:20]  # type: ignore[arg-type]
             detail = {"lines": line_rows, "brews": brews, "bag_to_use": crud.pick_bag(session, sb.id),  # type: ignore[arg-type]
                       "curve_ids": crud.brews_with_curves(session, [b.id for b in brews])}  # type: ignore[misc]
@@ -984,16 +991,22 @@ def _plan_suggestion(param: Optional[str], delta: Optional[str], rationale: Opti
 
 @app.post("/lines/{line_id}/copy")
 def copy_line(request: Request, line_id: int, bean_id: int = Form(...), brewer_id: int = Form(...),
-              grinder_id: int = Form(...), bag_id: int = Form(None)):
+              grinder_id: int = Form(...), bag_id: int = Form(None), grind_size: str = Form(None)):
     """Copy a named recipe's current version onto another coffee and gear, as its version 1."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
         source = _owned(session, user, models.RecipeLine, line_id)
         _owned(session, user, models.Bean, bean_id)
         _owned(session, user, models.Brewer, brewer_id)
-        _owned(session, user, models.Grinder, grinder_id)
+        grinder = _owned(session, user, models.Grinder, grinder_id)
         bag = _owned(session, user, models.BeanBag, bag_id) if bag_id else crud.pick_bag(session, bean_id)
-        new_line = crud.copy_line(session, source, bean_id, brewer_id, grinder_id)
+        grind = (grind_size or "").strip() or None
+        if grinder_id != source.grinder_id and not grind:
+            # a grind setting means nothing on another grinder
+            if not _is_pre_ground(grinder):
+                raise HTTPException(status_code=400, detail=f"Set the grind for the {grinder.name}: the number from another grinder won't match.")
+            grind = "pre-ground"
+        new_line = crud.copy_line(session, source, bean_id, brewer_id, grinder_id, grind)
         target = f"/?bag_id={bag.id}&brewer_id={brewer_id}&grinder_id={grinder_id}&line_id={new_line.id}" if bag else "/"
     return RedirectResponse(url=target, status_code=303)
 

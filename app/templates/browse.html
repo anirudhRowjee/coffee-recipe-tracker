@@ -68,7 +68,7 @@
     <nav class="action-list">
         {% for row in lines %}
         <a href="/lines/{{ row.line.id }}/versions{% if bag_to_use %}?bag_id={{ bag_to_use.id }}{% endif %}">
-            <span class="row-text"><b>{{ row.line.name }}</b>
+            <span class="row-text"><b>{{ row.label }}</b>
                 <span class="muted">version {{ row.versions }} · {{ row.cups }} cup{{ 's' if row.cups != 1 }}{% if row.rating %} · ★ {{ row.rating }}{% endif %} · {{ row.brewer.name }} + {{ row.grinder.name }}</span>
                 {% if row.latest %}<span class="muted recipe-numbers">{{ row.latest.dose_g|num }} g · {{ row.latest.water_ml|num }} ml · {{ row.latest.temp_c|num }} °C · grind {{ row.latest.grind_size }}</span>{% endif %}</span>
             <span class="chev">›</span>
@@ -131,6 +131,7 @@
         <input type="hidden" name="bean_id" value="{{ bean.id }}" />
         {% with size_name='initial_quantity_g' %}{% include 'partials/bag_size_field.html' %}{% endwith %}
         <label>Roast date <span class="muted">(optional)</span> {{ tip('roast_date') }} <input name="roast_date" type="date" /></label>
+        <label class="check-row"><input name="is_frozen" type="checkbox" value="true" /> It's going in the freezer {{ tip('frozen') }}</label>
         <button type="submit">Add bag</button>
     </form>
 </dialog>
@@ -176,7 +177,7 @@
         <label>Recipe
             <select name="line_id" required>
                 {% for row in lines %}
-                <option value="{{ row.line.id }}"{% if row.has_rec %} data-has-rec="1"{% endif %}>{{ row.line.name }} · {{ row.brewer.name }} · {{ row.grinder.name }}</option>
+                <option value="{{ row.line.id }}"{% if row.has_rec %} data-has-rec="1"{% endif %}>{{ row.label }}{% if row.label == row.line.name %} · {{ row.brewer.name }}{% endif %} · {{ row.grinder.name }}</option>
                 {% endfor %}
             </select>
         </label>

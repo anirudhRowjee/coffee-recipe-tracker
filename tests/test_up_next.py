@@ -15,7 +15,8 @@ def home(app, **params):
 def test_nothing_brewed_yet_asks_what_to_brew(app):
     post(app, "/recipes", BASELINE)
     page = home(app)
-    assert "What are we brewing?" in page and 'href="/?bag_id=1"' in page and "Start brewing" not in page
+    assert "What are we brewing?" in page and "Start brewing" not in page
+    assert 'href="/lines/1/brew?bag_id=1"' in page  # a coffee with a recipe: one tap to brew it
 
 
 def test_the_last_coffee_brewed_is_up_next(app):
@@ -72,6 +73,18 @@ def test_the_oldest_open_bag_is_used_first(app):
     post(app, "/recipes", BASELINE)
     post(app, "/bags", {"bean_id": 1, "initial_quantity_g": 250, "roast_date": "2020-01-01"})
     older = app.scalar("select max(id) from beanbag")
-    assert f'href="/?bag_id={older}"' in home(app)
+    assert f'href="/lines/1/brew?bag_id={older}"' in home(app)
     post(app, "/bags", {"bean_id": 1, "initial_quantity_g": 250, "roast_date": "2019-01-01", "is_frozen": "true"})
-    assert f'href="/?bag_id={older}"' in home(app)  # a frozen bag waits
+    assert f'href="/lines/1/brew?bag_id={older}"' in home(app)  # a frozen bag waits
+
+
+def test_copying_onto_another_grinder_asks_for_the_grind(app):
+    post(app, "/recipes", BASELINE)  # grinder 1
+    post(app, "/beans", {"name": "New one", "initial_quantity_g": "250"})
+    bean = app.scalar("select max(id) from bean")
+    bag = app.scalar("select max(id) from beanbag")
+    page = home(app, bag_id=bag, brewer_id=1, grinder_id=2)
+    assert "Grind on the" in page and "was 13 on another grinder" in page
+    post(app, "/lines/1/copy", {"bean_id": bean, "brewer_id": 1, "grinder_id": 2, "bag_id": bag}, status=400)
+    post(app, "/lines/1/copy", {"bean_id": bean, "brewer_id": 1, "grinder_id": 2, "bag_id": bag, "grind_size": "20"})
+    assert app.scalar(f"select grind_size from recipe where bean_id = {bean}") == "20"

@@ -57,4 +57,4 @@ def test_two_changes_are_refused_in_words(app):
 def test_the_card_links_to_it_with_the_next_time_note(app):
     post(app, "/recipes", BASELINE)
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "recommended_param": "temp_c", "recommended_delta": "2"})
-    assert "Try a change · Temp +2 °C" in latest(app)
+    assert 'Try a change <span class="muted">Temp +2 °C</span>' in latest(app)

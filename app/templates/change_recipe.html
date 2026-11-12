@@ -26,7 +26,7 @@
 
     <div class="change-layout">
         <section class="card change-main">
-            <p class="muted"><a href="/">‹ Back</a></p>
+            <p class="muted"><a href="/" data-back>‹ Back</a></p>
             {% if just_logged %}<p class="saved-banner" role="status"><span>✓ Cup saved to version {{ version }}.</span></p>{% endif %}
             <h2>{% if start_with_method %}Change the steps{% else %}Try a change{% endif %}</h2>
             <p class="muted">{{ latest.bean.name }}{% if line.name != 'Default' %} · {{ line.name }}{% endif %} · from version {{ version }}</p>

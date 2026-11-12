@@ -240,7 +240,8 @@ def gear_for_bean(session: Session, bean_id: int) -> Optional[models.RecipeLine]
     return lines[0] if lines else None
 
 
-def copy_line(session: Session, source: models.RecipeLine, bean_id: int, brewer_id: int, grinder_id: int) -> models.RecipeLine:
+def copy_line(session: Session, source: models.RecipeLine, bean_id: int, brewer_id: int, grinder_id: int,
+              grind_size: Optional[str] = None) -> models.RecipeLine:
     """Start a new named recipe for another coffee or gear from an existing one's current
     version (version 1 of the copy). Keeps the name if it's free there."""
     latest = get_latest_recipe(session, source.id)  # type: ignore[arg-type]
@@ -254,7 +255,7 @@ def copy_line(session: Session, source: models.RecipeLine, bean_id: int, brewer_
     line = create_line(session, bean_id, brewer_id, grinder_id, name)
     create_recipe(session, bean_id=bean_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line.id,  # type: ignore[arg-type]
                   dose_g=latest.dose_g, water_ml=latest.water_ml, temp_c=latest.temp_c,  # type: ignore[union-attr]
-                  grind_size=latest.grind_size, recipe_text=latest.recipe_text)  # type: ignore[union-attr]
+                  grind_size=grind_size or latest.grind_size, recipe_text=latest.recipe_text)  # type: ignore[union-attr]
     return line
 
 

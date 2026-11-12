@@ -24,10 +24,10 @@
         <div class="recipe-head-text">
             <p class="eyebrow">{% if is_current_plan %}📅 Planned{% else %}Up next{% endif %}</p>
             {% if bag %}<p class="recipe-bean-name">{{ bag.bean.name }}{% if show_line_name %} · {{ line.name }}{% endif %}</p>{% endif %}
+            <p class="recipe-meta">{% if brewer and grinder %}{{ brewer.name }} · {{ grinder.name }} · {% endif %}version {{ version }}{% if bean_bags|length > 1 and bag %} · {{ bag.roast_date.strftime('bag of %b %d') if bag.roast_date else 'bag #' ~ bag.id }}{% endif %}</p>
             <div class="chips recipe-chips">
-                <span class="chip">version {{ version }} {{ tip('version') }}</span>
-                {% if brewer and grinder %}<button type="button" class="chip" data-sheet="gear-sheet">{{ brewer.name }} · {{ grinder.name }} ▾</button>{% endif %}
-                {% if bean_bags|length > 1 and bag %}<button type="button" class="chip" data-sheet="gear-sheet">{{ bag.roast_date.strftime('Bag of %b %d') if bag.roast_date else 'Bag #' ~ bag.id }} ▾</button>{% endif %}
+                {% if brewer and grinder %}<button type="button" class="chip small" data-sheet="gear-sheet">Change gear</button>{% endif %}
+                <button type="button" class="chip small" data-sheet="coffee-sheet">Another coffee</button>
             </div>
         </div>
     </div>
@@ -54,10 +54,9 @@
         <div class="rtile"><span class="eyebrow">Water</span><b>{{ latest.water_ml|num }}<small> ml</small></b><i>{{ latest|ratio }}</i></div>
         <div class="rtile"><span class="eyebrow">Temp</span><b>{{ latest.temp_c|num }}<small> °C</small></b><i>kettle set to</i></div>
     </div>
-    <p class="tile-tips muted">{{ tip('grind', 'About grind') }} grind · {{ tip('ratio', 'About the ratio') }} ratio</p>
 
     {% if latest.recipe_text %}
-    <details class="method-block" open>
+    <details class="method-block" data-open-wide>
         <summary>Method · {{ latest.recipe_text|steps_summary }}</summary>
         <pre class="recipe-text">{{ latest.recipe_text }}</pre>
         {% if latest.recipe_text|needs_tidy %}
@@ -97,15 +96,30 @@
 </div>
 
 <nav class="action-list" aria-label="Recipe actions">
-    <a href="/lines/{{ line.id }}/change?{{ query }}">Try a change {% if rec %}· {{ change_label(rec.recommended_param, rec.recommended_delta) }}{% endif %}<span class="chev">›</span></a>
+    <a href="/lines/{{ line.id }}/change?{{ query }}">Try a change {% if rec %}<span class="muted">{{ change_label(rec.recommended_param, rec.recommended_delta) }}</span>{% endif %}<span class="chev">›</span></a>
     <a href="/lines/{{ line.id }}/versions?bag_id={{ bag_id }}">Versions and cups<span class="chev">›</span></a>
-    <button type="button" data-sheet="share-sheet">Share recipe<span class="chev">›</span></button>
-    {% if not is_current_plan %}<button type="button" data-sheet="plan-sheet">Make this Up next<span class="chev">›</span></button>{% endif %}
-    <button type="button" data-sheet="more-sheet">More<span class="muted">rename · copy · new · delete</span></button>
+    <button type="button" data-sheet="more-sheet">More<span class="muted">share · plan · rename · copy</span></button>
 </nav>
 </div>
 
 <aside class="up-next-side">
+    {% if coffees is defined and coffees|length > 1 %}
+    <section class="side-card">
+        <div class="side-head"><h3>Brew another coffee</h3><button type="button" class="chip small" data-sheet="coffee-sheet">All</button></div>
+        <nav class="action-list other-coffees">
+            {% for b, rem, last in coffees if b.id != bag_id %}{% if loop.index <= 4 %}
+            {% set other_line = coffee_lines.get(b.bean_id) %}
+            <a href="{% if other_line %}/lines/{{ other_line }}/brew?bag_id={{ b.id }}{% else %}/?bag_id={{ b.id }}{% endif %}" style="{{ b.bean|bean_theme }}">
+                {% if b.bean.image_version %}<img class="row-art" src="/beans/{{ b.bean_id }}/image?v={{ b.bean.image_version }}" alt="" loading="lazy" />{% else %}<span class="row-art"></span>{% endif %}
+                <span class="row-text"><b>{{ b.bean.name }}</b><span class="muted">{{ rem|int }} g left{% if last %} · {{ last|ist('%b %d') }}{% endif %}</span></span>
+                <span class="chev">{% if other_line %}▶{% else %}›{% endif %}</span>
+            </a>
+            {% endif %}{% endfor %}
+        </nav>
+    </section>
+    {% endif %}
+    {% if recent_brews or recent_deltas %}
+    <section class="side-card">
     {% if recent_brews %}
     <h3>Recent cups</h3>
     <div class="brew-log">
@@ -124,8 +138,6 @@
         </div>
         {% endfor %}
     </div>
-    {% else %}
-    <p class="muted">No cups of version {{ version }} yet.</p>
     {% endif %}
 
     {% if recent_deltas %}
@@ -135,6 +147,8 @@
         <li><strong>{{ delta.change_label }}</strong>{% if delta.rationale %} · <i>{{ delta.rationale }}</i>{% endif %} <span class="muted">{{ delta.created_at.strftime('%b %d') }}</span></li>
         {% endfor %}
     </ul>
+    {% endif %}
+    </section>
     {% endif %}
 </aside>
 </div>
@@ -181,6 +195,10 @@
 <dialog class="sheet" id="more-sheet" aria-label="More">
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>{{ line.name if line.name != 'Default' else 'This recipe' }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <nav class="action-list" style="margin-bottom:10px">
+        <button type="button" data-sheet="share-sheet">Share recipe<span class="chev">›</span></button>
+        {% if not is_current_plan %}<button type="button" data-sheet="plan-sheet">Make this Up next<span class="chev">›</span></button>{% endif %}
+    </nav>
     <details class="history-block">
         <summary class="history-summary">Rename</summary>
         <form method="post" action="/lines/{{ line.id }}/rename" class="stacked-form">
@@ -262,10 +280,15 @@
             <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
             <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
             <input type="hidden" name="bag_id" value="{{ bag_id }}" />
-            <button type="submit" class="copy-row">
+            <div class="copy-row">
                 <b>{{ src_bean.name }}{% if src_line.name != 'Default' %} · {{ src_line.name }}{% endif %}</b>
-                <span class="muted">{{ src_latest.dose_g|num }} g · {{ src_latest.water_ml|num }} ml · {{ src_latest.temp_c|num }} °C · grind {{ src_latest.grind_size }}</span>
-            </button>
+                <span class="muted">{{ src_latest.dose_g|num }} g · {{ src_latest.water_ml|num }} ml · {{ src_latest.temp_c|num }} °C{% if src_line.grinder_id == grinder_id %} · grind {{ src_latest.grind_size }}{% endif %}</span>
+                {% if src_line.grinder_id != grinder_id and not pre_ground %}
+                <label class="starter-grind">Grind on the {{ grinder.name if grinder else 'grinder' }} <span class="muted">(was {{ src_latest.grind_size }} on another grinder)</span>
+                    <input name="grind_size" required placeholder="your setting" data-label="Grind" /></label>
+                {% endif %}
+                <button type="submit" class="btn-inline">Copy this</button>
+            </div>
         </form>
         {% endfor %}
     </div>

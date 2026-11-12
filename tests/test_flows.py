@@ -108,7 +108,7 @@ def test_log_brew_stores_signed_recommendation_and_uses_dose(app):
 
     html = latest(app)
     assert 'data-rec="brew"' in html
-    assert "Try a change · Grind −1" in html
+    assert 'Try a change <span class="muted">Grind −1</span>' in html
     change = app.client.get("/lines/1/change", params={"bag_id": 1}).text
     assert 'data-rec-param="grind_size"' in change and 'data-rec-delta="-1.0"' in change  # starts Try a change from it
 

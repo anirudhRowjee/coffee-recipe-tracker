@@ -55,7 +55,7 @@
     <div class="sheet-head"><h3>Pick a coffee</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
     {% if coffees|length > 5 %}<input type="search" class="coffee-search" placeholder="Search coffees or flavours" aria-label="Search coffees" />{% endif %}
     {% include 'partials/coffee_cards.html' %}
-    <p class="muted" style="margin-top:12px"><a href="/browse">+ Add a coffee</a></p>
+    <button type="button" class="btn-secondary add-coffee-btn" data-sheet="add-coffee-sheet">+ Add a coffee</button>
 </dialog>
 
 {% with add_next='/' %}{% include 'partials/add_coffee_sheet.html' %}{% endwith %}

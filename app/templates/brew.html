@@ -14,7 +14,7 @@
 #}
 <section class="card brew-mode" id="brew-mode" style="{{ latest.bean|bean_theme }}">
     <div class="brew-top">
-        <a class="brew-back" href="/" aria-label="Back">←</a>
+        <a class="brew-back" href="/" aria-label="Back" data-back>←</a>
         <div class="brew-heading">
             <h2 class="brew-title">{{ title }}</h2>
             {% if older_version %}<p class="brew-older">Version {{ older_version[0] }}, once · the current version is {{ older_version[1] }}</p>{% endif %}

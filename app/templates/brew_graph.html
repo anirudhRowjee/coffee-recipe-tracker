@@ -4,7 +4,7 @@
 {% block content %}
 <div class="grid">
     <section class="card brew-graphs" style="{{ recipe.bean|bean_theme }}" id="brew-graph-page" data-graph="{{ graph }}">
-        <p class="brew-back"><a href="/">← Back</a></p>
+        <p class="brew-back"><a href="/" data-back>← Back</a></p>
         <h2>{{ title }} {{ tip('graph') }}</h2>
         <p class="muted">{{ brew.brewed_at|ist('%-d %b %Y, %H:%M') }}{% if brew.rating %} · <span aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
             · {{ '%g'|format(recipe.dose_g) }} g · {{ '%g'|format(recipe.water_ml) }} ml · {{ '%g'|format(recipe.temp_c) }} °C · grind {{ recipe.grind_size }}</p>

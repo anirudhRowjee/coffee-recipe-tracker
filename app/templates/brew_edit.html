@@ -3,7 +3,7 @@
 
 {% block content %}
 <section class="card edit-cup" style="{{ recipe.bean|bean_theme }}">
-    <p class="muted"><a href="/">‹ Back</a></p>
+    <p class="muted"><a href="/" data-back>‹ Back</a></p>
     <h2>Cup · {{ brew.brewed_at|ist('%b %d, %H:%M') }}</h2>
     <p class="muted">{{ recipe.bean.name }}{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %} · version {{ version }}
         · {{ recipe.dose_g|num }} g · {{ recipe.water_ml|num }} ml{% if has_curve %} · <a href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}</p>

@@ -13,7 +13,7 @@
 {% set labels = {'dose_g': 'Coffee', 'grind_size': 'Grind', 'water_ml': 'Water', 'temp_c': 'Temp'} %}
 <div class="versions-layout">
 <section class="card" style="{{ cur.bean|bean_theme }}">
-    <p class="muted"><a href="/">‹ Brew</a></p>
+    <p class="muted"><a href="/" data-back>‹ Back</a></p>
     <h2>{{ cur.bean.name }}{% if line.name != 'Default' %} · {{ line.name }}{% endif %}</h2>
     <p class="muted">{{ cur.brewer.name }} · {{ cur.grinder.name }} · {{ rows|length }} version{{ 's' if rows|length != 1 }} {{ tip('version') }}</p>
 
