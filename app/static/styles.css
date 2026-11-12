@@ -1911,3 +1911,23 @@ nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; bo
 .other-coffees > a, .other-coffees > button { min-height: 64px; }
 .side-card { padding-bottom: 16px; }
 .action-list .row-text .muted, .action-list .row-text span { margin-left: 0; }
+
+/* ==== The 4:6 builder ==== */
+.four-six .seg span small { display: block; font-size: 0.72rem; font-weight: 500; opacity: 0.8; }
+.four-six .eyebrow { margin: 14px 0 4px; }
+.ratio-note { text-align: center; }
+.fs-bar { display: flex; height: 52px; gap: 2px; border-radius: 10px; overflow: hidden; background: #e0c9b0; margin: 6px 0 4px; }
+.fs-bar span { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 0; font-size: 0.85rem; }
+.fs-bar .taste { background: #c8892d; }
+.fs-bar .body { background: #6b3d2e; }
+.fs-phases { display: flex; gap: 2px; font-size: 0.78rem; color: var(--text-2); }
+.fs-phases span { border-top: 3px solid; padding-top: 3px; text-align: center; }
+.fs-phases .p-taste { border-color: #c8892d; flex: 40 0 0; }
+.fs-phases .p-body { border-color: #6b3d2e; flex: 60 0 0; }
+.steps-list { list-style: none; padding: 0; margin: 12px 0; }
+.steps-list li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #e0c9b0; font-variant-numeric: tabular-nums; }
+.steps-list li:last-child { border-bottom: 0; }
+.steps-list .t { width: 40px; color: var(--text-2); }
+.steps-list .g { margin-left: auto; color: var(--text-2); }
+.four-six-entry { display: flex; align-items: center; gap: 8px; margin: 10px 0; padding: 12px 14px; border: 1px solid #e0c9b0; border-radius: 14px; background: #fff4e0; color: #2c1810; text-decoration: none; min-height: 56px; }
+.four-six-entry .chev { margin-left: auto; color: #6b3d2e; }

@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from . import auth, brew, crud, db, export, models, starters, theme, tips, words
+from . import auth, brew, crud, db, export, four_six, models, starters, theme, tips, words
 
 app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -425,6 +425,11 @@ class _Rec(NamedTuple):
     from_plan: bool
 
 
+def _shape_of(brewer: Optional[models.Brewer]) -> Optional[str]:
+    """Which kind of brewer it is (brew mode's drawing): "cone", "switch", "flat", "aeropress" or None."""
+    return brew.brewer_shape(brewer.name, brewer.method) if brewer else None
+
+
 def _starters_for(brewer: Optional[models.Brewer]) -> list:
     return starters.for_brewer(brew.brewer_shape(brewer.name, brewer.method) if brewer else None)
 
@@ -523,6 +528,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
             cooling_brew, cooling_minutes = recent_brews[0], max(minutes, 1)
     return {
         "trial": _applied_change(latest, rec),
+        "shape": _shape_of(session.get(models.Brewer, brewer_id_int)),
         "version": crud.version_number(session, latest) if latest else 0,
         "brewer": session.get(models.Brewer, brewer_id_int),
         "grinder": session.get(models.Grinder, grinder_id_int),
@@ -1327,6 +1333,62 @@ def delete_version(request: Request, recipe_id: int):
         line_id = recipe.line_id
         crud.delete_version(session, recipe)
     return RedirectResponse(url=f"/lines/{line_id}/versions", status_code=303)
+
+
+@app.get("/four-six", response_class=HTMLResponse)
+def four_six_page(request: Request, bag_id: int, brewer_id: int, grinder_id: int):
+    """Build a 4:6 recipe (the calculator's rules) as a coffee's starting recipe on this gear."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        brewer = _owned(session, user, models.Brewer, brewer_id)
+        grinder = _owned(session, user, models.Grinder, grinder_id)
+        return templates.TemplateResponse("four_six.html", {
+            "request": request, "current_user": user, "bag": bag, "brewer": brewer, "grinder": grinder,
+            "roasts": four_six.ROASTS, "tastes": four_six.TASTES, "bodies": four_six.BODIES,
+            "has_lines": bool(crud.get_lines_for_combo(session, bag.bean_id, brewer_id, grinder_id)),
+            "pre_ground": _is_pre_ground(grinder), "shape": brew.brewer_shape(brewer.name, brewer.method),
+        })
+
+
+@app.post("/four-six")
+def four_six_create(request: Request, bag_id: int = Form(...), brewer_id: int = Form(...), grinder_id: int = Form(...),
+                    coffee: str = Form(...), ratio: str = Form(...), roast: str = Form("light"), taste: str = Form("0"),
+                    pours: str = Form("3"), grind_size: str = Form(None), name: str = Form(None)):
+    """Save the 4:6 recipe as version 1 of a new named recipe; the server builds the steps."""
+    dose, water_ratio = _parse_amount(coffee), _parse_amount(ratio)
+    temp = four_six.roast_temp(roast)
+    try:
+        taste_f, body = float(taste), int(pours)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Taste and strength must be one of the choices")
+    lo, hi = four_six.LIMITS["coffee"]
+    if dose is None or not lo <= dose <= hi:
+        raise HTTPException(status_code=400, detail=f"Coffee should be between {lo:g} and {hi:g} g")
+    lo, hi = four_six.LIMITS["ratio"]
+    if water_ratio is None or not lo <= water_ratio <= hi:
+        raise HTTPException(status_code=400, detail=f"The ratio should be between 1:{lo:g} and 1:{hi:g}")
+    if temp is None or not -1 <= taste_f <= 1 or body not in (1, 2, 3, 4):
+        raise HTTPException(status_code=400, detail="Roast, taste and strength must be one of the choices")
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        brewer = _owned(session, user, models.Brewer, brewer_id)
+        grinder = _owned(session, user, models.Grinder, grinder_id)
+        grind = "pre-ground" if _is_pre_ground(grinder) else (grind_size or "").strip()
+        if not grind:
+            raise HTTPException(status_code=400, detail=f"Set the grind for the {grinder.name}: coarse, about French-press coarse")
+        p = four_six.plan(dose, water_ratio, taste_f, body)
+        label, n = (name or "").strip() or "4:6", 2
+        base = label
+        while crud.line_name_taken(session, bag.bean_id, brewer_id, grinder_id, label):
+            label, n = f"{base} {n}", n + 1
+        line = crud.create_line(session, bag.bean_id, brewer_id, grinder_id, label)
+        crud.create_recipe(session, bean_id=bag.bean_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line.id,  # type: ignore[arg-type]
+                           dose_g=dose, water_ml=p["water"], temp_c=temp, grind_size=grind,
+                           recipe_text=four_six.steps_text(dose, temp, p, brew.brewer_shape(brewer.name, brewer.method)))
+        target = f"/?bag_id={bag.id}&brewer_id={brewer_id}&grinder_id={grinder_id}&line_id={line.id}"
+    return RedirectResponse(url=target, status_code=303)
 
 
 @app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)

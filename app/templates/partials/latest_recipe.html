@@ -207,6 +207,7 @@
     <div class="sheet-head"><h3>{{ line.name if line.name != 'Default' else 'This recipe' }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
     <nav class="action-list" style="margin-bottom:10px">
         <button type="button" data-sheet="share-sheet">Share recipe<span class="chev">›</span></button>
+        {% if shape in ('cone', 'switch', 'flat') %}<a href="/four-six?bag_id={{ bag_id }}&amp;brewer_id={{ brewer_id }}&amp;grinder_id={{ grinder_id }}">New 4:6 recipe for this gear<span class="chev">›</span></a>{% endif %}
         {% if not is_current_plan %}<button type="button" data-sheet="plan-sheet">Make this Up next<span class="chev">›</span></button>{% endif %}
     </nav>
     <details class="history-block">
@@ -330,6 +331,12 @@
         {% endfor %}
     </div>
 </details>
+{% endif %}
+{% if shape in ('cone', 'switch', 'flat') %}
+<a class="four-six-entry" href="/four-six?bag_id={{ bag_id }}&amp;brewer_id={{ brewer_id }}&amp;grinder_id={{ grinder_id }}">
+    <span class="row-text"><b>Build a 4:6 recipe</b><span class="muted">Kasuya's method: pick coffee, ratio, roast, taste and strength</span></span>
+    <span class="chev">›</span>
+</a>
 {% endif %}
 {% if starters %}
 <details class="history-block" open>
