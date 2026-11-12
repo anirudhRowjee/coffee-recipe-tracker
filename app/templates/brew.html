@@ -211,27 +211,51 @@
         };
         function beep(kind) {
             if (!audio) return;
+            // a phone suspends ("interrupted" on iOS) the sound after a lock or a call; try again
+            if (audio.state !== 'running' && audio.resume) { try { audio.resume(); } catch (e) {} }
             try {
                 (SOUNDS[kind] || SOUNDS.step).forEach(function (tone) {
-                    var osc = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime + tone[1];
+                    var osc = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime + 0.02 + tone[1];
                     osc.frequency.value = tone[0];
-                    gain.gain.value = 0.2;
+                    // loud enough for a phone speaker across the counter, with a quick fade in
+                    // and out so it doesn't click
+                    gain.gain.setValueAtTime(0.0001, at);
+                    gain.gain.exponentialRampToValueAtTime(0.6, at + 0.01);
+                    gain.gain.setValueAtTime(0.6, at + tone[2] - 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, at + tone[2]);
                     osc.connect(gain);
                     gain.connect(audio.destination);
                     osc.start(at);
-                    osc.stop(at + tone[2]);
+                    osc.stop(at + tone[2] + 0.02);
                 });
             } catch (e) { /* no sound is fine */ }
         }
         window.brewBeep = beep;
         // Browsers only allow sound after a tap, so wake it on any tap (Start, or Scale:
         // a brew the scale starts has no tap of its own).
+        var unlocked = false;
         function wakeAudio() {
+            // iPhones mute web sound when the ringer switch is on silent, unless the page
+            // says it's playing on purpose (Safari 16.4+; other browsers don't have this)
+            try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
             var Ctx = window.AudioContext || window.webkitAudioContext;
             if (Ctx && !audio) { try { audio = new Ctx(); } catch (e) { audio = null; } }
-            if (audio && audio.state === 'suspended' && audio.resume) audio.resume();
+            if (!audio) return;
+            if (audio.state !== 'running' && audio.resume) { try { audio.resume(); } catch (e) {} }
+            // iOS only lets a page make sound later if it played something during a tap:
+            // a silent blip, once
+            if (!unlocked) {
+                try {
+                    var blip = audio.createBufferSource();
+                    blip.buffer = audio.createBuffer(1, 1, 22050);
+                    blip.connect(audio.destination);
+                    blip.start(0);
+                    unlocked = true;
+                } catch (e) {}
+            }
         }
         document.addEventListener('click', wakeAudio, true);
+        document.addEventListener('touchend', wakeAudio, true);
 
         function keepAwake() {
             if (!('wakeLock' in navigator)) return;
