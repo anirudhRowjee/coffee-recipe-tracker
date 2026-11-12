@@ -17,40 +17,44 @@
             <p class="muted"><a href="/" data-back>‹ Back</a></p>
             <h2>A 4:6 recipe</h2>
             <p class="muted">{{ bag.bean.name }} · {{ brewer.name }} · {{ grinder.name }}</p>
-            <p class="muted">Tetsu Kasuya's method: the first 40% of the water sets the taste, the last 60% the strength.</p>
 
-            <p class="eyebrow">Coffee</p>
-            <div class="stepper">
-                <button type="button" class="stepper-btn" data-step="-0.5" aria-label="Less coffee">−</button>
-                <input name="coffee" type="number" inputmode="decimal" step="any" min="5" max="60" value="15" data-label="Coffee" data-unit=" g" required />
-                <button type="button" class="stepper-btn" data-step="0.5" aria-label="More coffee">+</button>
+            <div class="fs-row">
+                <div><p class="eyebrow">Coffee</p>
+                    <div class="stepper">
+                        <button type="button" class="stepper-btn" data-step="-0.5" aria-label="Less coffee">−</button>
+                        <input name="coffee" type="number" inputmode="decimal" step="any" min="5" max="60" value="15" data-label="Coffee" data-unit=" g" required />
+                        <button type="button" class="stepper-btn" data-step="0.5" aria-label="More coffee">+</button>
+                    </div></div>
+                <div><p class="eyebrow">Ratio 1 : {{ tip('ratio') }}</p>
+                    <div class="stepper">
+                        <button type="button" class="stepper-btn" data-step="-0.5" aria-label="Stronger ratio">−</button>
+                        <input name="ratio" type="number" inputmode="decimal" step="any" min="10" max="20" value="16" data-label="Ratio" required />
+                        <button type="button" class="stepper-btn" data-step="0.5" aria-label="Lighter ratio">+</button>
+                    </div></div>
             </div>
-            <p class="eyebrow">Ratio {{ tip('ratio') }}</p>
-            <div class="stepper">
-                <button type="button" class="stepper-btn" data-step="-0.5" aria-label="Stronger ratio">−</button>
-                <input name="ratio" type="number" inputmode="decimal" step="any" min="10" max="20" value="16" data-label="Ratio" required />
-                <button type="button" class="stepper-btn" data-step="0.5" aria-label="Lighter ratio">+</button>
-            </div>
-            <p class="muted ratio-note" id="fs-water"></p>
 
-            <p class="eyebrow">Roast</p>
-            <div class="seg" role="radiogroup" aria-label="Roast">
-                {% for key, label, temp in roasts %}
-                <label><input type="radio" name="roast" value="{{ key }}" data-temp="{{ temp }}" {% if key == 'light' %}checked{% endif %} /><span>{{ label }}<small>{{ temp }} °C</small></span></label>
-                {% endfor %}
+            <label class="eyebrow" for="fs-roast">Roast</label>
+            <input type="range" id="fs-roast" class="fs-roast" min="0" max="100" step="1" value="20" aria-describedby="fs-roast-read"
+                data-temps="{{ roast_temps|tojson|forceescape }}" data-names="{{ roast_names|tojson|forceescape }}" />
+            <div class="fs-ends"><span>Light</span><span>Medium</span><span>Dark</span></div>
+            <div class="fs-roast-out">
+                <p class="fs-reading" id="fs-roast-read"></p>
+                <div class="stepper stepper-small" aria-label="Water temperature"><span class="stepper-label">Water</span>
+                    <button type="button" class="stepper-btn" data-step="-1" aria-label="Cooler">−</button>
+                    <input name="temp_c" id="fs-temp" type="number" inputmode="decimal" step="any" min="70" max="100" value="93" data-label="Water" data-unit=" °C" required />
+                    <button type="button" class="stepper-btn" data-step="1" aria-label="Hotter">+</button>
+                </div>
             </div>
-            <p class="eyebrow">Taste</p>
-            <div class="seg" role="radiogroup" aria-label="Taste">
-                {% for value, label in tastes %}
-                <label><input type="radio" name="taste" value="{{ value }}" {% if value == 0 %}checked{% endif %} /><span>{{ label }}</span></label>
-                {% endfor %}
-            </div>
-            <p class="eyebrow">Strength</p>
-            <div class="seg" role="radiogroup" aria-label="Strength">
-                {% for value, label in bodies %}
-                <label><input type="radio" name="pours" value="{{ value }}" {% if value == 3 %}checked{% endif %} /><span>{{ label }}<small>{{ value }} pour{{ 's' if value != 1 }}</small></span></label>
-                {% endfor %}
-            </div>
+
+            <label class="eyebrow" for="fs-taste">Taste</label>
+            <input type="range" id="fs-taste" name="taste" class="fs-taste" min="-1" max="1" step="0.05" value="0" aria-describedby="fs-taste-read" />
+            <div class="fs-ends"><span>Brighter</span><span>Balanced</span><span>Sweeter</span></div>
+            <p class="fs-reading" id="fs-taste-read"></p>
+
+            <label class="eyebrow" for="fs-body">Strength</label>
+            <input type="range" id="fs-body" name="pours" class="fs-body" min="1" max="4" step="1" value="3" aria-describedby="fs-body-read" />
+            <div class="fs-ends"><span>Lighter</span><span>Stronger</span></div>
+            <p class="fs-reading" id="fs-body-read"></p>
 
             {% if not pre_ground %}
             <label>Grind on the {{ grinder.name }} {{ tip('grind') }}
@@ -60,16 +64,16 @@
             {% if has_lines %}
             <label>Name <input name="name" value="4:6" required /></label>
             {% endif %}
-            <div class="dock"><button type="submit">Save as a recipe</button></div>
-            <p class="muted">It becomes version 1 of a new recipe. Nothing is brewed or logged yet.</p>
+            <div class="dock"><button type="submit">Save as version 1</button></div>
         </section>
 
         <aside class="card">
             <h3>The pours</h3>
+            <p class="muted" id="fs-water"></p>
             <div class="fs-bar" id="fs-bar" role="img" aria-label="The water split into pours"></div>
             <div class="fs-phases"><span class="p-taste">40% · taste</span><span class="p-body">60% · strength</span></div>
             <ol class="steps-list" id="fs-steps"></ol>
-            <p class="muted">Pour every 45 seconds, letting each pour drain. Take the dripper off at Done{% if shape == 'switch' %}; keep the Switch's valve open throughout{% endif %}.</p>
+            <p class="muted">Grind coarse. Pour every 45 seconds{% if shape == 'switch' %}, valve open{% endif %}; take the dripper off at Done.</p>
         </aside>
     </div>
 </form>

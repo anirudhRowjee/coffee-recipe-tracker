@@ -11,18 +11,14 @@ from typing import List, Optional
 INTERVAL = 45   # seconds between pours
 DRAIN = 30      # after the last pour, until the dripper comes off
 
-# Roast choices: Kasuya's temperatures (93 °C light, 88 medium, 83 dark), with the steps between
-ROASTS = [
-    ("light", "Light", 93),
-    ("light-medium", "Light-medium", 91),
-    ("medium", "Medium", 88),
-    ("medium-dark", "Medium-dark", 85),
-    ("dark", "Dark", 83),
-]
-TASTES = [(-1, "Brighter"), (0, "Balanced"), (1, "Sweeter")]
-BODIES = [(1, "Lightest"), (2, "Lighter"), (3, "Standard"), (4, "Strongest")]
+# Roast, 0 (lightest) to 100 (darkest), as the calculator's slider: the water temperature it
+# suggests (Kasuya's 93 °C light, 88 medium, 83 dark, joined smoothly, a little hotter for the
+# very lightest), and a name. The temperature is only a suggestion; the page lets you change it.
+ROAST_TEMPS = [(0, 95), (20, 93), (50, 88), (80, 83), (100, 81)]
+ROAST_NAMES = [(0, "Extra light"), (14, "Light"), (32, "Light-medium"), (48, "Medium"), (64, "Medium-dark"), (80, "Dark"), (92, "Very dark")]
+BODIES = {1: "Lightest", 2: "Lighter", 3: "Standard", 4: "Strongest"}
 
-LIMITS = {"coffee": (5.0, 60.0), "ratio": (10.0, 20.0)}
+LIMITS = {"coffee": (5.0, 60.0), "ratio": (10.0, 20.0), "temp": (70.0, 100.0)}
 
 
 def _round(x: float) -> int:
@@ -30,8 +26,13 @@ def _round(x: float) -> int:
     return math.floor(x + 0.5)
 
 
-def roast_temp(roast: str) -> Optional[int]:
-    return next((t for key, _, t in ROASTS if key == roast), None)
+def roast_temp(level: float) -> int:
+    """The suggested water temperature for a roast level (0 lightest, 100 darkest)."""
+    level = max(0.0, min(100.0, level))
+    for (a, ta), (b, tb) in zip(ROAST_TEMPS, ROAST_TEMPS[1:]):
+        if level <= b:
+            return _round(ta + (tb - ta) * (level - a) / (b - a))
+    return ROAST_TEMPS[-1][1]
 
 
 def plan(coffee: float, ratio: float, taste: float, body_pours: int) -> dict:
@@ -55,10 +56,10 @@ def _clock(seconds: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
-def steps_text(coffee: float, temp: int, p: dict, brewer_shape: Optional[str] = None) -> str:
+def steps_text(coffee: float, temp: float, p: dict, brewer_shape: Optional[str] = None) -> str:
     """The method in the app's step format, ready for brew mode."""
     grams = f"{coffee:g}"
-    prep = f"Prep: {grams}g coffee, ground coarse, water at {temp} °C"
+    prep = f"Prep: {grams}g coffee, ground coarse, water at {temp:g} °C"
     if brewer_shape == "switch":
         prep += ", valve open throughout"
     lines = [prep]

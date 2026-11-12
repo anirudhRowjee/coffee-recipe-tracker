@@ -1345,7 +1345,7 @@ def four_six_page(request: Request, bag_id: int, brewer_id: int, grinder_id: int
         grinder = _owned(session, user, models.Grinder, grinder_id)
         return templates.TemplateResponse("four_six.html", {
             "request": request, "current_user": user, "bag": bag, "brewer": brewer, "grinder": grinder,
-            "roasts": four_six.ROASTS, "tastes": four_six.TASTES, "bodies": four_six.BODIES,
+            "roast_temps": four_six.ROAST_TEMPS, "roast_names": four_six.ROAST_NAMES, "bodies": four_six.BODIES,
             "has_lines": bool(crud.get_lines_for_combo(session, bag.bean_id, brewer_id, grinder_id)),
             "pre_ground": _is_pre_ground(grinder), "shape": brew.brewer_shape(brewer.name, brewer.method),
         })
@@ -1353,11 +1353,10 @@ def four_six_page(request: Request, bag_id: int, brewer_id: int, grinder_id: int
 
 @app.post("/four-six")
 def four_six_create(request: Request, bag_id: int = Form(...), brewer_id: int = Form(...), grinder_id: int = Form(...),
-                    coffee: str = Form(...), ratio: str = Form(...), roast: str = Form("light"), taste: str = Form("0"),
+                    coffee: str = Form(...), ratio: str = Form(...), temp_c: str = Form(...), taste: str = Form("0"),
                     pours: str = Form("3"), grind_size: str = Form(None), name: str = Form(None)):
     """Save the 4:6 recipe as version 1 of a new named recipe; the server builds the steps."""
-    dose, water_ratio = _parse_amount(coffee), _parse_amount(ratio)
-    temp = four_six.roast_temp(roast)
+    dose, water_ratio, temp = _parse_amount(coffee), _parse_amount(ratio), _parse_amount(temp_c)
     try:
         taste_f, body = float(taste), int(pours)
     except ValueError:
@@ -1368,8 +1367,11 @@ def four_six_create(request: Request, bag_id: int = Form(...), brewer_id: int = 
     lo, hi = four_six.LIMITS["ratio"]
     if water_ratio is None or not lo <= water_ratio <= hi:
         raise HTTPException(status_code=400, detail=f"The ratio should be between 1:{lo:g} and 1:{hi:g}")
-    if temp is None or not -1 <= taste_f <= 1 or body not in (1, 2, 3, 4):
-        raise HTTPException(status_code=400, detail="Roast, taste and strength must be one of the choices")
+    lo, hi = four_six.LIMITS["temp"]
+    if temp is None or not lo <= temp <= hi:
+        raise HTTPException(status_code=400, detail=f"The water should be between {lo:g} and {hi:g} °C")
+    if not -1 <= taste_f <= 1 or body not in (1, 2, 3, 4):
+        raise HTTPException(status_code=400, detail="Taste and strength must be within their sliders")
     with Session(db.engine) as session:
         user = _require_user(request, session)
         bag = _owned(session, user, models.BeanBag, bag_id)

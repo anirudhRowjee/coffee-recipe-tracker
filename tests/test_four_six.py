@@ -4,7 +4,7 @@ The 4:6 builder: the calculator's maths on the server, and a starting recipe sav
 from app import four_six
 from test_flows import BASELINE, app, latest, post  # noqa: F401 — app is a fixture
 
-FORM = {"bag_id": 1, "brewer_id": 1, "grinder_id": 1, "coffee": "20", "ratio": "15", "roast": "light",
+FORM = {"bag_id": 1, "brewer_id": 1, "grinder_id": 1, "coffee": "20", "ratio": "15", "temp_c": "93",
         "taste": "0", "pours": "3", "grind_size": "28"}
 
 
@@ -14,6 +14,16 @@ def test_the_maths_matches_the_calculator():
     assert [x["to"] for x in four_six.plan(20, 15, 1, 3)["pours"]][:2] == [50, 120]    # sweeter: smaller first pour
     assert [x["to"] for x in four_six.plan(20, 15, -1, 3)["pours"]][:2] == [70, 120]   # brighter: bigger first pour
     assert len(four_six.plan(20, 15, 0, 1)["pours"]) == 3 and len(four_six.plan(20, 15, 0, 4)["pours"]) == 6
+
+
+def test_roast_suggests_a_temperature():
+    assert [four_six.roast_temp(x) for x in (0, 20, 50, 80, 100)] == [95, 93, 88, 83, 81]
+
+
+def test_a_chosen_temperature_and_a_slider_taste_are_kept(app):
+    post(app, "/four-six", {**FORM, "temp_c": "95.5", "taste": "0.35"})
+    assert app.scalar("select temp_c from recipe") == 95.5
+    assert "water at 95.5 °C" in app.scalar("select recipe_text from recipe")
 
 
 def test_the_steps_are_in_brew_modes_format():
@@ -29,7 +39,8 @@ def test_offered_for_pour_over_gear_without_a_recipe(app):
     bag = app.scalar("select max(id) from beanbag")
     page = app.client.get("/", params={"bag_id": bag, "brewer_id": brewer, "grinder_id": 1}).text
     assert f"/four-six?bag_id={bag}&amp;brewer_id={brewer}&amp;grinder_id=1" in page
-    assert "Light-medium" in app.client.get("/four-six", params={"bag_id": bag, "brewer_id": brewer, "grinder_id": 1}).text
+    page = app.client.get("/four-six", params={"bag_id": bag, "brewer_id": brewer, "grinder_id": 1}).text
+    assert 'id="fs-roast"' in page and 'id="fs-taste" name="taste"' in page and 'id="fs-body" name="pours"' in page
 
 
 def test_saving_makes_version_one_of_a_new_recipe(app):
@@ -46,6 +57,7 @@ def test_saving_makes_version_one_of_a_new_recipe(app):
 def test_bad_settings_are_refused(app):
     post(app, "/four-six", {**FORM, "coffee": "200"}, status=400)
     post(app, "/four-six", {**FORM, "pours": "9"}, status=400)
-    post(app, "/four-six", {**FORM, "roast": "burnt"}, status=400)
+    post(app, "/four-six", {**FORM, "temp_c": "120"}, status=400)
+    post(app, "/four-six", {**FORM, "taste": "3"}, status=400)
     post(app, "/four-six", {**FORM, "grind_size": ""}, status=400)
     assert app.scalar("select count(*) from recipe") == 0

@@ -307,9 +307,16 @@
 {% elif bean_id %}
 {# A coffee and gear with no recipe yet: never a blank form first #}
 {% if bag %}<p class="recipe-bean-name">{{ bag.bean.name }}{% if brewer and grinder %} · {{ brewer.name }} · {{ grinder.name }}{% endif %}</p>{% endif %}
-<p class="muted">No recipe yet for this coffee with this brewer and grinder. Start from one of yours, or add its first version below.</p>
+<p class="muted">No recipe yet for this coffee with this brewer and grinder. Start one:</p>
+<div class="start-options">
+{% if shape in ('cone', 'switch', 'flat') %}
+<a class="four-six-entry" href="/four-six?bag_id={{ bag_id }}&amp;brewer_id={{ brewer_id }}&amp;grinder_id={{ grinder_id }}">
+    <span class="row-text"><b>Build a 4:6 recipe</b><span class="muted">Kasuya's method: pick coffee, ratio, roast, taste and strength</span></span>
+    <span class="chev">›</span>
+</a>
+{% endif %}
 {% if copy_sources %}
-<details class="history-block" open>
+<details class="history-block">
     <summary class="history-summary">Copy one of your recipes</summary>
     <div class="copy-list">
         {% for src_line, src_bean, src_latest in copy_sources %}
@@ -332,14 +339,9 @@
     </div>
 </details>
 {% endif %}
-{% if shape in ('cone', 'switch', 'flat') %}
-<a class="four-six-entry" href="/four-six?bag_id={{ bag_id }}&amp;brewer_id={{ brewer_id }}&amp;grinder_id={{ grinder_id }}">
-    <span class="row-text"><b>Build a 4:6 recipe</b><span class="muted">Kasuya's method: pick coffee, ratio, roast, taste and strength</span></span>
-    <span class="chev">›</span>
-</a>
-{% endif %}
+
 {% if starters %}
-<details class="history-block" open>
+<details class="history-block">
     <summary class="history-summary">A starting recipe{% if brewer %} for the {{ brewer.name }}{% endif %}</summary>
     <div class="copy-list">
         {% for st in starters %}
@@ -364,7 +366,7 @@
     </div>
 </details>
 {% endif %}
-<details class="history-block" {% if not copy_sources and not starters %}open{% endif %}>
+<details class="history-block">
     <summary class="history-summary">My own numbers</summary>
     <form method="post" action="/recipes" class="stacked-form">
         <input type="hidden" name="bean_id" value="{{ bean_id }}" />
@@ -382,4 +384,5 @@
         <button type="submit" style="margin-top:4px">Save first version</button>
     </form>
 </details>
+</div>
 {% endif %}
