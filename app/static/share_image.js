@@ -171,7 +171,7 @@
     // Every parameter, as tiles; returns the y below them
     var compact = false;
     function drawParams(X, CW, y) {
-        var gap = compact ? 14 : 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = compact ? 100 : 128;
+        var gap = compact ? 14 : 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = compact ? 88 : 112;
         card.params.forEach(function (param, i) {
             var tx = X + (i % cols) * (tileW + gap), ty = y + Math.floor(i / cols) * (tileH + gap);
             ctx.fillStyle = soft;
@@ -179,11 +179,11 @@
             ctx.fill();
             font('normal', 24, SANS);
             ctx.fillStyle = LABEL;
-            ctx.fillText(param[0], tx + 22, ty + (compact ? 34 : 40));
-            var size = compact ? 48 : 52;
+            ctx.fillText(param[0], tx + 22, ty + (compact ? 32 : 36));
+            var size = compact ? 38 : 42;
             do { font('bold', size, SANS); size -= 2; } while (ctx.measureText(param[1]).width > tileW - 44 && size > 22);
             ctx.fillStyle = VALUE;
-            ctx.fillText(param[1], tx + 22, ty + (compact ? 82 : 100));
+            ctx.fillText(param[1], tx + 22, ty + (compact ? 72 : 86));
         });
         return y + Math.ceil(card.params.length / cols) * (tileH + gap) + 26;
     }
@@ -200,8 +200,8 @@
     var NOTE_PAD = 26;
     function noteLines(CW) {
         var text = note.text.replace(/\s+/g, ' ').trim();
-        return card.story ? fitLines(text, CW - 2 * NOTE_PAD - 12, 5, 'italic', 46, 30, SERIF)
-                          : fitLines(text, CW - 2 * NOTE_PAD - 12, 2, 'italic', 38, 32, SERIF);
+        return card.story ? fitLines(text, CW - 2 * NOTE_PAD - 12, 5, 'italic', 38, 28, SERIF)
+                          : fitLines(text, CW - 2 * NOTE_PAD - 12, 2, 'italic', 32, 26, SERIF);
     }
     function noteHeight(CW) {
         var fitted = noteLines(CW);
