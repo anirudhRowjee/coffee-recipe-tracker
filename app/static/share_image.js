@@ -146,7 +146,7 @@
             drawSteps(X, CW, drawMethodHeading(X, drawParams(X, CW, drawCurveBlock(X, CW, drawNoteBlock(X, CW, top0), STORY_CURVE_H))), bottom);
         } else {
             y = drawParams(X, CW, top0);
-            var curveH = note ? 180 : CURVE_H;
+            var curveH = CURVE_H;
             if (card.curve) { bottom -= curveH + 16; drawCurve(X, CW, bottom + 16, curveH); }
             if (note) { var nh = noteHeight(CW); bottom -= nh + 28; drawNote(X, CW, bottom + 12, nh); }
             if (card.steps.length) drawSteps(X, CW, drawMethodHeading(X, y), bottom);
@@ -245,7 +245,7 @@
         drawNote(X, CW, y, h);
         return y + h + 30;
     }
-    var STORY_CURVE_H = 330;
+    var STORY_CURVE_H = 170;
     function drawCurveBlock(X, CW, y, h) {
         if (!card.curve) return y;
         drawCurve(X, CW, y, h);
@@ -253,7 +253,7 @@
     }
 
     // The weight through one brew, against this version's step targets (dashed)
-    var CURVE_H = 200;
+    var CURVE_H = 130;  // a strip: there's no axis to read, it shows the shape of the brew
     function drawCurve(X, CW, top, height) {
         var t = card.curve.t, g = card.curve.g, plan = card.curve.targets || [];
         var end = Math.max(t[t.length - 1] || 1, plan.length ? plan[plan.length - 1][0] + 15 : 0);
