@@ -54,14 +54,19 @@ def test_brew_page_shows_recipe_large_with_timed_steps(app):
     html = r.text
     assert '<h2 class="brew-title">Blue Tokai Baarbara Estate</h2>' in html
     assert "Hario Switch · Timemore C2" in html
-    for label, value in [("Dose", "15 g"), ("Water", "250 ml"), ("Ratio", "1:16.7"), ("Temp", "93 °C"), ("Grind", "13")]:
-        assert f"<dt>{label}</dt>\n            <dd>{value}</dd>" in html, label
+    # the recipe as labelled tiles, each saying what it's for
+    for label, value, use in [("Coffee", "15<small>g</small>", "beans to weigh"), ("Grind", "13", "on the Timemore C2"),
+                              ("Water", "250<small>ml</small>", "in the kettle · 1:16.7"), ("Temperature", "93<small>°C</small>", "kettle set to")]:
+        assert f'<dt>{label}</dt><dd>{value}</dd><dd class="brew-use">{use}</dd>' in html, label
+    assert re.search(r'<p class="brew-labels" id="brew-labels" hidden>', html)  # the one-line version, once brewing
     assert re.findall(r'<li data-times="([\d,]*)">([^<]*)</li>', html) == [
         ("", "Close the switch"), ("", "Add all the grounds"),
         ("60,120", "Swirl at 1:00 and 2:00"), ("180", "Release at 3:00"),
     ]
     assert re.search(r'<div class="brew-timer" id="brew-timer"[^>]* hidden>', html)  # only shown with JavaScript
-    assert html.index('id="brew-current"') < html.index('id="brew-clock"')  # current step sits above the clock
+    assert html.index('id="brew-clock"') < html.index('id="brew-scale"') < html.index('id="brew-current"')  # time and weight side by side, the step under them
+    assert re.search(r'<details class="brew-all-steps" id="brew-all-steps" open>', html)  # every step shows without JavaScript
+    assert re.search(r'<div class="brew-controls" id="brew-controls" hidden>', html)
     assert "<h1>" not in html and "<h1>" in app.client.get("/browse").text  # no site header: it has to fit one screen
 
 
@@ -75,7 +80,7 @@ def test_named_recipe_title(app):
     post(app, "/recipes", BASELINE)
     post(app, "/recipes", {**BASELINE, "line_name": "2 cup", "dose_g": 30, "water_ml": 500})
     html = brew_page(app, 2).text
-    assert "Blue Tokai Baarbara Estate — 2 cup" in html and "<dd>1:16.7</dd>" in html and "<dd>30 g</dd>" in html
+    assert "Blue Tokai Baarbara Estate — 2 cup" in html and "in the kettle · 1:16.7" in html and "<dd>30<small>g</small></dd>" in html
 
 
 def test_card_links_to_brew_mode_with_bag(app):

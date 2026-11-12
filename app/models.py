@@ -10,6 +10,10 @@ class User(SQLModel, table=True):
     password_hash: Optional[str] = None  # no password yet = can't sign in
     is_admin: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
     must_change_password: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
+    # Brew mode, set on Manage: the brewer animation in the step card, and the
+    # weight/flow graph drawn while brewing (otherwise only after Stop)
+    show_brew_animation: bool = Field(default=True, sa_column_kwargs={"server_default": "1"})
+    show_live_graph: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
 
     beans: List["Bean"] = Relationship(back_populates="user")
     brewers: List["Brewer"] = Relationship(back_populates="user")

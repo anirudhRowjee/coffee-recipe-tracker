@@ -61,6 +61,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_brew_ratings(conn)
         _migrate_bean_art(conn)
         _migrate_accounts(conn)
+        _migrate_brew_settings(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -96,6 +97,15 @@ def _migrate_accounts(conn) -> None:
         conn.execute(text("ALTER TABLE user ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"))
     if not conn.execute(text("SELECT COUNT(*) FROM user WHERE is_admin = 1")).scalar():
         conn.execute(text("UPDATE user SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM user)"))
+
+
+def _migrate_brew_settings(conn) -> None:
+    """Brew mode's two switches on Manage, per user."""
+    user_columns = _columns(conn, "user")
+    if "show_brew_animation" not in user_columns:
+        conn.execute(text("ALTER TABLE user ADD COLUMN show_brew_animation BOOLEAN NOT NULL DEFAULT 1"))
+    if "show_live_graph" not in user_columns:
+        conn.execute(text("ALTER TABLE user ADD COLUMN show_live_graph BOOLEAN NOT NULL DEFAULT 0"))
 
 
 DEFAULT_LINE_NAME = "Default"

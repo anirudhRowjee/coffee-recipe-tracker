@@ -134,6 +134,9 @@ def import_all(engine: Engine, src: Path) -> None:
                 password_hash=_str(r.get("password_hash")),
                 is_admin=_bool(r.get("is_admin")),
                 must_change_password=_bool(r.get("must_change_password")),
+                # older snapshots have neither: the defaults (animation on, live graph off)
+                show_brew_animation=_bool(r["show_brew_animation"]) if r.get("show_brew_animation") else True,
+                show_live_graph=_bool(r.get("show_live_graph")),
             ))
         session.commit()
         print(f"  users:    {len(rows)}")

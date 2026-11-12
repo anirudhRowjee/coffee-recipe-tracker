@@ -56,8 +56,10 @@
         var y = function (v) { return M.top + (1 - (v - y0) / (y1 - y0)) * plotH; };
 
         var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + height, width: W, height: height, 'class': 'brew-graph', role: 'img' }, host);
-        yt.forEach(function (v) {
+        var every = plotH / (yt.length - 1) < 18 ? 2 : 1;  // a short chart (the live one) labels every other line
+        yt.forEach(function (v, i) {
             el('line', { x1: M.left, x2: W - M.right, y1: y(v), y2: y(v), 'class': v === 0 ? 'bg-base' : 'bg-grid' }, svg);
+            if ((yt.length - 1 - i) % every) return;
             el('text', { x: M.left - 6, y: y(v) + 4, 'class': 'bg-label', 'text-anchor': 'end' }, svg).textContent = v + (v === y1 ? ' ' + unit : '');
         });
         timeTicks(end, W).forEach(function (t) {
@@ -97,16 +99,19 @@
             maxOf(flows).toFixed(1) + ' g/s · ' + avg.toFixed(1) + ' g/s while pouring';
     }
 
-    // Draws into root's [data-graph=weight|flow], .bg-summary, .bg-legend and .bg-readout
-    function draw(root, samples, targets, compare) {
+    // Draws into root's [data-graph=weight|flow], .bg-summary, .bg-legend and .bg-readout.
+    // opts (brew mode's live graph): heights [weight, flow], and end, the time axis's length.
+    function draw(root, samples, targets, compare, opts) {
+        opts = opts || {};
         var weightHost = root.querySelector('[data-graph=weight]'), flowHost = root.querySelector('[data-graph=flow]');
         var W = Math.max(280, weightHost.clientWidth || 640);  // drawn at its real width, so labels stay 12px on a phone
         var other = compare ? compare.samples : null;
-        var end = Math.max(samples[samples.length - 1][0], other ? other[other.length - 1][0] : 0, 10);
+        var end = Math.max(samples[samples.length - 1][0], other ? other[other.length - 1][0] : 0, opts.end || 0, 10);
+        var heights = opts.heights || [210, 150];
         var weightSeries = (other ? [[other, 1, 'bg-compare']] : []).concat([[samples, 1, 'bg-line']]);
         var flowSeries = (other ? [[other, 2, 'bg-compare']] : []).concat([[samples, 2, 'bg-line']]);
-        var weight = chart(weightHost, W, 210, weightSeries, 'g', end, targets);
-        var flow = chart(flowHost, W, 150, flowSeries, 'g/s', end, null);
+        var weight = chart(weightHost, W, heights[0], weightSeries, 'g', end, targets);
+        var flow = chart(flowHost, W, heights[1], flowSeries, 'g/s', end, null);
         var charts = [[weight, 1], [flow, 2]];
 
         root.querySelector('.bg-summary').textContent = summary(samples);
@@ -253,17 +258,29 @@
         });
     }
 
-    // Brew mode: scale.js calls show() when the timer stops, hide() on Reset
+    // Brew mode: scale.js calls show() when the timer stops (laid over this recipe's last
+    // saved brew, if there is one), hide() on Reset, and live() while brewing when the
+    // live graph is on in Manage
     var box = document.getElementById('brew-graphs');
-    if (box) offerPng(box, box.getAttribute('data-title'), box.getAttribute('data-filename'), document.getElementById('brew-graphs-png'));
+    var liveBox = document.getElementById('brew-live');
+    var last = null;
+    if (box) {
+        offerPng(box, box.getAttribute('data-title'), box.getAttribute('data-filename'), document.getElementById('brew-graphs-png'));
+        try {
+            var saved = box.getAttribute('data-compare');
+            if (saved) { saved = JSON.parse(saved); last = { samples: zip(saved), label: saved.label }; }
+        } catch (e) { last = null; }
+    }
     window.BrewGraphs = {
         show: function (samples, targets) {
             if (!box) return;
             box.hidden = false;  // shown first, so the charts can be drawn at its real width
-            draw(box, samples, targets, null);
-            if (box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            draw(box, samples, targets, last);
         },
-        hide: function () { if (box) box.hidden = true; }
+        hide: function () { if (box) box.hidden = true; },
+        live: function (samples, targets, end) {
+            if (liveBox && !liveBox.hidden) draw(liveBox, samples, targets, null, { heights: [170, 90], end: end });
+        }
     };
 
     // A logged brew's graph page

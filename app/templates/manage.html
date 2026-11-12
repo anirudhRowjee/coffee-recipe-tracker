@@ -31,6 +31,22 @@
         </p>
     </section>
 
+    <section class="card brew-settings" id="brew-mode">
+        <h2>Brew mode</h2>
+        <form method="post" action="/settings/brew-mode" class="stacked-form">
+            <label class="switch-row">
+                <input type="checkbox" name="show_brew_animation" value="1" onchange="this.form.submit()"{% if current_user.show_brew_animation %} checked{% endif %} />
+                <span>Show the brewer animation<small class="muted">In the step card, acting out the step you're on. Only for methods written as steps.</small></span>
+            </label>
+            <label class="switch-row">
+                <input type="checkbox" name="show_live_graph" value="1" onchange="this.form.submit()"{% if current_user.show_live_graph %} checked{% endif %} />
+                <span>Show the graph while brewing<small class="muted">With a scale connected. Off: the graphs appear when you press Stop.</small></span>
+            </label>
+            <noscript><button type="submit">Save</button></noscript>
+        </form>
+        <p class="muted">These apply on every device you're signed in on.</p>
+    </section>
+
     <section class="card">
         <h2>Beans</h2>
         <button onclick="toggleForm('bean-form')">+ Add Bean</button>

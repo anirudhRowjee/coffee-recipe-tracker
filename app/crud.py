@@ -52,6 +52,13 @@ def name_taken(session: Session, name: str) -> bool:
     return any(u.name.strip().lower() == name.strip().lower() for u in get_users(session))
 
 
+def set_brew_settings(session: Session, user: models.User, animation: bool, live_graph: bool) -> None:
+    user.show_brew_animation = animation
+    user.show_live_graph = live_graph
+    session.add(user)
+    session.commit()
+
+
 def create_user(session: Session, name: str, password: str) -> models.User:
     user = models.User(name=name, password_hash=auth.hash_password(password), must_change_password=True)
     session.add(user)

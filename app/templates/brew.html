@@ -4,74 +4,135 @@
 {% block site_header %}{% endblock %}
 
 {% block content %}
-<section class="card brew-mode" style="{{ latest.bean|bean_theme }}">
-    {% if latest.bean.image_version %}
-    <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
-    {% endif %}
-    <p class="brew-back"><a href="/">← Back</a></p>
-    <h2 class="brew-title">{{ title }}</h2>
-    <p class="muted brew-gear">{{ latest.brewer.name }} · {{ latest.grinder.name }}</p>
-
-    <dl class="brew-params">
-        {% for label, value in params %}
-        <div>
-            <dt>{{ label }}</dt>
-            <dd>{{ value }}</dd>
+{#
+  Brew mode, laid out for a phone on the counter: the recipe as four labelled tiles
+  before you start; then time and weight as two equal tiles, the step you're on (with
+  the brewer animation, if it's on in Manage), and the rest of the method folded
+  under "All steps"; the graphs after Stop. Start/Stop/Tare stay in a bar at the
+  bottom. Without JavaScript (the Kindle) it's the recipe, every step and the log form.
+#}
+<section class="card brew-mode" id="brew-mode" style="{{ latest.bean|bean_theme }}">
+    <div class="brew-top">
+        <a class="brew-back" href="/" aria-label="Back">←</a>
+        <div class="brew-heading">
+            <h2 class="brew-title">{{ title }}</h2>
+            <p class="muted brew-gear">{{ latest.brewer.name }} · {{ latest.grinder.name }}</p>
         </div>
-        {% endfor %}
-    </dl>
+        {% if latest.bean.image_version %}
+        <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
+        {% endif %}
+        {# A Bookoo scale over Web Bluetooth (static/scale.js); hidden where the browser can't #}
+        <button type="button" id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden>+ Scale</button>
+        <span class="brew-pill brew-pill-on" id="brew-scale-status" hidden><i></i>Scale</span>
+    </div>
+
+    {# Two columns on a landscape iPad: this one, then .brew-side; one column everywhere else #}
+    <div class="brew-main">
+    {# The recipe, readable from across the counter; the script hides it once you start #}
+    <div class="brew-prep" id="brew-prep">
+        <p class="brew-kicker">Before you start</p>
+        <dl class="brew-params">
+            <div><dt>Coffee</dt><dd>{{ '%g'|format(latest.dose_g) }}<small>g</small></dd><dd class="brew-use">beans to weigh</dd></div>
+            <div><dt>Grind</dt><dd>{{ latest.grind_size }}</dd><dd class="brew-use">on the {{ latest.grinder.name }}</dd></div>
+            <div><dt>Water</dt><dd>{{ '%g'|format(latest.water_ml) }}<small>ml</small></dd><dd class="brew-use">in the kettle · {{ ratio }}</dd></div>
+            <div><dt>Temperature</dt><dd>{{ '%g'|format(latest.temp_c) }}<small>°C</small></dd><dd class="brew-use">kettle set to</dd></div>
+        </dl>
+        {% if prep %}<p class="brew-prep-note">{{ prep }}</p>{% endif %}
+    </div>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
-    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}"{% if animation %} data-animation="{{ animation }}"{% endif %} hidden>
-        <p class="brew-current" id="brew-current" hidden></p>
-        <div class="brew-clock-row">
-            <div class="brew-anim" id="brew-anim" hidden></div>
-            <div>
-                <div class="brew-clock" id="brew-clock">0:00</div>
-                <label class="brew-anim-toggle" id="brew-anim-toggle" for="brew-anim-on" hidden><input id="brew-anim-on" type="checkbox" checked /> Animation</label>
+    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}"
+         data-water="{{ '%g'|format(latest.water_ml) }}" data-live-graph="{{ '1' if live_graph else '0' }}"{% if animation %} data-animation="{{ animation }}"{% endif %} hidden>
+        <div class="brew-tiles">
+            <div class="brew-tile">
+                <small id="brew-time-label">Time</small>
+                <strong class="brew-clock" id="brew-clock">0:00</strong>
+                <span id="brew-time-sub"></span>
+                <div class="brew-bar brew-time-bar"><span id="brew-time-fill"></span></div>
+            </div>
+            {# with the scale: the live weight against the step's target #}
+            <div class="brew-tile brew-scale" id="brew-scale" hidden>
+                <i class="brew-ok" aria-hidden="true">✓</i>
+                <small id="brew-weight-label">Weight</small>
+                <strong id="brew-scale-weight">0<span class="dec">.0</span></strong>
+                <span id="brew-scale-target">g on the scale</span>
+                <div class="brew-bar brew-scale-bar"><span id="brew-scale-fill"></span></div>
+            </div>
+            {# without: the weight to pour to (any kitchen scale), or the time left in the step #}
+            <div class="brew-tile brew-plan-tile" id="brew-plan-tile">
+                <small id="brew-plan-label">Pour to</small>
+                <strong id="brew-plan-value"></strong>
+                <span id="brew-plan-sub"></span>
             </div>
         </div>
-        {# A Bookoo scale over Web Bluetooth (static/scale.js); hidden where the browser can't #}
-        <div class="brew-scale" id="brew-scale" hidden>
-            <div class="brew-scale-reading"><span id="brew-scale-weight">0.0</span> g<span class="brew-scale-target" id="brew-scale-target"></span></div>
-            <div class="brew-scale-bar"><span id="brew-scale-fill"></span></div>
-            <p class="brew-scale-note" id="brew-scale-note" hidden></p>
+        <p class="brew-scale-note" id="brew-scale-note" hidden></p>
+        <div class="brew-card" id="brew-card" hidden>
+            <div class="brew-anim" id="brew-anim" hidden></div>
+            <div class="brew-card-text">
+                <small id="brew-card-label"></small>
+                <p class="brew-current" id="brew-current"></p>
+                <p class="brew-card-meta" id="brew-card-meta"></p>
+            </div>
         </div>
         <p class="brew-next" id="brew-next"></p>
-        <div class="brew-controls">
-            <button type="button" id="brew-start">Start</button>
-            <button type="button" id="brew-reset" class="btn-secondary" hidden>Reset</button>
-            <button type="button" id="brew-scale-connect" class="btn-secondary brew-scale-btn" hidden>Scale</button>
-            <button type="button" id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden>Tare</button>
-        </div>
+    </div>
+    <p class="brew-labels" id="brew-labels" hidden>
+        <span>Coffee <b>{{ '%g'|format(latest.dose_g) }} g</b></span>
+        <span>Water <b>{{ '%g'|format(latest.water_ml) }} ml</b></span>
+        <span><b>{{ '%g'|format(latest.temp_c) }} °C</b></span>
+        <span>Grind <b>{{ latest.grind_size }}</b> {{ latest.grinder.name }}</span>
+    </p>
+    </div>
+
+    <div class="brew-side">
+    {# the graph while brewing, when it's on in Manage and a scale is connected #}
+    <div class="brew-live" id="brew-live" hidden>
+        <p class="brew-live-tag"><span class="brew-live-dot">●</span> Live · dashed is the plan</p>
+        <div data-graph="weight"></div>
+        <div data-graph="flow"></div>
+        <p class="bg-summary" hidden></p>
+        <p class="bg-readout" hidden></p>
     </div>
 
     {% if steps %}
-    {# not an <ol>: methods usually carry their own bullets or numbers #}
-    <ul class="brew-steps">
-        {% for step in steps %}
-        <li data-times="{{ step.times|join(',') }}"{% if step.target is not none %} data-grams="{{ step.target }}"{% endif %}>{{ step.text }}</li>
-        {% endfor %}
-    </ul>
+    {# open, so without JavaScript every step shows; the script folds it away #}
+    <details class="brew-all-steps" id="brew-all-steps" open>
+        <summary><span class="brew-dots" id="brew-dots"></span><span class="brew-all-label">All steps</span></summary>
+        {# not an <ol>: methods usually carry their own bullets or numbers #}
+        <ul class="brew-steps">
+            {% for step in steps %}
+            <li data-times="{{ step.times|join(',') }}"{% if step.target is not none %} data-grams="{{ step.target }}"{% endif %}>{{ step.text }}</li>
+            {% endfor %}
+        </ul>
+    </details>
     {% endif %}
     {% if latest.recipe_text|needs_tidy %}
     <p class="share-links"><a href="/lines/{{ line.id }}/tidy{% if bag %}?bag_id={{ bag.id }}{% endif %}">Tidy this method into steps</a></p>
     {% endif %}
-</section>
 
-{# Filled in by static/brew_graphs.js after a brew with the scale connected #}
-<section class="card brew-graphs" id="brew-graphs" style="{{ latest.bean|bean_theme }}"
-         data-title="{{ title }}" data-filename="brew-{{ line.id }}.png" hidden>
-    <h3>This brew</h3>
-    {% include 'partials/brew_graph_body.html' %}
-    <div class="share-actions">
-        <button type="button" class="btn-secondary" id="brew-graphs-png">Save as image</button>
+    {# Filled in by static/brew_graphs.js when the timer stops, with the scale connected #}
+    <div class="brew-graphs" id="brew-graphs" data-title="{{ title }}" data-filename="brew-{{ line.id }}.png"
+         data-label="This brew"{% if last_curve %} data-compare="{{ last_curve }}"{% endif %} hidden>
+        <p class="brew-kicker">{{ 'This brew, and the last one in grey' if last_curve else 'This brew' }}</p>
+        {% include 'partials/brew_graph_body.html' %}
+        <div class="share-actions">
+            <button type="button" class="btn-secondary" id="brew-graphs-png">Save as image</button>
+        </div>
+        {% if bag %}<p class="muted">Logging the brew saves these graphs with it.</p>{% endif %}
     </div>
-    {% if bag %}<p class="muted">Logging the brew below saves these graphs with it.</p>{% endif %}
+
+    </div>
+
+    <div class="brew-controls" id="brew-controls" hidden>
+        <button type="button" id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden>Tare</button>
+        <button type="button" id="brew-reset" class="btn-secondary" hidden>Reset</button>
+        <button type="button" id="brew-start">Start</button>
+        {% if bag %}<button type="button" id="brew-log" hidden>Log this brew</button>{% endif %}
+    </div>
 </section>
 
 {% if bag %}
-<section class="card">
+<section class="card brew-log-card" id="brew-log-card">
     <h3>Log this brew</h3>
     {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id %}
     {% include 'partials/log_brew_form.html' %}
@@ -88,16 +149,30 @@
     (function () {
         var timer = document.getElementById('brew-timer');
         if (!timer || !Date.now || !document.querySelectorAll) return;
+        function $(id) { return document.getElementById(id); }
         timer.hidden = false;
+        $('brew-controls').hidden = false;
 
-        var clock = document.getElementById('brew-clock');
-        var currentBox = document.getElementById('brew-current');
-        var prep = timer.getAttribute('data-prep');
+        var page = $('brew-mode');
+        var clock = $('brew-clock'), timeLabel = $('brew-time-label'), timeSub = $('brew-time-sub'), timeFill = $('brew-time-fill');
+        var planTile = $('brew-plan-tile'), planLabel = $('brew-plan-label'), planValue = $('brew-plan-value'), planSub = $('brew-plan-sub');
+        var card = $('brew-card'), cardLabel = $('brew-card-label'), currentBox = $('brew-current'), cardMeta = $('brew-card-meta');
+        var next = $('brew-next'), prepBox = $('brew-prep'), labels = $('brew-labels');
+        var allSteps = $('brew-all-steps'), dots = $('brew-dots');
+        var startBtn = $('brew-start'), resetBtn = $('brew-reset'), logBtn = $('brew-log'), logCard = $('brew-log-card');
         var autoStop = timer.getAttribute('data-auto-stop') === '1';
-        var next = document.getElementById('brew-next');
-        var startBtn = document.getElementById('brew-start');
-        var resetBtn = document.getElementById('brew-reset');
+        var water = timer.getAttribute('data-water');
         var steps = Array.prototype.slice.call(document.querySelectorAll('.brew-steps li'));
+
+        // folded on a phone (the dots and the step card say where you are); on a landscape
+        // iPad there's room beside the tiles for every step, ticking off as you go
+        var wide = window.matchMedia && window.matchMedia('(min-width: 900px) and (orientation: landscape)');
+        // (but not while the live graph has that column: one thing there at a time)
+        function fold() { if (allSteps) allSteps.open = !!(wide && wide.matches) && page.className.indexOf('brew-live-on') < 0; }
+        window.brewFoldSteps = fold;
+        fold();
+        if (wide && wide.addListener) wide.addListener(fold);
+        if (logCard) logCard.hidden = true;    // until Stop
 
         var events = [];  // {t: seconds, i: step index}, in time order
         steps.forEach(function (li, i) {
@@ -106,6 +181,7 @@
             });
         });
         events.sort(function (a, b) { return a.t - b.t; });
+        var lastAt = events.length ? events[events.length - 1].t : 0;
 
         var startedAt = null;   // Date.now() at start, so backgrounding can't drift it
         var stoppedAt = 0;      // elapsed seconds while stopped
@@ -114,9 +190,16 @@
 
         function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
         function elapsed() { return startedAt === null ? stoppedAt : Math.floor((Date.now() - startedAt) / 1000); }
+        function grams(li) { var g = li && li.getAttribute('data-grams'); return g ? parseFloat(g) : null; }
+        function g(v) { return v % 1 ? v.toFixed(1) : String(v); }
+        function firstTime(li) { return parseInt(li.getAttribute('data-times'), 10); }
+        function fresh() { return startedAt === null && stoppedAt === 0 && !countdown; }
 
-        // the step without the bullet or number the method may start it with
-        function stepText(li) { return li.textContent.replace(/^\s*(?:[\u2022*-]|\d+[.)])\s+/, ''); }
+        // the step without the bullet, number or time ("1:10 — ") the method may start it
+        // with: the card and the tiles already say when
+        function stepText(li) {
+            return li.textContent.replace(/^\s*(?:[•*-]|\d+[.)])\s+/, '').replace(/^\d+:\d\d\s*[—–-]\s*/, '');
+        }
 
         // [frequency, delay, length]: a new step is one beep, the countdown ticks low and
         // ends high, and reaching a step's weight (static/scale.js) is a rising double chirp
@@ -158,31 +241,103 @@
             if (wakeLock) { wakeLock.release(); wakeLock = null; }
         }
 
+        // The next step after index i that has a weight to pour to
+        function nextTarget(i) {
+            for (var k = i + 1; k < steps.length; k++) if (grams(steps[k]) !== null) return steps[k];
+            return null;
+        }
+
+        // The right-hand tile without a scale: the weight to pour to, read off any
+        // kitchen scale, or for a step with none (a swirl, the drawdown) the time it has left
+        function renderPlan(s, li, upcoming) {
+            var t = grams(li), after;
+            if (!fresh() && startedAt === null) {
+                planLabel.textContent = 'Water'; planValue.textContent = water; planSub.textContent = 'ml, from the recipe';
+            } else if (t !== null) {
+                after = nextTarget(steps.indexOf(li));
+                planLabel.textContent = 'Pour to'; planValue.textContent = g(t);
+                planSub.textContent = after ? 'g, then ' + g(grams(after)) + ' at ' + fmt(firstTime(after)) : 'g, the last pour';
+            } else if (upcoming && !fresh()) {
+                planLabel.textContent = 'Step ends in'; planValue.textContent = fmt(upcoming.t - s); planSub.textContent = 'until the next step';
+            } else if (fresh() && nextTarget(-1)) {
+                after = nextTarget(-1);
+                planLabel.textContent = 'Pour to'; planValue.textContent = g(grams(after)); planSub.textContent = 'g, the first pour';
+            } else {
+                planLabel.textContent = 'Water'; planValue.textContent = water; planSub.textContent = 'ml in all';
+            }
+        }
+
+        function renderDots(current, stopped) {
+            if (!dots) return;
+            if (fresh()) {
+                dots.textContent = steps.length + ' step' + (steps.length === 1 ? '' : 's') + (lastAt ? ' · about ' + fmt(lastAt) : '');
+                return;
+            }
+            var html = '';
+            steps.forEach(function (li, i) {
+                var cls = i < current || stopped && i === current ? 'done' : i === current ? 'cur' : '';
+                if (li.hasAttribute('data-reached')) cls += ' reached';
+                html += '<i class="' + cls + '"></i>';
+            });
+            dots.innerHTML = html;
+        }
+
         function render() {
-            var s = elapsed(), current = -1, upcoming = null;
-            clock.textContent = fmt(s);
+            var s = elapsed(), current = -1, upcoming = null, running = startedAt !== null;
+            if (!countdown) clock.textContent = fmt(s);
             for (var k = 0; k < events.length; k++) {
                 if (events[k].t <= s) { current = k; } else { upcoming = events[k]; break; }
             }
-            if (startedAt !== null && current > lastEvent && events[current].t > 0) beep();
+            if (running && current > lastEvent && events[current].t > 0) beep();
             lastEvent = current;
-            if (animation) animation.update(current, s, startedAt !== null);
-            steps.forEach(function (li) { li.className = ''; });
-            if (current >= 0) {
-                steps[events[current].i].className = 'brew-step-now';
-                currentBox.textContent = stepText(steps[events[current].i]);
+            if (animation) animation.update(current, s, running);
+            var li = current >= 0 ? steps[events[current].i] : null;
+            steps.forEach(function (step) { step.className = ''; });
+            if (li) li.className = 'brew-step-now';
+
+            // before you start: the recipe tiles; from Start on, one labelled line
+            prepBox.hidden = !fresh();
+            labels.hidden = fresh();
+            page.className = 'card brew-mode' + (fresh() ? ' brew-fresh' : '') + (page.className.indexOf('brew-live-on') >= 0 ? ' brew-live-on' : '');
+
+            // the clock's tile, and its bar through the current step
+            var stopped = !running && !fresh() && !countdown;
+            timeLabel.textContent = stopped ? 'Brewed' : 'Time';
+            if (countdown) timeSub.textContent = 'pick up the kettle';
+            else if (fresh()) timeSub.textContent = lastAt ? 'about ' + fmt(lastAt) : '';
+            else if (stopped) timeSub.textContent = current >= 0 ? (current + 1) + ' of ' + events.length + ' steps' : '';
+            else timeSub.textContent = upcoming ? 'next step in ' + fmt(upcoming.t - s) : (events.length ? 'last step' : '');
+            var share = 0;
+            if (stopped) share = 1;
+            else if (current >= 0) share = upcoming ? (s - events[current].t) / (upcoming.t - events[current].t) : 1;
+            timeFill.style.width = (Math.max(0, Math.min(1, share)) * 100).toFixed(1) + '%';
+
+            renderPlan(s, li, upcoming);
+
+            // the step card: the first step before you start, the current one while brewing
+            var shown = fresh() || countdown ? (events.length ? steps[events[0].i] : null) : (stopped ? null : li);
+            card.hidden = !shown;
+            if (shown) {
+                cardLabel.textContent = (fresh() || countdown ? 'First step · ' : 'Now · ') + fmt(fresh() || countdown ? events[0].t : events[current].t);
+                var words = stepText(shown);
+                currentBox.textContent = words;
+                // a long step gets smaller type, so the card never pushes everything off the screen
+                currentBox.className = 'brew-current' + (words.length > 90 ? ' longer' : words.length > 50 ? ' long' : '');
+                var meta = '', t = grams(shown), w = window.brewScaleWeight ? window.brewScaleWeight() : null;
+                if (fresh() || countdown) {
+                    meta = '';  // the tiles already say what's next
+                } else if (t !== null && w !== null && !shown.hasAttribute('data-reached') && w < t) {
+                    meta = Math.ceil(t - w) + ' g to go';
+                }
+                cardMeta.textContent = meta;
+                cardMeta.hidden = !meta;
+                card.className = 'brew-card' + (running && shown.hasAttribute('data-reached') ? ' reached' : '');
             }
-            currentBox.hidden = current < 0;
-            if (prep && startedAt === null && stoppedAt === 0) {
-                currentBox.textContent = 'Before you start: ' + prep;
-                currentBox.hidden = false;
-            }
-            if (upcoming) {
-                next.textContent = 'Next in ' + fmt(upcoming.t - s) + ': ' + stepText(steps[upcoming.i]);
-            } else {
-                next.textContent = events.length && current >= 0 ? 'That was the last timed step' : '';
-            }
-            if (autoStop && startedAt !== null && current === events.length - 1 && events[current].t > 0) stop();
+
+            next.textContent = running && upcoming ? 'At ' + fmt(upcoming.t) + ' · ' + stepText(steps[upcoming.i]) : '';
+            next.hidden = !next.textContent;
+            renderDots(li ? events[current].i : -1, stopped);
+            if (autoStop && running && current === events.length - 1 && events[current].t > 0) stop();
         }
 
         function stop() {
@@ -192,8 +347,9 @@
             letSleep();
             startBtn.textContent = 'Resume';
             resetBtn.hidden = false;
+            if (logBtn) { logBtn.hidden = stoppedAt === 0; startBtn.className = 'btn-secondary'; }
             render();
-            var notes = document.getElementById('log-notes');
+            var notes = $('log-notes');
             if (notes && stoppedAt > 0) {
                 // the scale's reading too, when one is connected (static/scale.js)
                 var weighed = window.brewScaleGrams ? window.brewScaleGrams() : '';
@@ -228,8 +384,8 @@
             keepAwake();
             countdown = { end: Date.now() + COUNTDOWN * 1000, shown: null, interval: setInterval(countdownTick, 100) };
             startBtn.textContent = 'Cancel';
-            next.textContent = 'Pick up the kettle';
             timer.className = 'brew-timer brew-counting';
+            render();
             countdownTick();
         }
         function endCountdown() {
@@ -249,7 +405,9 @@
             tick = setInterval(render, 250);
             keepAwake();
             startBtn.textContent = 'Stop';
+            startBtn.className = '';
             resetBtn.hidden = true;
+            if (logBtn) logBtn.hidden = true;
             render();
         }
 
@@ -263,13 +421,21 @@
             stoppedAt = 0;
             lastEvent = -1;
             startBtn.textContent = 'Start';
+            startBtn.className = '';
             resetBtn.hidden = true;
+            if (logBtn) logBtn.hidden = true;
+            if (logCard) logCard.hidden = true;
             render();
+        });
+        if (logBtn) logBtn.addEventListener('click', function () {
+            logCard.hidden = false;
+            if (logCard.scrollIntoView) logCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
         // the browser drops the wake lock when the tab is hidden; take it back
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible' && startedAt !== null) keepAwake();
         });
+        window.brewRender = render;  // scale.js redraws when a weight is reached
         render();
     })();
 </script>

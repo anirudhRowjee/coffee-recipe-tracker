@@ -487,6 +487,16 @@ def manage(request: Request):
         })
 
 
+@app.post("/settings/brew-mode")
+def save_brew_settings(request: Request, show_brew_animation: Optional[str] = Form(None),
+                       show_live_graph: Optional[str] = Form(None)):
+    """Brew mode's switches on Manage. Unticked checkboxes send nothing."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        crud.set_brew_settings(session, user, animation=bool(show_brew_animation), live_graph=bool(show_live_graph))
+    return RedirectResponse(url="/manage#brew-mode", status_code=303)
+
+
 @app.get("/browse", response_class=HTMLResponse)
 def browse(request: Request):
     with Session(db.engine) as session:
@@ -814,20 +824,28 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
             "line": line,
             "latest": latest,
             "title": export.title(line, latest.bean),
-            "params": [
-                ("Dose", f"{latest.dose_g:g} g"),
-                ("Water", f"{latest.water_ml:g} ml"),
-                ("Ratio", export.ratio(latest)),
-                ("Temp", f"{latest.temp_c:g} °C"),
-                ("Grind", latest.grind_size),
-            ],
+            "ratio": export.ratio(latest),
             "steps": brew.parse_steps(latest.recipe_text),
             "prep": brew.prep_text(latest.recipe_text),
             "auto_stop": brew.ends_timer(latest.recipe_text),
-            "animation": brew.animation_data(latest.recipe_text, latest.brewer.name, latest.brewer.method),
+            "animation": brew.animation_data(latest.recipe_text, latest.brewer.name, latest.brewer.method)
+                         if user.show_brew_animation else "",
+            "live_graph": user.show_live_graph,
+            "last_curve": _last_curve(session, line, latest),
             "bag": bag,
             "plan_id": plan.id if plan else None,
         })
+
+
+def _last_curve(session: Session, line: models.RecipeLine, latest: models.Recipe) -> str:
+    """The newest saved curve of this named recipe, as JSON for brew mode to lay under
+    the graph after Stop ("" if there is none)."""
+    last = next(iter(crud.line_brews_with_curves(session, line.id)), None)  # type: ignore[arg-type]
+    if last is None:
+        return ""
+    curve = crud.get_curve(session, last.id)  # type: ignore[arg-type]
+    label = _brew_label(last, session.get(models.Recipe, last.recipe_id), latest)
+    return json.dumps({**curve, "label": "Last brew, " + label}, separators=(",", ":"))  # type: ignore[dict-item]
 
 
 @app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)

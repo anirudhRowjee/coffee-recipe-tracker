@@ -182,7 +182,7 @@ def test_every_named_recipe_exports(app_on, reference_db):
         assert f"\n- Grind: {line['grind']} on " in r.text, line
         r = app.client.get(f"/lines/{line['id']}/brew")
         assert r.status_code == 200, line
-        assert f"<dt>Grind</dt>\n            <dd>{line['grind']}</dd>" in r.text, line
+        assert f"<dt>Grind</dt><dd>{line['grind']}</dd>" in r.text, line
 
 
 def test_every_real_method_stays_usable_and_can_be_tidied(app_on, reference_db):

@@ -192,8 +192,7 @@ def test_page_carries_the_plan(app):
     raw = re.search(r'data-animation="([^"]+)"', html).group(1)
     assert json.loads(html_lib.unescape(raw)) == plan(HYBRID, "Hario Switch")
     assert re.search(r'<div class="brew-anim" id="brew-anim" hidden>', html)  # only shown with JavaScript
-    assert re.search(r'id="brew-anim-toggle"[^>]* hidden>', html)
-    assert re.search(r'id="brew-anim-on" type="checkbox" checked', html)  # on by default
+    assert "brew-anim-toggle" not in html  # switched on and off on Manage now
     assert html.index('src="/static/brew_animation.js?v=') < html.index("window.BrewAnimation(timer)")
 
 

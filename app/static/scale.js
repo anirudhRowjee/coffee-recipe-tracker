@@ -39,6 +39,11 @@
     var startBtn = document.getElementById('brew-start');
     var resetBtn = document.getElementById('brew-reset');
     var note = document.getElementById('brew-scale-note');
+    var label = document.getElementById('brew-weight-label');
+    var planTile = document.getElementById('brew-plan-tile');
+    var status = document.getElementById('brew-scale-status');
+    var live = document.getElementById('brew-live');
+    var liveOn = timer.getAttribute('data-live-graph') === '1' && live, liveDrawnAt = 0;
     var fromScale = false;  // the scale started or stopped the brew, so don't echo it back
     var device = null, command = null, grams = null;
 
@@ -139,6 +144,30 @@
             keepForLog();
         }
         wasRunning = now;
+        drawLive(now);
+    }
+
+    // The graph while brewing (Manage: "Show the graph while brewing"): redrawn once a
+    // second, out to the end of the method so the plan's whole staircase shows.
+    function planEnd() {
+        var end = 0;
+        Array.prototype.forEach.call(document.querySelectorAll('.brew-steps li'), function (li) {
+            (li.getAttribute('data-times') || '').split(',').forEach(function (t) { if (t !== '') end = Math.max(end, parseInt(t, 10)); });
+        });
+        return end + 20;
+    }
+    function drawLive(now) {
+        if (!liveOn) return;
+        var on = now && command !== null;
+        if (live.hidden === on) {
+            live.hidden = !on;
+            var page = document.getElementById('brew-mode');
+            page.className = page.className.replace(/ ?brew-live-on/, '') + (on ? ' brew-live-on' : '');
+            if (window.brewFoldSteps) window.brewFoldSteps();
+        }
+        if (!on || samples.length < 2 || Date.now() - liveDrawnAt < 1000 || !window.BrewGraphs) return;
+        liveDrawnAt = Date.now();
+        window.BrewGraphs.live(samples, stepTargets(), planEnd());
     }
 
     // Two readings a second go into the log form, so the graphs are saved with the brew
@@ -179,8 +208,9 @@
 
     function show() {
         if (grams === null) return;
-        var w = weight();
-        weightBox.textContent = w.toFixed(1);
+        var w = weight(), fixed = w.toFixed(1);
+        // the decimal smaller, so the number fits its tile at a size readable from the counter
+        weightBox.innerHTML = fixed.slice(0, -2) + '<span class="dec">' + fixed.slice(-2) + '</span>';
         var li = targetStep(), t = li ? parseFloat(li.getAttribute('data-grams')) : null;
         // Reaching the weight ticks the step off; the clock still decides when the next
         // one starts, since the method's times are part of the recipe. Only while the
@@ -189,11 +219,17 @@
         if (li && running() && w >= t - CLOSE_G && !li.hasAttribute('data-reached')) {
             li.setAttribute('data-reached', '');
             if (window.brewBeep) window.brewBeep('reached');  // not the new-step beep
+            if (window.brewRender) window.brewRender();      // the step card turns green too
         }
         var reached = li && li.hasAttribute('data-reached');
-        targetBox.textContent = t ? (reached ? ' ✓ ' : ' → ') + (t % 1 ? t.toFixed(1) : t) + ' g' : '';
-        fill.style.width = (t ? Math.max(0, Math.min(1, w / t)) * 100 : 0).toFixed(1) + '%';
-        panel.className = 'brew-scale' + (t && w > t + CLOSE_G ? ' over-target' : reached ? ' at-target' : '');
+        var stopped = !running() && startBtn.textContent === 'Resume';
+        var tg = t ? (t % 1 ? t.toFixed(1) : String(t)) + ' g' : '';
+        label.textContent = stopped ? 'In the cup' : 'Weight';
+        tareBtn.hidden = stopped;  // after a brew the bar is Reset, Resume and Log
+        targetBox.textContent = stopped ? 'g' : !running() ? 'g on the scale'
+            : !t ? 'g' : reached ? 'g · ' + tg + ' reached' : 'g → ' + tg;
+        fill.style.width = (stopped ? 100 : running() && t ? Math.max(0, Math.min(1, w / t)) * 100 : 0).toFixed(1) + '%';
+        panel.className = 'brew-tile brew-scale' + (running() && t && w > t + CLOSE_G ? ' over-target' : running() && reached ? ' at-target' : '');
     }
 
     function say(text) { note.textContent = text; note.hidden = !text; }
@@ -222,9 +258,12 @@
 
     function connected(on) {
         panel.hidden = !on;
+        planTile.hidden = on;  // the weight replaces "Pour to"
         connectBtn.hidden = on;
+        status.hidden = !on;
         tareBtn.hidden = !on;
         if (!on) { command = null; grams = null; }
+        drawLive(running());
     }
 
     function bytes(view) { return new Uint8Array(view.buffer, view.byteOffset, view.byteLength); }
@@ -291,7 +330,7 @@
             }
         }).then(function () {
             connectBtn.disabled = false;
-            connectBtn.textContent = 'Scale';
+            connectBtn.textContent = '+ Scale';
         });
     });
 
@@ -323,4 +362,5 @@
     setInterval(function () { track(); show(); }, 500);
 
     window.brewScaleGrams = function () { return grams === null ? '' : Math.round(weight()) + ' g'; };
+    window.brewScaleWeight = function () { return grams === null ? null : weight(); };
 })();

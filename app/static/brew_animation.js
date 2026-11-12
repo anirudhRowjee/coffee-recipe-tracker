@@ -1,4 +1,6 @@
-// Brew mode's animation: a small drawing of the brewer doing the current step.
+// Brew mode's animation: a small drawing of the brewer doing the current step, in the
+// step card. Whether it shows at all is a setting on Manage (the server leaves out
+// data-animation when it's off).
 // app/brew.py decides everything about a recipe (brewer shape, what each step is,
 // water level, valve, cup) and tests it; this only draws one step at a time as
 // SVG, and CSS keyframes in styles.css do the moving. Lengths are the step's real
@@ -120,23 +122,13 @@ window.BrewAnimation = (function () {
         return svg(style, '<defs><clipPath id="' + id + '"><path d="' + s.inside + '"/></clipPath>' + mugClip + '</defs>' + mug + drips + body + over + badge);
     }
 
-    function setting(value) {
-        try {
-            if (value) localStorage.setItem('brew-animation', value);
-            return localStorage.getItem('brew-animation');
-        } catch (e) { return null; }
-    }
-
     // Returns {update(stepIndex, elapsedSeconds, running)}, or null if this recipe has no animation.
     return function (timer) {
         var raw = timer.getAttribute('data-animation');
         if (!raw) return null;
         var data = JSON.parse(raw);
         var host = document.getElementById('brew-anim');
-        var toggle = document.getElementById('brew-anim-toggle');
-        var checkbox = document.getElementById('brew-anim-on');
-        var enabled = setting() !== 'off';
-        var drawn = null, last = { index: -1, elapsed: 0, running: false };
+        var drawn = null;
 
         // Which phase of a step the clock is in
         function phaseOf(step, elapsed) {
@@ -146,8 +138,6 @@ window.BrewAnimation = (function () {
         }
 
         function update(index, elapsed, running) {
-            last = { index: index, elapsed: elapsed, running: running };
-            if (!enabled) return;
             var step = data.steps[index];
             var at = step ? phaseOf(step, elapsed) : 0;
             var phase = step ? step.phases[at] : READY;
@@ -159,24 +149,7 @@ window.BrewAnimation = (function () {
             host.classList.toggle('brew-anim-paused', !running && phase.kind !== 'done');
         }
 
-        function apply() {
-            host.hidden = !enabled;
-            if (enabled) {
-                drawn = null;
-                update(last.index, last.elapsed, last.running);
-            } else {
-                host.innerHTML = '';
-            }
-        }
-
-        toggle.hidden = false;
-        checkbox.checked = enabled;
-        checkbox.addEventListener('change', function () {
-            enabled = checkbox.checked;
-            setting(enabled ? 'on' : 'off');
-            apply();
-        });
-        apply();
+        host.hidden = false;
         return { update: update };
     };
 })();

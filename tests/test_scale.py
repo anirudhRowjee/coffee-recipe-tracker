@@ -35,15 +35,15 @@ def test_scale_controls_are_hidden_until_the_script_shows_them(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": METHOD})
     page = brew_page(app)
     assert re.search(r'<script src="/static/scale\.js\?v=[0-9a-f]{10}"></script>', page)
-    for marker in ('id="brew-scale" hidden', 'id="brew-scale-connect" class="btn-secondary brew-scale-btn" hidden',
-                   'id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden'):
+    for marker in ('id="brew-scale" hidden', 'id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden',
+                   'id="brew-scale-status" hidden', 'id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden'):
         assert marker in page
 
 
 def test_free_text_still_renders(app):
     post(app, "/recipes", BASELINE)
     page = brew_page(app)
-    assert "data-grams" not in page
+    assert ' data-grams="' not in page
     assert 'id="brew-scale-connect"' in page
 
 
@@ -68,8 +68,8 @@ def test_static_urls_change_when_the_file_does(app, tmp_path, monkeypatch):
 def test_graphs_section_waits_for_a_brew(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": METHOD})
     page = brew_page(app)
-    assert 'id="brew-graphs"' in page and 'id="brew-graphs" style=' in page
-    assert page.index('id="brew-graphs"') < page.index("Log this brew")  # between the recipe and the log form
+    assert 'id="brew-graphs"' in page
+    assert page.index('id="brew-graphs"') < page.index('id="brew-controls"') < page.index('id="brew-log-card"')  # under the steps, before the log form
     assert page.index('/static/brew_graphs.js') < page.index('/static/scale.js')  # scale.js hands it the readings
     section = page[page.index('id="brew-graphs"'):]
     assert section[:section.index(">")].endswith("hidden")
