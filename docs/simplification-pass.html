@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coffee App Simplification Pass</title>
+<style>
+/* Report shell in cool ink; mockups inside .phone / .ipad use the app's own palette so they read as the real thing.
+   Layout: one reading column; device frames in wrapping rows; the iPad frame scrolls sideways inside its own box on a phone. */
+:root {
+  --ink: #1d2126;
+  --ink-soft: #4a525c;
+  --paper: #f6f7f8;
+  --card: #ffffff;
+  --rule: #dde1e5;
+  --mark: #b4561f;
+  --good: #2f7a4f;
+  --display: Georgia, 'Palatino Linotype', Palatino, serif;
+  --body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --a-bg: #faf6f0; --a-card: #fffdf9; --a-ink: #2c1810; --a-brown: #6b3d2e; --a-parch: #f0e4d4;
+  --a-border: #e0c9b0; --a-muted: #8a6a55; --a-amber: #f6e3b4; --a-amber-ink: #6b4a00; --a-green: #e3f1e5;
+  --a-tip: #3b2418;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e6e8eb; --ink-soft: #a9b0b8; --paper: #15181b; --card: #1e2226; --rule: #31373d; --mark: #e58a55; --good: #6cc394;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #e6e8eb; --ink-soft: #a9b0b8; --paper: #15181b; --card: #1e2226; --rule: #31373d; --mark: #e58a55; --good: #6cc394;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 16px 80px; }
+.col { max-width: 720px; }
+h1, h2, h3 { font-family: var(--display); font-weight: normal; text-wrap: balance; line-height: 1.2; }
+h1 { font-size: 2.3rem; margin: 0 0 8px; }
+h2 { font-size: 1.7rem; margin: 56px 0 8px; padding-top: 24px; border-top: 1px solid var(--rule); }
+h3 { font-size: 1.25rem; margin: 40px 0 6px; }
+p { margin: 0 0 12px; }
+.lede { font-size: 1.12rem; color: var(--ink-soft); }
+.muted { color: var(--ink-soft); }
+code { font-size: 0.88em; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; }
+nav.toc a { color: var(--ink); text-decoration: none; border: 1px solid var(--rule); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--mark); outline: none; }
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 24px 0; }
+.stat { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.stat b { display: block; font-family: var(--display); font-size: 2rem; font-weight: normal; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--ink-soft); font-size: 0.9rem; }
+.issue { background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--mark); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+.issue.minor { border-left-color: var(--rule); }
+.issue h3 { margin: 0 0 6px; font-size: 1.15rem; }
+.issue .tag { display: inline-block; font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mark); font-weight: 600; margin-bottom: 4px; }
+.issue.minor .tag { color: var(--ink-soft); }
+.issue ul { margin: 6px 0 0; padding-left: 20px; }
+.issue li { margin: 3px 0; }
+.good-box { border-left-color: var(--good); }
+.good-box .tag { color: var(--good); }
+table.terms { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.93rem; }
+table.terms th, table.terms td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.terms th { font-weight: 600; color: var(--ink-soft); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.tablewrap { overflow-x: auto; }
+
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 18px 0; }
+.principles div { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; font-size: 0.92rem; }
+.principles b { display: block; margin-bottom: 2px; }
+
+/* ---------- device frames ---------- */
+.mock-row { display: flex; flex-wrap: wrap; gap: 28px; margin: 18px 0 8px; align-items: flex-start; }
+figure { margin: 0; }
+.mock { display: flex; flex-direction: column; gap: 10px; width: 300px; max-width: 100%; }
+.mock.wide { width: 780px; }
+.mock figcaption { font-size: 0.9rem; color: var(--ink-soft); }
+.mock figcaption b { color: var(--ink); }
+.frame-scroll { overflow-x: auto; padding-bottom: 4px; }
+
+.phone, .ipad { background: var(--a-bg); color: var(--a-ink); font: 13px/1.45 var(--body); color-scheme: light; position: relative; overflow: hidden; }
+.phone { border: 8px solid #222; border-radius: 34px; height: 620px; display: flex; flex-direction: column; }
+.ipad { border: 12px solid #222; border-radius: 26px; width: 780px; height: 542px; display: grid; grid-template-columns: 64px 1fr; }
+.status { display: flex; justify-content: space-between; padding: 8px 18px 2px; font-size: 0.7rem; font-weight: 600; flex: 0 0 auto; }
+.status .isl { width: 76px; height: 20px; background: #111; border-radius: 12px; margin-top: -2px; }
+.screen { flex: 1; overflow: hidden; padding: 6px 12px 0; position: relative; }
+.home-ind { height: 4px; width: 110px; background: #222; border-radius: 3px; margin: 6px auto 6px; flex: 0 0 auto; }
+
+/* bottom tab bar (phone) */
+.tabbar { display: flex; border-top: 1px solid var(--a-border); background: rgba(255,253,249,.96); flex: 0 0 auto; }
+.tabbar span { flex: 1; text-align: center; padding: 6px 0 2px; font-size: 0.64rem; color: var(--a-muted); }
+.tabbar span i { display: block; font-style: normal; font-size: 1.05rem; line-height: 1.2; }
+.tabbar span.on { color: var(--a-brown); font-weight: 700; }
+/* sticky action above the tab bar */
+.dock { padding: 8px 12px; background: linear-gradient(to top, var(--a-bg) 70%, rgba(250,246,240,0)); flex: 0 0 auto; }
+
+/* iPad sidebar rail */
+.rail { background: #f3e9dc; border-right: 1px solid var(--a-border); display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 18px; }
+.rail span { width: 52px; text-align: center; font-size: 0.6rem; color: var(--a-muted); padding: 6px 0; border-radius: 10px; }
+.rail span i { display: block; font-style: normal; font-size: 1.15rem; }
+.rail span.on { background: var(--a-card); color: var(--a-brown); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.ipad .body { display: grid; min-width: 0; position: relative; }
+.ipad .body.two { grid-template-columns: 1.25fr 1fr; }
+.ipad .body.split { grid-template-columns: 250px 1fr; }
+.pane { padding: 16px 16px 0; overflow: hidden; min-width: 0; position: relative; }
+.pane + .pane { border-left: 1px solid var(--a-border); background: #fcf8f2; }
+.ipad .topline { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.ipad .topline .title { font-family: var(--display); font-size: 1.35rem; }
+
+/* shared app pieces */
+.title { font-family: var(--display); font-size: 1.25rem; }
+.bar { display: flex; justify-content: space-between; align-items: center; margin: 2px 0 10px; }
+.eyebrow { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-muted); font-weight: 700; }
+.pcard { background: var(--a-card); border: 1px solid var(--a-border); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.pcard h4 { font-family: var(--display); font-weight: normal; font-size: 1.15rem; margin: 0; line-height: 1.25; }
+.art { width: 44px; height: 44px; border-radius: 10px; flex: 0 0 44px; background: linear-gradient(135deg, #e8c9a0, #b06a43 55%, #4b2a1b); }
+.art.b { background: linear-gradient(135deg, #f0dcae, #c9a24a 50%, #6b5a1f); }
+.art.c { background: linear-gradient(135deg, #f5d6d0, #c26a6a 50%, #5b2430); }
+.art.d { background: linear-gradient(135deg, #dfe7d8, #7a9a6a 50%, #2f4a2a); }
+.art.sm { width: 34px; height: 34px; flex-basis: 34px; border-radius: 8px; }
+.hrow { display: flex; gap: 10px; align-items: center; }
+.sub { font-size: 0.76rem; color: var(--a-muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chip { border: 1px solid var(--a-border); background: var(--a-card); border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; color: var(--a-ink); min-height: 32px; display: inline-flex; align-items: center; gap: 4px; }
+.chip.on { background: var(--a-brown); border-color: var(--a-brown); color: #fff; }
+.chip.ghost { border-style: dashed; color: var(--a-muted); }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.tiles.four { grid-template-columns: repeat(4, 1fr); }
+.tiles.four .tile b { font-size: 1.3rem; white-space: nowrap; }
+.tile { border: 1px solid var(--a-border); border-radius: 12px; padding: 8px 10px; background: #fffaf3; position: relative; min-height: 64px; }
+.tile b { display: block; font-size: 1.45rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile b small { font-size: 0.72rem; font-weight: 500; }
+.tile i { font-style: normal; font-size: 0.68rem; color: var(--a-muted); display: block; }
+.tile .eyebrow { font-size: 0.58rem; }
+.tile .edit { position: absolute; top: 6px; right: 8px; font-size: 0.7rem; color: var(--a-muted); }
+.tile.active { border: 2px solid var(--a-brown); background: #fff; box-shadow: 0 2px 10px rgba(107,61,46,.18); }
+.tile.locked { opacity: 0.42; }
+.tile.locked::after { content: "🔒"; position: absolute; top: 6px; right: 8px; font-size: 0.65rem; }
+.btn { display: block; width: 100%; text-align: center; border-radius: 12px; padding: 12px; min-height: 46px; background: var(--a-brown); color: #fff; border: 0; font: 700 0.95rem var(--body); }
+.btn.sec { background: var(--a-parch); color: var(--a-ink); }
+.btn.small { display: inline-flex; align-items: center; width: auto; padding: 6px 12px; min-height: 34px; font-size: 0.8rem; }
+.btnrow { display: flex; gap: 8px; margin-top: 8px; }
+.btnrow .btn { flex: 1; }
+.note { background: var(--a-amber); color: var(--a-amber-ink); border-radius: 12px; padding: 9px 10px; font-size: 0.82rem; margin: 8px 0; display: flex; gap: 8px; align-items: center; }
+.note b { color: var(--a-ink); }
+.note .btn { margin-left: auto; flex: 0 0 auto; }
+.stars { color: #c18a2f; letter-spacing: 1px; }
+.list { border: 1px solid var(--a-border); border-radius: 14px; overflow: hidden; background: var(--a-card); }
+.list > div { padding: 11px 12px; min-height: 46px; border-bottom: 1px solid var(--a-border); display: flex; align-items: center; gap: 10px; font-size: 0.86rem; }
+.list > div:last-child { border-bottom: 0; }
+.list > div.sel { background: #f6ecdf; box-shadow: inset 3px 0 0 var(--a-brown); }
+.list .chev { margin-left: auto; color: var(--a-muted); }
+.list .d { color: var(--a-muted); font-size: 0.74rem; display: block; }
+.steps { font-size: 0.8rem; line-height: 1.5; }
+.steps div { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--a-border); }
+.steps div:last-child { border-bottom: 0; }
+.steps .t { font-variant-numeric: tabular-nums; color: var(--a-muted); width: 34px; flex: 0 0 34px; }
+.steps .g { margin-left: auto; color: var(--a-muted); }
+.brewlog { font-size: 0.8rem; padding: 8px 0; border-bottom: 1px solid var(--a-border); }
+.brewlog:last-child { border-bottom: 0; }
+.green { background: var(--a-green); border-radius: 12px; padding: 9px 10px; font-size: 0.82rem; margin: 8px 0; }
+.dim { opacity: 0.45; }
+.lbl { font-size: 0.78rem; font-weight: 700; margin-top: 10px; }
+.input { border: 1px solid var(--a-border); background: #fff; border-radius: 10px; padding: 10px; font-size: 0.84rem; color: var(--a-muted); margin: 4px 0 8px; min-height: 40px; }
+.seg { display: flex; background: var(--a-parch); border-radius: 10px; padding: 3px; gap: 3px; margin: 8px 0; }
+.seg span { flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; font-size: 0.78rem; color: var(--a-muted); }
+.seg span.on { background: var(--a-card); color: var(--a-ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+.stepper button { width: 56px; height: 56px; border-radius: 16px; border: 1px solid var(--a-border); background: var(--a-card); font-size: 1.6rem; color: var(--a-ink); }
+.stepper .val { text-align: center; flex: 1; }
+.stepper .val b { font-size: 2.2rem; display: block; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.stepper .val i { font-style: normal; font-size: 0.78rem; color: var(--a-muted); }
+.bigstars { font-size: 2.3rem; color: #c18a2f; letter-spacing: 6px; text-align: center; margin: 4px 0; }
+.check { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--a-border); }
+.check:last-child { border-bottom: 0; }
+.check .dot { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; border: 2px solid var(--a-border); display: grid; place-items: center; font-size: 0.72rem; font-weight: 700; }
+.check.done .dot { background: var(--a-brown); border-color: var(--a-brown); color: #fff; }
+.check.done .t { color: var(--a-muted); text-decoration: line-through; }
+.check.now .dot { border-color: var(--a-brown); color: var(--a-brown); }
+.check .t { font-weight: 700; font-size: 0.88rem; }
+.progress { height: 6px; background: var(--a-parch); border-radius: 3px; overflow: hidden; margin: 6px 0 4px; }
+.progress span { display: block; height: 100%; background: var(--a-brown); }
+
+/* bottom sheet / side sheet / popover */
+.scrim { position: absolute; inset: 0; background: rgba(30,18,10,.38); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--a-card); border-radius: 20px 20px 0 0; padding: 8px 14px 14px; box-shadow: 0 -6px 24px rgba(0,0,0,.18); }
+.sheet .grab { width: 38px; height: 5px; border-radius: 3px; background: #d9c6b3; margin: 0 auto 10px; }
+.sheet h4 { font-family: var(--display); font-weight: normal; font-size: 1.2rem; margin: 0 0 2px; }
+.pop { position: absolute; background: var(--a-card); border: 1px solid var(--a-border); border-radius: 16px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.pop::before { content: ""; position: absolute; width: 14px; height: 14px; background: var(--a-card); border-left: 1px solid var(--a-border); border-top: 1px solid var(--a-border); transform: rotate(45deg); top: -8px; left: var(--arrow, 40px); }
+
+/* help: the "?" tip, live (uses <details> so it works in the static page; the real app would use the Popover API) */
+details.tip { display: inline-block; position: relative; vertical-align: middle; }
+details.tip > summary { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--a-parch); color: var(--a-brown); font: 800 0.72rem/1 var(--body); cursor: pointer; list-style: none; margin-left: 3px; }
+details.tip > summary::-webkit-details-marker { display: none; }
+details.tip > summary::after { content: ""; position: absolute; inset: -11px; } /* 44px hit area */
+details.tip > summary:focus-visible { outline: 2px solid var(--a-brown); outline-offset: 2px; }
+details.tip[open] > summary { background: var(--a-brown); color: #fff; border-color: var(--a-brown); }
+details.tip > div { position: absolute; z-index: 5; top: 30px; left: -110px; width: 230px; background: var(--a-tip); color: #fbf3e8; border-radius: 12px; padding: 10px 12px; font-size: 0.78rem; line-height: 1.45; font-weight: 400; text-transform: none; letter-spacing: 0; box-shadow: 0 8px 22px rgba(0,0,0,.25); }
+details.tip > div::before { content: ""; position: absolute; top: -6px; left: 116px; width: 12px; height: 12px; background: var(--a-tip); transform: rotate(45deg); }
+details.tip.left > div { left: -200px; }
+details.tip.left > div::before { left: 206px; }
+details.tip.right > div { left: -10px; }
+details.tip.right > div::before { left: 16px; }
+details.tip > div a { color: #f4c58b; }
+.coach { background: var(--a-tip); color: #fbf3e8; border-radius: 14px; padding: 10px 12px; font-size: 0.78rem; display: flex; gap: 8px; align-items: flex-start; }
+.coach b { color: #fff; }
+.coach .x { margin-left: auto; opacity: 0.7; padding-left: 6px; }
+.spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 999px rgba(30,18,10,.55); pointer-events: none; }
+
+.morning { display: flex; gap: 10px; align-items: center; margin: 2px 0 10px; }
+.morning .px { flex: 0 0 auto; line-height: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--a-border); }
+.morning .px svg { display: block; }
+.morning b { font-family: var(--display); font-weight: normal; font-size: 1.15rem; display: block; line-height: 1.2; }
+.morning i { font-family: var(--display); font-size: 0.8rem; color: #5c3520; display: block; line-height: 1.3; }
+.switch { width: 40px; height: 24px; border-radius: 12px; background: var(--a-brown); position: relative; flex: 0 0 40px; margin-left: auto; }
+.switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.switch.off { background: #d9c6b3; }
+.switch.off::after { right: auto; left: 3px; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 8px 0; }
+.keypad span { background: var(--a-parch); border-radius: 8px; text-align: center; padding: 7px 0; font-weight: 600; }
+.srow { display: grid; grid-template-columns: 14px 44px 1fr auto; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--a-border); font-size: 0.8rem; }
+.srow:last-of-type { border-bottom: 0; }
+.srow .h { color: #c9b29c; letter-spacing: -2px; }
+.srow .tm { border: 1px solid var(--a-border); border-radius: 8px; text-align: center; padding: 5px 0; font-variant-numeric: tabular-nums; background: #fff; }
+.srow .ac { border: 1px solid var(--a-border); border-radius: 8px; padding: 5px 8px; background: #fff; }
+.srow .gr { display: flex; align-items: center; gap: 4px; }
+.srow .gr span { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--a-border); display: grid; place-items: center; background: var(--a-card); }
+.srow .gr b { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.srow.changed { background: #fff4e0; border-radius: 10px; padding-left: 4px; padding-right: 4px; }
+.srow.changed small { display: block; color: var(--a-amber-ink); font-size: 0.66rem; text-align: center; }
+.ver { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--a-border); font-size: 0.82rem; }
+.ver:last-child { border-bottom: 0; }
+.ver .n { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--a-parch); display: grid; place-items: center; font-weight: 700; font-size: 0.75rem; }
+.ver.cur .n { background: var(--a-brown); color: #fff; }
+.ver .what { font-weight: 700; }
+.badge { display: inline-block; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 6px; padding: 1px 6px; background: var(--a-parch); color: var(--a-brown); vertical-align: 1px; }
+.badge.best { background: var(--a-green); color: #2c4a33; }
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cgrid .card2 { background: var(--a-card); border: 1px solid var(--a-border); border-radius: 12px; overflow: hidden; }
+.cgrid .card2 .art { width: 100%; height: 54px; border-radius: 0; }
+.cgrid .card2 div.t { padding: 6px 8px 8px; font-size: 0.78rem; line-height: 1.3; }
+.cgrid .card2 div.t b { display: block; font-size: 0.82rem; }
+.cgrid.three { grid-template-columns: repeat(3, 1fr); }
+.chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.86rem; margin: 6px 0; }
+.chain .v { border: 1px solid var(--rule); background: var(--card); border-radius: 8px; padding: 3px 9px; }
+.chain .v.cur { border-color: var(--mark); color: var(--mark); font-weight: 700; }
+.chain .arr { color: var(--ink-soft); font-size: 0.78rem; }
+.decision { background: var(--card); border: 1px solid var(--rule); border-left: 4px solid #3a6fb0; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+.decision .tag { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: #3a6fb0; font-weight: 700; }
+.err { color: #a3332a; font-size: 0.74rem; margin: -4px 0 8px; }
+.input.bad { border-color: #c4554a; background: #fff6f5; color: #2c1810; }
+.input.ok { border-color: #7aa985; color: #2c1810; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: 10px; background: #2c1810; color: #fbf3e8; border-radius: 12px; padding: 10px 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.toast b { color: #f4c58b; margin-left: auto; }
+.btn.off { background: #d9c6b3; color: #fff; }
+.warnbox { background: #fff4e0; border: 1px solid #f0d49a; border-radius: 12px; padding: 9px 10px; font-size: 0.8rem; margin: 8px 0; }
+.locked-row { opacity: .5; }
+.order { counter-reset: step; list-style: none; padding: 0; }
+.order li { counter-increment: step; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px 12px 52px; margin: 10px 0; position: relative; }
+.order li::before { content: counter(step); position: absolute; left: 14px; top: 11px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; }
+.order li b { display: block; }
+.order li span { color: var(--ink-soft); font-size: 0.92rem; }
+@media (prefers-reduced-motion: no-preference) { nav.toc a { transition: border-color .15s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="col">
+  <h1>Simplification pass</h1>
+  <p class="lede">A walk through every screen of the coffee tracker, asking one question: would someone who isn't Anirudh know what to do next? I used a copy of the prod database, signed in both as you (23 coffees, 90 brews) and as a friend with nothing set up yet.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#complex">1 · What feels complex</a>
+    <a href="#mockups">2 · Mockups (iPhone, iPad)</a>
+    <a href="#help">3 · Tooltips and help</a>
+    <a href="#order">4 · Order of work</a>
+  </nav>
+</header>
+
+<div class="stat-row">
+  <div class="stat"><b>3 of 4</b><span>friends with accounts haven't logged a brew yet. Two haven't added a coffee.</span></div>
+  <div class="stat"><b>~100</b><span>tappable things on the recipe card on Brew (each star and step-editor row counts once)</span></div>
+  <div class="stat"><b>3×</b><span>times "Create variation" asks for the same change: the new value, "What changed", and "Delta amount"</span></div>
+  <div class="stat"><b>5</b><span>names for the same idea: recipe, named recipe, version, variation, baseline</span></div>
+</div>
+
+<section class="col" id="complex">
+<h2>1 · What feels complex</h2>
+<p class="muted">Ranked by how much each one would stop a new person. Brew mode is the exception: it's already the clearest screen, and it's the model for everything else.</p>
+
+<div class="issue good-box">
+  <div class="tag">Already right</div>
+  <h3>Brew mode explains itself</h3>
+  <p>Each number sits in a labelled tile that says what it's for: "15 g, beans to weigh", "93 °C, kettle set to", "22 on the Timemore". There's one big button, and the next step is always on screen. The rest of the app should copy this: say what a number is for, show one main action, and keep the rest a tap away.</p>
+</div>
+
+<div class="issue">
+  <div class="tag">Highest impact</div>
+  <h3>Getting started is a scavenger hunt</h3>
+  <ul>
+    <li>The welcome popup says "go to Manage". On Manage, the setup forms sit below Lifetime savings (₹0), Brewing streak (0 days) and the brew-mode switches, all of which mean nothing yet.</li>
+    <li>Adding a coffee takes two forms: "+ Add Bean" (five fields), then "+ Add Bag" inside the new row (seven fields, including frozen date and low-stock alert).</li>
+    <li>Brewer and grinder are both required, so someone using pre-ground coffee has to invent a grinder called "No Grinder". The popup actually tells them to.</li>
+    <li>Back on Brew, there's no progress and no "next": just three empty pickers. After dismissing the popup there's no way to get the steps back.</li>
+    <li>The first recipe form asks for a dose, water, temperature and grind with no starting values and no example.</li>
+  </ul>
+</div>
+
+<div class="issue">
+  <div class="tag">Highest impact</div>
+  <h3>The recipe card does nine jobs at once</h3>
+  <p>One card on Brew shows the recipe, starts brew mode, offers three share links and "Tidy into steps", plans the next brew (a note plus a suggested change), shows the recommendation, then opens into Log a brew (with past brews), Create variation (with change history), New named recipe, and Rename or delete. On a phone that's four screens of scrolling, and the main action (▶ Brew) looks the same size as everything else.</p>
+</div>
+
+<div class="issue">
+  <div class="tag">Highest impact</div>
+  <h3>"Create variation" asks for the same change three times, then does something you can't see</h3>
+  <ul>
+    <li>To change the temperature you edit the Temp field, pick "Temp" under "What changed", and type "+3" under "Delta amount". The server already knows which field changed (<code>validate_one_parameter_delta</code> works it out), but it saves the dropdown's answer, so the two can disagree.</li>
+    <li>Saving a variation also <em>logs a brew</em> of the new version, which takes the dose out of the bag, even if the tasting notes are empty. Nothing on the form says so.</li>
+    <li>The form repeats Log a brew's fields (tasting notes, rating, recommend next change, why), so there are two places to log a brew, and they behave differently.</li>
+    <li>The one-change rule is the heart of the app, but people only find out about it from an error page ("Must change exactly one parameter. Changed: ['dose_g', 'temp_c']").</li>
+  </ul>
+</div>
+
+<div class="issue">
+  <div class="tag">High</div>
+  <h3>One idea, many names, and code names showing through</h3>
+  <div class="tablewrap">
+  <table class="terms">
+    <thead><tr><th>Idea</th><th>Names used today</th><th>Suggested</th></tr></thead>
+    <tbody>
+      <tr><td>A recipe someone keeps improving</td><td>recipe, named recipe, line (in code), "Default"</td><td><b>Recipe</b></td></tr>
+      <tr><td>One saved state of it</td><td>version, variation, baseline</td><td><b>Version</b> ("Version 4"); the first is just "Version 1"</td></tr>
+      <tr><td>Making a new version</td><td>Create variation, Save variation</td><td><b>Try a change</b></td></tr>
+      <tr><td>Your note to future you</td><td>Recommend next change, Recommended next, Planned change, Previous recommendation, Apply, "→ Try"</td><td><b>Next time</b> ("Next time: hotter by 3 °C")</td></tr>
+      <tr><td>Putting a brew at the top of Brew</td><td>Plan for next time, Schedule next brew, Scheduled brew, Planned for next time</td><td><b>Up next</b></td></tr>
+      <tr><td>The pages</td><td>Brew, Browse, Manage</td><td><b>Brew, Coffees, Settings</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:10px">Code names reach the screen too: the banner says "Change <b>temp c</b> by 3.0", the change-history tables have a "Param" column showing <code>dose_g</code> with a bare "-1.0", and the variation form says "Delta amount".</p>
+</div>
+
+<div class="issue">
+  <div class="tag">High</div>
+  <h3>Browse and Manage overlap, and Manage holds five things</h3>
+  <ul>
+    <li>Manage covers stats (savings, streak), settings (brew mode), stock (beans and bags), gear (brewers and grinders) and admin (users). A new person looking for "my coffees" has two pages to check.</li>
+    <li>Browse shows bags and history for each coffee, but bags are added and edited on Manage.</li>
+    <li>"Schedule next brew" on Browse and "Plan for next time" on Brew are the same thing, with different forms.</li>
+  </ul>
+</div>
+
+<div class="issue">
+  <div class="tag">Medium</div>
+  <h3>Three pickers before anything shows</h3>
+  <p>Unless a brew is planned, Brew shows a greeting and three pickers (bag in a popup, then brewer and grinder dropdowns) before any recipe appears. Most coffees are brewed with the same gear each time, so the app could remember the last gear per coffee and open on the coffee you brewed last.</p>
+</div>
+
+<div class="issue minor">
+  <div class="tag">Small, quick fixes</div>
+  <h3>Paper cuts</h3>
+  <ul>
+    <li>"ID 12" on every coffee on Browse and Manage: a database number nobody needs.</li>
+    <li>On Browse, "Last brewed Jun 14" is really the date that version was saved, not the last brew.</li>
+    <li>Browse is in alphabetical order, so "729 Grams Swiss Water Decaf" comes first instead of the coffee you're drinking now.</li>
+    <li>"15.0 g", "240.0 ml", "93.0 °C": trailing ".0" everywhere outside brew mode.</li>
+    <li>The footer says "Lightweight HTMX app · SQLite backend", which is a note for developers.</li>
+    <li>Manage's coffee rows wrap into tall narrow columns on a phone (the name, then "ID 12 · Guatemala · Medium-Dark · 1 bag" squeezed beside it).</li>
+    <li>"Share as text" and "Download .md": friends won't know what .md is.</li>
+    <li>"Log a brew" opens on its own only when a brew is planned, so the same card looks different from day to day.</li>
+  </ul>
+</div>
+</section>
+
+
+<section id="mockups">
+<div class="col">
+<h2>2 · Mockups for iPhone and iPad</h2>
+<p class="muted">Designed for touch first: your iPhone in Bluefy, and the iPad in landscape. The Kindle is no longer a target, so these use bottom sheets, popovers and steppers freely. They keep what matters: one change per version, and existing recipes stay exactly as they are. The <b>?</b> buttons are the real help pattern from section 3; tap them.</p>
+</div>
+
+<div class="principles">
+  <div><b>Thumb first</b>The main action sits at the bottom of the screen, above a bottom tab bar. Nothing important is only reachable at the top.</div>
+  <div><b>Sheets, not long forms</b>Every secondary task opens in a bottom sheet (phone) or a popover (iPad) over the page you're on, then closes. Nothing grows the page by four screens.</div>
+  <div><b>Tap, don't type</b>Steppers, chips and stars instead of number fields, so no ± button and no keyboard while holding a kettle.</div>
+  <div><b>Big targets</b>Every control is at least 44 points. The tip "?" is drawn small but its hit area is 44.</div>
+  <div><b>iPad gets two columns</b>Landscape iPad shows the list and the detail side by side, with a side rail for navigation. No stretched phone layout.</div>
+  <div><b>Brew mode is the model</b>Labelled tiles that say what each number is for, one big button, the next thing always visible.</div>
+</div>
+
+<!-- ======================= A ======================= -->
+<h3 class="col">A · Brew: one coffee, one big button</h3>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:42</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="morning"><span class="px"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="Generative pixel art"><rect x="0" y="0" width="4" height="4" fill="#a08060" /><rect x="4" y="0" width="4" height="4" fill="#e0c9b0" /><rect x="8" y="0" width="4" height="4" fill="#a8b545" /><rect x="12" y="0" width="4" height="4" fill="#7c9a3d" /><rect x="16" y="0" width="4" height="4" fill="#c9d97a" /><rect x="20" y="0" width="4" height="4" fill="#d4b896" /><rect x="24" y="0" width="4" height="4" fill="#e0c9b0" /><rect x="28" y="0" width="4" height="4" fill="#c9d97a" /><rect x="32" y="0" width="4" height="4" fill="#7c9a3d" /><rect x="36" y="0" width="4" height="4" fill="#5c3520" /><rect x="40" y="0" width="4" height="4" fill="#c68a3d" /><rect x="44" y="0" width="4" height="4" fill="#a08060" /><rect x="4" y="4" width="4" height="4" fill="#a08060" /><rect x="8" y="4" width="4" height="4" fill="#a08060" /><rect x="12" y="4" width="4" height="4" fill="#7c9a3d" /><rect x="16" y="4" width="4" height="4" fill="#8c6a4f" /><rect x="20" y="4" width="4" height="4" fill="#7c9a3d" /><rect x="24" y="4" width="4" height="4" fill="#7c9a3d" /><rect x="28" y="4" width="4" height="4" fill="#8c6a4f" /><rect x="32" y="4" width="4" height="4" fill="#7c9a3d" /><rect x="36" y="4" width="4" height="4" fill="#a08060" /><rect x="40" y="4" width="4" height="4" fill="#d4b896" /><rect x="4" y="8" width="4" height="4" fill="#92400e" /><rect x="8" y="8" width="4" height="4" fill="#5c3520" /><rect x="20" y="8" width="4" height="4" fill="#7c9a3d" /><rect x="24" y="8" width="4" height="4" fill="#7c9a3d" /><rect x="28" y="8" width="4" height="4" fill="#e0c9b0" /><rect x="32" y="8" width="4" height="4" fill="#fcd9a0" /><rect x="40" y="8" width="4" height="4" fill="#92400e" /><rect x="44" y="8" width="4" height="4" fill="#fcd9a0" /><rect x="0" y="12" width="4" height="4" fill="#a8b545" /><rect x="4" y="12" width="4" height="4" fill="#fcd9a0" /><rect x="8" y="12" width="4" height="4" fill="#f5c87a" /><rect x="12" y="12" width="4" height="4" fill="#7c9a3d" /><rect x="20" y="12" width="4" height="4" fill="#d4b896" /><rect x="24" y="12" width="4" height="4" fill="#d4b896" /><rect x="36" y="12" width="4" height="4" fill="#f5c87a" /><rect x="40" y="12" width="4" height="4" fill="#fcd9a0" /><rect x="44" y="12" width="4" height="4" fill="#a8b545" /><rect x="4" y="16" width="4" height="4" fill="#e0a458" /><rect x="12" y="16" width="4" height="4" fill="#92400e" /><rect x="16" y="16" width="4" height="4" fill="#4d6b2f" /><rect x="20" y="16" width="4" height="4" fill="#e0c9b0" /><rect x="24" y="16" width="4" height="4" fill="#e0c9b0" /><rect x="28" y="16" width="4" height="4" fill="#4d6b2f" /><rect x="32" y="16" width="4" height="4" fill="#4a2a1e" /><rect x="44" y="16" width="4" height="4" fill="#5c3520" /><rect x="4" y="20" width="4" height="4" fill="#c68a3d" /><rect x="16" y="20" width="4" height="4" fill="#5c3520" /><rect x="20" y="20" width="4" height="4" fill="#8c6a4f" /><rect x="24" y="20" width="4" height="4" fill="#8c6a4f" /><rect x="28" y="20" width="4" height="4" fill="#a08060" /><rect x="36" y="20" width="4" height="4" fill="#a08060" /><rect x="0" y="24" width="4" height="4" fill="#4d6b2f" /><rect x="12" y="24" width="4" height="4" fill="#a8b545" /><rect x="16" y="24" width="4" height="4" fill="#e0a458" /><rect x="20" y="24" width="4" height="4" fill="#8a5a2b" /><rect x="24" y="24" width="4" height="4" fill="#8a5a2b" /><rect x="28" y="24" width="4" height="4" fill="#c4956a" /><rect x="32" y="24" width="4" height="4" fill="#c4956a" /><rect x="40" y="24" width="4" height="4" fill="#7a4f32" /><rect x="44" y="24" width="4" height="4" fill="#4d6b2f" /><rect x="0" y="28" width="4" height="4" fill="#d4b896" /><rect x="8" y="28" width="4" height="4" fill="#a08060" /><rect x="20" y="28" width="4" height="4" fill="#8a5a2b" /><rect x="24" y="28" width="4" height="4" fill="#8a5a2b" /><rect x="28" y="28" width="4" height="4" fill="#fcd9a0" /><rect x="36" y="28" width="4" height="4" fill="#a08060" /><rect x="0" y="32" width="4" height="4" fill="#8c6a4f" /><rect x="4" y="32" width="4" height="4" fill="#7a4f32" /><rect x="12" y="32" width="4" height="4" fill="#a08060" /><rect x="24" y="32" width="4" height="4" fill="#a8b545" /><rect x="32" y="32" width="4" height="4" fill="#a08060" /><rect x="44" y="32" width="4" height="4" fill="#8c6a4f" /><rect x="4" y="36" width="4" height="4" fill="#5c3520" /><rect x="8" y="36" width="4" height="4" fill="#7a4f32" /><rect x="24" y="36" width="4" height="4" fill="#f5c87a" /><rect x="36" y="36" width="4" height="4" fill="#7a4f32" /><rect x="40" y="36" width="4" height="4" fill="#5c3520" /><rect x="44" y="36" width="4" height="4" fill="#f5c87a" /><rect x="0" y="40" width="4" height="4" fill="#f5c87a" /><rect x="8" y="40" width="4" height="4" fill="#5c3520" /><rect x="12" y="40" width="4" height="4" fill="#8a5a2b" /><rect x="16" y="40" width="4" height="4" fill="#7a4f32" /><rect x="20" y="40" width="4" height="4" fill="#4d6b2f" /><rect x="24" y="40" width="4" height="4" fill="#4d6b2f" /><rect x="32" y="40" width="4" height="4" fill="#8a5a2b" /><rect x="36" y="40" width="4" height="4" fill="#5c3520" /><rect x="44" y="40" width="4" height="4" fill="#f5c87a" /><rect x="8" y="44" width="4" height="4" fill="#8c6a4f" /><rect x="12" y="44" width="4" height="4" fill="#fcd9a0" /><rect x="16" y="44" width="4" height="4" fill="#e0a458" /><rect x="20" y="44" width="4" height="4" fill="#d4b896" /><rect x="24" y="44" width="4" height="4" fill="#d4b896" /><rect x="28" y="44" width="4" height="4" fill="#e0a458" /><rect x="32" y="44" width="4" height="4" fill="#fcd9a0" /><rect x="36" y="44" width="4" height="4" fill="#8c6a4f" /><rect x="40" y="44" width="4" height="4" fill="#a08060" /></svg></span><span><b>Morning, Anirudh</b><i>"The best brew is the one you paid attention to."</i></span></div>
+        <div class="pcard">
+          <div class="hrow"><div class="art"></div><div><div class="eyebrow">Up next</div><h4>Industry Beans Kanake</h4></div></div>
+          <div class="chips"><span class="chip">4:6 sweet · v3</span><span class="chip">Switch · C2s</span></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b><i>beans to weigh</i></div>
+            <div class="tile"><span class="eyebrow">Grind</span><b>22</b><i>on the C2s</i></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b><i>1:16</i></div>
+            <div class="tile"><span class="eyebrow">Temp</span><b>93<small> °C</small></b><i>kettle set to</i></div>
+          </div>
+          <div class="note"><span><b>Next time:</b> hotter by 3 °C</span><span class="btn small">Try it</span></div>
+          <div class="sub"><span class="stars">★★★☆☆</span> Last cup, Nov 12: "warm, slightly sour…"</div>
+        </div>
+        <div class="list">
+          <div>Try a change <span class="chev">›</span></div>
+          <div>Share recipe <span class="chev">›</span></div>
+          <div>More <span class="d" style="margin-left:auto">rename · copy · new · delete</span></div>
+        </div>
+      </div>
+      <div class="dock"><span class="btn">▶ Start brewing</span><div class="sub" style="text-align:center;margin-top:6px"><u>Pick another coffee</u> · <u>log a cup without the timer</u></div></div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>iPhone.</b> The morning art and quote stay, as one slim line at the top instead of a card filling the first screen. Start brewing is pinned above the tab bar, right under your thumb. The recipe uses brew mode's tiles. Everything else is a row that opens a sheet.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Up next</span><span class="chip ghost">Pick a coffee ▾</span></div>
+          <div class="hrow"><div class="art"></div><div><h4 style="font-family:var(--display);font-weight:normal;font-size:1.25rem;margin:0">Industry Beans Kanake</h4><div class="sub">4:6 sweet · version 3 · Hario Switch · Timemore C2s</div></div></div>
+          <div class="tiles four">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b><i>beans to weigh</i></div>
+            <div class="tile"><span class="eyebrow">Grind</span><b>22</b><i>on the C2s</i></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b><i>1:16</i></div>
+            <div class="tile"><span class="eyebrow">Temp</span><b>93<small> °C</small></b><i>kettle set to</i></div>
+          </div>
+          <div class="eyebrow" style="margin:6px 0 2px">Method · about 2:45</div>
+          <div class="steps">
+            <div><span class="t">0:00</span>Bloom<span class="g">to 44 g</span></div>
+            <div><span class="t">0:45</span>Pour, for taste<span class="g">to 96 g</span></div>
+            <div><span class="t">1:30</span>Pour, for strength<span class="g">to 168 g</span></div>
+            <div><span class="t">2:15</span>Pour, for strength<span class="g">to 240 g</span></div>
+          </div>
+          <div class="btnrow" style="margin-top:12px"><span class="btn" style="flex:2">▶ Start brewing</span><span class="btn sec">Log a cup</span></div>
+        </div>
+        <div class="pane">
+          <div class="morning"><span class="px"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60" role="img" aria-label="Generative pixel art"><rect x="0" y="0" width="5" height="5" fill="#a8b545" /><rect x="15" y="0" width="5" height="5" fill="#7c9a3d" /><rect x="20" y="0" width="5" height="5" fill="#c9d97a" /><rect x="25" y="0" width="5" height="5" fill="#4d6b2f" /><rect x="30" y="0" width="5" height="5" fill="#4d6b2f" /><rect x="35" y="0" width="5" height="5" fill="#c9d97a" /><rect x="40" y="0" width="5" height="5" fill="#7c9a3d" /><rect x="50" y="0" width="5" height="5" fill="#d4b896" /><rect x="55" y="0" width="5" height="5" fill="#a8b545" /><rect x="0" y="5" width="5" height="5" fill="#92400e" /><rect x="10" y="5" width="5" height="5" fill="#8c6a4f" /><rect x="25" y="5" width="5" height="5" fill="#e0c9b0" /><rect x="30" y="5" width="5" height="5" fill="#e0c9b0" /><rect x="45" y="5" width="5" height="5" fill="#7a4f32" /><rect x="55" y="5" width="5" height="5" fill="#f5ebe0" /><rect x="5" y="10" width="5" height="5" fill="#4a2a1e" /><rect x="10" y="10" width="5" height="5" fill="#a8b545" /><rect x="45" y="10" width="5" height="5" fill="#a8b545" /><rect x="50" y="10" width="5" height="5" fill="#c4956a" /><rect x="55" y="10" width="5" height="5" fill="#3b1f0e" /><rect x="0" y="15" width="5" height="5" fill="#7a4f32" /><rect x="10" y="15" width="5" height="5" fill="#e0a458" /><rect x="20" y="15" width="5" height="5" fill="#d4b896" /><rect x="25" y="15" width="5" height="5" fill="#7a4f32" /><rect x="30" y="15" width="5" height="5" fill="#92400e" /><rect x="35" y="15" width="5" height="5" fill="#8a5a2b" /><rect x="45" y="15" width="5" height="5" fill="#c4956a" /><rect x="50" y="15" width="5" height="5" fill="#fcd9a0" /><rect x="55" y="15" width="5" height="5" fill="#7a4f32" /><rect x="0" y="20" width="5" height="5" fill="#a08060" /><rect x="5" y="20" width="5" height="5" fill="#e0a458" /><rect x="10" y="20" width="5" height="5" fill="#c68a3d" /><rect x="20" y="20" width="5" height="5" fill="#7c9a3d" /><rect x="25" y="20" width="5" height="5" fill="#f5ebe0" /><rect x="30" y="20" width="5" height="5" fill="#5c3520" /><rect x="35" y="20" width="5" height="5" fill="#d4b896" /><rect x="40" y="20" width="5" height="5" fill="#4d6b2f" /><rect x="50" y="20" width="5" height="5" fill="#e0a458" /><rect x="55" y="20" width="5" height="5" fill="#4d6b2f" /><rect x="0" y="25" width="5" height="5" fill="#f5c87a" /><rect x="5" y="25" width="5" height="5" fill="#92400e" /><rect x="10" y="25" width="5" height="5" fill="#7c9a3d" /><rect x="15" y="25" width="5" height="5" fill="#7c9a3d" /><rect x="20" y="25" width="5" height="5" fill="#e0a458" /><rect x="25" y="25" width="5" height="5" fill="#a08060" /><rect x="30" y="25" width="5" height="5" fill="#a08060" /><rect x="35" y="25" width="5" height="5" fill="#e0a458" /><rect x="40" y="25" width="5" height="5" fill="#7c9a3d" /><rect x="50" y="25" width="5" height="5" fill="#a8b545" /><rect x="55" y="25" width="5" height="5" fill="#4d6b2f" /><rect x="0" y="30" width="5" height="5" fill="#e0c9b0" /><rect x="5" y="30" width="5" height="5" fill="#4a2a1e" /><rect x="10" y="30" width="5" height="5" fill="#e0a458" /><rect x="15" y="30" width="5" height="5" fill="#4d6b2f" /><rect x="20" y="30" width="5" height="5" fill="#c9d97a" /><rect x="25" y="30" width="5" height="5" fill="#d4b896" /><rect x="30" y="30" width="5" height="5" fill="#3b1f0e" /><rect x="35" y="30" width="5" height="5" fill="#c9d97a" /><rect x="40" y="30" width="5" height="5" fill="#4a2a1e" /><rect x="50" y="30" width="5" height="5" fill="#4a2a1e" /><rect x="55" y="30" width="5" height="5" fill="#4d6b2f" /><rect x="0" y="35" width="5" height="5" fill="#7c9a3d" /><rect x="10" y="35" width="5" height="5" fill="#a08060" /><rect x="35" y="35" width="5" height="5" fill="#e0c9b0" /><rect x="45" y="35" width="5" height="5" fill="#f5ebe0" /><rect x="55" y="35" width="5" height="5" fill="#7c9a3d" /><rect x="0" y="40" width="5" height="5" fill="#3b1f0e" /><rect x="5" y="40" width="5" height="5" fill="#d4b896" /><rect x="10" y="40" width="5" height="5" fill="#a8b545" /><rect x="15" y="40" width="5" height="5" fill="#e0c9b0" /><rect x="45" y="40" width="5" height="5" fill="#a8b545" /><rect x="50" y="40" width="5" height="5" fill="#d4b896" /><rect x="55" y="40" width="5" height="5" fill="#3b1f0e" /><rect x="0" y="45" width="5" height="5" fill="#f5ebe0" /><rect x="10" y="45" width="5" height="5" fill="#4d6b2f" /><rect x="20" y="45" width="5" height="5" fill="#f5ebe0" /><rect x="25" y="45" width="5" height="5" fill="#d4b896" /><rect x="30" y="45" width="5" height="5" fill="#d4b896" /><rect x="35" y="45" width="5" height="5" fill="#f5ebe0" /><rect x="45" y="45" width="5" height="5" fill="#4d6b2f" /><rect x="55" y="45" width="5" height="5" fill="#4a2a1e" /><rect x="5" y="50" width="5" height="5" fill="#c9d97a" /><rect x="10" y="50" width="5" height="5" fill="#4d6b2f" /><rect x="15" y="50" width="5" height="5" fill="#f5ebe0" /><rect x="20" y="50" width="5" height="5" fill="#c4956a" /><rect x="25" y="50" width="5" height="5" fill="#4d6b2f" /><rect x="30" y="50" width="5" height="5" fill="#4d6b2f" /><rect x="35" y="50" width="5" height="5" fill="#fcd9a0" /><rect x="40" y="50" width="5" height="5" fill="#4d6b2f" /><rect x="45" y="50" width="5" height="5" fill="#4d6b2f" /><rect x="50" y="50" width="5" height="5" fill="#c9d97a" /><rect x="0" y="55" width="5" height="5" fill="#5c3520" /><rect x="5" y="55" width="5" height="5" fill="#4a2a1e" /><rect x="10" y="55" width="5" height="5" fill="#c68a3d" /><rect x="25" y="55" width="5" height="5" fill="#7a4f32" /><rect x="30" y="55" width="5" height="5" fill="#7a4f32" /><rect x="45" y="55" width="5" height="5" fill="#c68a3d" /><rect x="50" y="55" width="5" height="5" fill="#f5c87a" /><rect x="55" y="55" width="5" height="5" fill="#fcd9a0" /></svg></span><span><b>Morning, Anirudh</b><i>"The best brew is the one you paid attention to."</i></span></div>
+          <div class="note"><span><b>Next time:</b> hotter by 3 °C, for more sweetness</span><span class="btn small">Try it</span></div>
+          <div class="eyebrow" style="margin:12px 0 2px">Recent cups</div>
+          <div class="brewlog"><span class="stars">★★★☆☆</span> <span class="sub">Nov 12 · v3 · 2:45 · 241 g</span><br>Warm, slightly acidic, a bit sour. Blackcurrant?</div>
+          <div class="brewlog"><span class="stars">★★★★☆</span> <span class="sub">Nov 9 · v2</span><br>Sweet, juicy, a little flat at the end.</div>
+          <div class="brewlog"><span class="stars">★★★☆☆</span> <span class="sub">Nov 6 · v1</span><br>Bitter finish.</div>
+          <div class="list" style="margin-top:12px">
+            <div>Try a change <span class="chev">›</span></div>
+            <div>Share recipe <span class="chev">›</span></div>
+            <div>History and graphs <span class="chev">›</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad, landscape.</b> Recipe and method on the left with the buttons in reach of either thumb; the morning art and quote, what happened last time and what to try next on the right. The coffee picker is a popover from "Pick a coffee".</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= A2 ======================= -->
+<h3 class="col">A2 · Brew when nothing is picked</h3>
+<div class="col"><p class="muted">"Up next" is chosen in this order: the brew you planned; otherwise the coffee you brewed most recently that still has coffee left, with the gear and recipe you used; otherwise nothing, and Brew asks. You also get here from "Pick another coffee".</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="morning"><span class="px"><svg width="40" height="40" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect width="8" height="8" fill="#f3e3cc"/><rect x="1" y="1" width="2" height="2" fill="#8a5a3c"/><rect x="5" y="1" width="2" height="2" fill="#8a5a3c"/><rect x="3" y="3" width="2" height="2" fill="#c98b4f"/><rect x="1" y="5" width="6" height="1" fill="#5a3a22"/><rect x="2" y="6" width="4" height="1" fill="#a0784f"/></svg></span><span><b>Morning, Anirudh</b><i>"Great mornings are brewed, not found."</i></span></div>
+        <div class="title" style="margin-bottom:8px">What are we brewing?</div>
+        <div class="cgrid">
+          <div class="card2"><div class="art"></div><div class="t"><b>Kanake</b>165 g · today</div></div>
+          <div class="card2"><div class="art b"></div><div class="t"><b>Fabrica – Jaén</b>80 g · low</div></div>
+          <div class="card2"><div class="art c"></div><div class="t"><b>Caramelo Doce</b>220 g · new</div></div>
+          <div class="card2"><div class="art d"></div><div class="t"><b>729 Grams Decaf</b>185 g · Jun</div></div>
+        </div>
+        <div class="list" style="margin-top:10px"><div>+ Add a coffee <span class="chev">›</span></div></div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Coffees as big cards.</b> Bag photos and colours, most recently brewed first. Tapping one picks it, along with the gear and recipe you used with it last.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="sub">‹ Coffees</span></div>
+        <div class="pcard">
+          <div class="hrow"><div class="art c"></div><div><h4>Fabrica – Caramelo Doce</h4><div class="sub">caramel, milk chocolate</div></div></div>
+          <div class="chips"><span class="chip">AeroPress · Budan</span><span class="chip ghost">Change</span></div>
+          <div class="note" style="display:block"><b>No recipe for this on the AeroPress yet.</b> Start from one of these, then tune it.</div>
+        </div>
+        <div class="list">
+          <div><span><b>Copy one of your recipes</b><span class="d">Kanake "4:6 sweet" · Jaén "Default" ›</span></span></div>
+          <div><span><b>A starting recipe for AeroPress</b><span class="d">Classic, Inverted, Strong and short</span></span><span class="chev">›</span></div>
+          <div><span><b>My own numbers</b><span class="d">set each tile with − and +</span></span><span class="chev">›</span></div>
+        </div>
+        <p class="sub" style="margin-top:10px">Whichever you pick becomes version 1 of a new recipe for this coffee and gear.</p>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>A coffee with no recipe for this gear.</b> Never a blank form: copy one of your own recipes from another coffee, use a starting recipe, or set the four tiles with steppers.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">What are we brewing?</span></div>
+          <div class="cgrid three">
+            <div class="card2"><div class="art"></div><div class="t"><b>Kanake</b>165 g · today</div></div>
+            <div class="card2"><div class="art b"></div><div class="t"><b>Fabrica – Jaén</b>80 g · low</div></div>
+            <div class="card2" style="outline:2px solid #6b3d2e"><div class="art c"></div><div class="t"><b>Caramelo Doce</b>220 g · new</div></div>
+            <div class="card2"><div class="art d"></div><div class="t"><b>729 Grams Decaf</b>185 g · Jun</div></div>
+            <div class="card2"><div class="art b" style="filter:hue-rotate(60deg)"></div><div class="t"><b>Estrela Carvalho</b>60 g · low</div></div>
+            <div class="card2" style="display:grid;place-items:center;border-style:dashed;min-height:100px"><span class="sub">+ Add a coffee</span></div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="hrow"><div class="art c"></div><div><h4 style="font-family:var(--display);font-weight:normal;font-size:1.2rem;margin:0">Caramelo Doce</h4><div class="sub">220 g left · caramel, milk chocolate</div></div></div>
+          <div class="lbl">Brewing it with</div>
+          <div class="chips"><span class="chip on">AeroPress</span><span class="chip">Switch</span><span class="chip">Kalita</span><span class="chip ghost">+ Add</span></div>
+          <div class="chips" style="margin-top:0"><span class="chip on">Budan</span><span class="chip">C2s</span><span class="chip">Pre-ground</span></div>
+          <div class="note" style="display:block"><b>No recipe for this on the AeroPress yet.</b></div>
+          <div class="list">
+            <div>Copy one of your recipes <span class="chev">›</span></div>
+            <div>A starting recipe for AeroPress <span class="chev">›</span></div>
+            <div>My own numbers <span class="chev">›</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad.</b> Coffees on the left, the one you tapped on the right with its gear as chips. With a recipe it shows the Up next card from A; without one, these three ways to start.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= B ======================= -->
+<h3 class="col">B · Picking a coffee: a sheet, recent first</h3>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:42</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Morning, Anirudh</span></div>
+        <div class="pcard dim" style="height:300px"></div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:70px">
+          <div class="grab"></div>
+          <h4>Pick a coffee</h4>
+          <div class="input">Search coffees or flavours</div>
+          <div class="eyebrow" style="margin:6px 0">Brewed recently</div>
+          <div class="list">
+            <div class="sel"><div class="art sm"></div><span>Industry Beans Kanake<span class="d">165 g left · today · Switch + C2s</span></span></div>
+            <div><div class="art sm b"></div><span>Fabrica – Jaén<span class="d">80 g left · low · 3 days ago · V60</span></span></div>
+          </div>
+          <div class="eyebrow" style="margin:10px 0 6px">Not brewed lately</div>
+          <div class="list">
+            <div><div class="art sm c"></div><span>Fabrica – Caramelo Doce<span class="d">220 g left · new bag</span></span></div>
+            <div><div class="art sm d"></div><span>729 Grams Decaf<span class="d">185 g left · Jun 14</span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>One tap most days.</b> Choosing a coffee brings back the brewer, grinder and recipe you used with it last, which the app can read from your last brew without storing anything new. Swipe down to close.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:43</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Morning, Anirudh</span></div>
+        <div class="pcard dim" style="height:300px"></div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:70px">
+          <div class="grab"></div>
+          <h4>Brewing it with</h4>
+          <div class="lbl">Brewer</div>
+          <div class="chips"><span class="chip on">Hario Switch</span><span class="chip">Kalita</span><span class="chip">AeroPress</span><span class="chip">Office AeroPress</span><span class="chip ghost">+ Add</span></div>
+          <div class="lbl">Grinder</div>
+          <div class="chips"><span class="chip on">Timemore C2s</span><span class="chip">Budan</span><span class="chip">Pre-ground</span><span class="chip ghost">+ Add</span></div>
+          <div class="lbl">Recipe</div>
+          <div class="seg"><span class="on">4:6 sweet</span><span>Default</span><span>+ New</span></div>
+          <span class="btn">Done</span>
+        </div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Gear as chips.</b> Tapping the gear chip on the card opens this. Chips replace the two dropdowns, and the recipe choice (4:6 sweet or Default) sits here instead of in its own picker on the card. "+ Add" opens the add-brewer sheet from section G without leaving Brew.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= C ======================= -->
+<h3 class="col">C · Try a change: tap the number you want to change</h3>
+<div class="col"><p class="muted">The one-change rule becomes something you can see. Tap a tile and the other three lock. There's nothing to explain in an error, because you can't change two things.</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Try a change</span><span class="sub">Cancel</span></div>
+        <div class="sub" style="margin-bottom:4px">Tap the one thing to change
+          <details class="tip right"><summary aria-label="Why only one thing?">?</summary><div>If you grind finer <i>and</i> pour hotter and the cup gets better, you can't tell which one helped. One change per version keeps every lesson clear.</div></details></div>
+        <div class="tiles">
+          <div class="tile locked"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+          <div class="tile locked"><span class="eyebrow">Grind</span><b>22</b></div>
+          <div class="tile locked"><span class="eyebrow">Water</span><b>240<small> ml</small></b></div>
+          <div class="tile active"><span class="eyebrow">Temp</span><b>96<small> °C</small></b><i>was 93</i></div>
+        </div>
+        <div class="tile locked" style="min-height:0"><span class="eyebrow">Method</span> <span class="sub">4 pours</span></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="eyebrow">Temperature</div>
+          <div class="stepper"><button type="button" aria-label="Cooler">−</button><div class="val"><b>96 °C</b><i>was 93 · +3</i></div><button type="button" aria-label="Hotter">+</button></div>
+          <div class="chips" style="margin-top:0"><span class="chip on">for more sweetness</span><span class="chip ghost">Write a reason</span></div>
+          <span class="btn">Save as version 4</span>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>iPhone.</b> The stepper moves in sensible steps (1 for grind, 1 °C, 0.5 g, 10 ml) and the app works out "+3" itself, so "What changed" and "Delta amount" disappear. The reason comes from your Next time note. Tapping the Method tile opens the step editor in C2.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Try a change</span><span class="sub">Cancel</span></div>
+          <div class="sub">Industry Beans Kanake · 4:6 sweet · from version 3</div>
+          <div class="tiles four">
+            <div class="tile locked"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile locked"><span class="eyebrow">Grind</span><b>22</b></div>
+            <div class="tile locked"><span class="eyebrow">Water</span><b>240<small> ml</small></b></div>
+            <div class="tile active"><span class="eyebrow">Temp</span><b>96<small> °C</small></b><i>was 93</i></div>
+          </div>
+          <div class="pop" style="--arrow:300px; left:130px; right:16px; top:150px">
+            <div class="eyebrow">Temperature</div>
+            <div class="stepper"><button type="button" aria-label="Cooler">−</button><div class="val"><b>96 °C</b><i>was 93 · +3</i></div><button type="button" aria-label="Hotter">+</button></div>
+            <div class="chips" style="margin:0"><span class="chip on">for more sweetness</span><span class="chip ghost">Write a reason</span></div>
+          </div>
+          <div class="btnrow" style="position:absolute;left:16px;right:16px;bottom:16px"><span class="btn">Save as version 4</span></div>
+        </div>
+        <div class="pane">
+          <div class="eyebrow">What changes</div>
+          <div class="green" style="font-size:.9rem"><b>Temp 93 → 96 °C</b><br><span class="sub" style="color:#2c4a33">Coffee, grind, water and method stay the same.</span></div>
+          <div class="eyebrow" style="margin-top:12px">Why you're trying it</div>
+          <div class="note">Your note after Nov 12: hotter by 3 °C, for more sweetness</div>
+          <div class="eyebrow" style="margin-top:12px">Earlier changes</div>
+          <div class="brewlog">v3 · Grind 21 → 22 · <i>a touch bitter</i></div>
+          <div class="brewlog">v2 · Temp 91 → 93 °C · <i>flat</i></div>
+          <div class="brewlog">v1 · started at 15 g, 240 ml</div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad.</b> The stepper is a popover pointing at the tile you tapped. The right column shows exactly what will change and the history of earlier changes, so you can see whether you've tried this already.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="green" style="margin-top:20px;font-size:.9rem"><b>Version 4 saved</b><br>Temp 93 → 96 °C, for more sweetness.</div>
+        <div class="pcard">
+          <div class="hrow"><div class="art"></div><div><div class="eyebrow">Up next</div><h4>Industry Beans Kanake</h4></div></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile"><span class="eyebrow">Grind</span><b>22</b></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b></div>
+            <div class="tile active"><span class="eyebrow">Temp</span><b>96<small> °C</small></b><i>new</i></div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><span class="btn">▶ Brew version 4 now</span><div class="btnrow"><span class="btn sec">I already brewed it</span><span class="btn sec">Later</span></div></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Saving doesn't log a brew.</b> Today's habit of brewing first and writing it up after still works: "I already brewed it" opens the log sheet for version 4.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= C2 ======================= -->
+<h3 class="col">C2 · Changing the method steps</h3>
+<div class="col"><p class="muted">Variations haven't gone; they're what <b>Try a change</b> makes, now called versions. The method is one of the five things you can pick, exactly as "Recipe text" is today. After brewing you get here two ways: pick <b>Change steps</b> under Next time in the log sheet (it opens here next time), or tap <b>Try a change → Method</b> straight away.</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Try a change</span><span class="sub">Cancel</span></div>
+        <div class="tiles" style="margin:0 0 6px">
+          <div class="tile locked" style="min-height:0"><span class="eyebrow">Coffee</span> <b style="display:inline;font-size:1rem">15 g</b></div>
+          <div class="tile locked" style="min-height:0"><span class="eyebrow">Grind</span> <b style="display:inline;font-size:1rem">22</b></div>
+        </div>
+        <div class="sheet" style="top:84px">
+          <div class="grab"></div>
+          <div class="eyebrow">Method · version 3 → 4</div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">0:00</span><span class="ac">Bloom</span><span class="gr"><span>−</span><b>44 g</b><span>+</span></span></div>
+          <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">0:45</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>100 g<small>was 96</small></b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">1:30</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>168 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:15</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>240 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:45</span><span class="ac">Drawdown</span><span class="gr"></span></div>
+          <div class="chips"><span class="chip ghost">+ Add a step</span><span class="chip ghost">Edit as text</span></div>
+          <div class="chips" style="margin-top:0"><span class="chip on">more sweetness up front</span><span class="chip ghost">Write a reason</span></div>
+          <span class="btn">Save as version 4</span>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Steps as rows.</b> Grams have − and + (5 g steps). Drag ⋮⋮ to reorder, swipe left to delete. Changed rows are highlighted with the old value. It still saves the same <code>m:ss — action (to 100g)</code> text as today's step editor.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Try a change</span><span class="sub">Cancel</span></div>
+        <div class="srow dim"><span class="h">⋮⋮</span><span class="tm">0:00</span><span class="ac">Bloom</span><span class="gr"><b>44 g</b></span></div>
+        <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">1:00</span><span class="ac">Pour</span><span class="gr"><b>100 g</b></span></div>
+        <div class="pop" style="--arrow:60px;left:12px;right:12px;top:118px">
+          <div class="eyebrow">Step 2 starts at</div>
+          <div class="stepper" style="margin:6px 0"><button type="button" aria-label="15 seconds earlier">−</button><div class="val"><b>1:00</b><i>was 0:45 · 15 s steps</i></div><button type="button" aria-label="15 seconds later">+</button></div>
+          <div class="eyebrow" style="margin-top:6px">What happens</div>
+          <div class="chips"><span class="chip">Bloom</span><span class="chip on">Pour</span><span class="chip">Swirl</span><span class="chip">Stir</span><span class="chip">Wait</span><span class="chip">Close valve</span><span class="chip">Open valve</span><span class="chip">Press</span><span class="chip">Drawdown</span><span class="chip ghost">Other…</span></div>
+          <div class="lbl">Note <span class="sub" style="font-weight:400">optional</span></div>
+          <div class="input" style="margin-bottom:0">slow spiral, centre only</div>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Tap a step's time or action.</b> A popover with a time stepper and action chips. The chips are the same words brew mode already recognises for its animation, so a step written this way always animates.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Change the method</span><span class="sub">Cancel</span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">0:00</span><span class="ac">Bloom</span><span class="gr"><span>−</span><b>44 g</b><span>+</span></span></div>
+          <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">0:45</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>100 g<small>was 96</small></b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">1:30</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>168 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:15</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>240 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:45</span><span class="ac">Drawdown</span><span class="gr"></span></div>
+          <div class="chips"><span class="chip ghost">+ Add a step</span><span class="chip ghost">Edit as text</span></div>
+          <div class="btnrow" style="position:absolute;left:16px;right:16px;bottom:16px"><span class="btn">Save as version 4</span></div>
+        </div>
+        <div class="pane">
+          <div class="eyebrow">What changes</div>
+          <div class="green"><b>2nd pour: to 96 g → to 100 g</b><br><span style="color:#2c4a33">Everything else stays the same.</span></div>
+          <div class="eyebrow" style="margin-top:12px">Pour plan</div>
+          <svg viewBox="0 0 300 120" width="100%" height="120" role="img" aria-label="Target weight at each step, before and after">
+            <line x1="20" y1="105" x2="295" y2="105" stroke="#e0c9b0"/>
+            <polyline fill="none" stroke="#c9b6a4" stroke-width="2" stroke-dasharray="4 3" points="20,105 20,86 80,86 80,64 140,64 140,40 200,40 200,10 290,10"/>
+            <polyline fill="none" stroke="#6b3d2e" stroke-width="2" points="20,105 20,86 80,86 80,62 140,62 140,40 200,40 200,10 290,10"/>
+            <circle cx="80" cy="62" r="4" fill="#6b3d2e"/>
+            <text x="22" y="118" font-size="9" fill="#8a6a55">0:00</text><text x="262" y="118" font-size="9" fill="#8a6a55">2:45</text>
+            <text x="86" y="58" font-size="9" fill="#6b3d2e">100 g</text><text x="214" y="20" font-size="9" fill="#8a6a55">240 g</text>
+          </svg>
+          <div class="sub"><span style="color:#6b3d2e">━</span> version 4 &nbsp; <span style="color:#c9b6a4">┅</span> version 3</div>
+          <div class="note" style="margin-top:10px">Your note after Nov 12: <b>change steps</b>, more sweetness up front</div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad.</b> The editor on the left; on the right, the change in words and the pour plan as a staircase, old dashed and new solid, the same chart brew mode already draws its targets with.</figcaption>
+  </figure>
+</div>
+<div class="col"><p class="muted">Methods written as free text (from before the step editor) open as plain text with a "Tidy into steps" button, as they do now; nothing is converted unless you ask.</p></div>
+
+<!-- ======================= C3 ======================= -->
+<h3 class="col">C3 · Recipes and their versions</h3>
+<div class="col">
+  <p class="muted">Two ideas, kept apart. A <b>recipe</b> is one approach to a coffee with some gear; you can keep several. <b>Versions</b> are the steps of tuning one recipe; each is one change from the one before, and Brew always uses the newest.</p>
+  <div class="chain"><b style="min-width:84px">4:6 sweet</b><span class="v">v1</span><span class="arr">temp +2 →</span><span class="v">v2</span><span class="arr">grind +1 →</span><span class="v">v3</span><span class="arr">temp +3 →</span><span class="v cur">v4 · current</span></div>
+  <div class="chain"><b style="min-width:84px">Default</b><span class="v">v1</span><span class="arr">dose −1 →</span><span class="v">v2</span><span class="arr">… →</span><span class="v cur">v5 · current</span></div>
+  <p class="muted">You reach a recipe's versions from its card ("version 4" is a link), from Coffees, or from "History" on the iPad's Brew page.</p>
+</div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="sub">‹ Brew</span><span class="title">4:6 sweet</span><span class="sub" style="visibility:hidden">x</span></div>
+        <div class="seg" style="margin-top:0"><span class="on">Versions</span><span>Cups</span><span>Graphs</span></div>
+        <div class="ver cur"><span class="n">4</span><div><span class="what">Temp 93 → 96 °C</span> <span class="badge">current</span><div class="sub">for more sweetness · not brewed yet</div></div></div>
+        <div class="ver"><span class="n">3</span><div><span class="what">Grind 21 → 22</span><div class="sub">a touch bitter · 2 cups · <span class="stars">★★★</span></div></div></div>
+        <div class="ver"><span class="n">2</span><div><span class="what">Temp 91 → 93 °C</span> <span class="badge best">best rated</span><div class="sub">flat · 3 cups · <span class="stars">★★★★</span></div></div></div>
+        <div class="ver"><span class="n">1</span><div><span class="what">Started</span><div class="sub">15 g · 240 ml · 91 °C · grind 21 · 1 cup</div></div></div>
+        <div class="list" style="margin-top:10px">
+          <div>Undo the last change <span class="d" style="margin-left:auto">back to 93 °C</span></div>
+        </div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>One line per version.</b> Each says what changed (real values), why, how many cups and how they rated, newest first. "Undo the last change" makes version 5 with 93 °C again, which is still a single change.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:44</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">4:6 sweet</span></div>
+        <div class="ver dim"><span class="n">4</span><div><span class="what">Temp 93 → 96 °C</span></div></div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:70px">
+          <div class="grab"></div>
+          <h4>Version 2</h4>
+          <div class="sub">Temp 91 → 93 °C · 3 cups · <span class="stars">★★★★</span></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile" style="background:#fff4e0"><span class="eyebrow">Grind</span><b>21</b><i>now 22</i></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b></div>
+            <div class="tile" style="background:#fff4e0"><span class="eyebrow">Temp</span><b>93<small> °C</small></b><i>now 96</i></div>
+          </div>
+          <div class="brewlog"><span class="stars">★★★★☆</span> Nov 9 · sweet, juicy, a little flat at the end</div>
+          <div class="btnrow"><span class="btn sec">Compare with now</span><span class="btn sec">Brew it once</span></div>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Tap a version.</b> Its numbers, with the ones that differ from now highlighted, and its cups. "Brew it once" runs brew mode with version 2 and logs the cup against it, without changing which version is current. There's no "go back": to move towards version 2, you undo or change one thing at a time.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span><i>☕</i>Brew</span><span class="on"><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body split">
+        <div class="pane" style="padding:14px 10px 0">
+          <div class="topline"><span class="title">4:6 sweet</span></div>
+          <div class="ver cur"><span class="n">4</span><div><span class="what">Temp 93 → 96</span><div class="sub">not brewed yet</div></div></div>
+          <div class="ver"><span class="n">3</span><div><span class="what">Grind 21 → 22</span><div class="sub">2 cups · ★★★</div></div></div>
+          <div class="ver" style="background:#f6ecdf;border-radius:10px"><span class="n">2</span><div><span class="what">Temp 91 → 93</span><div class="sub">3 cups · ★★★★</div></div></div>
+          <div class="ver"><span class="n">1</span><div><span class="what">Started</span><div class="sub">1 cup · ★★</div></div></div>
+        </div>
+        <div class="pane">
+          <div class="topline"><span class="title">Version 2 and version 4</span></div>
+          <div class="tiles four">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b><i>same</i></div>
+            <div class="tile" style="background:#fff4e0"><span class="eyebrow">Grind</span><b>21 → 22</b><i>v3 changed it</i></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b><i>same</i></div>
+            <div class="tile" style="background:#fff4e0"><span class="eyebrow">Temp</span><b>93 → 96</b><i>v4 changed it</i></div>
+          </div>
+          <div class="eyebrow">Ratings by version</div>
+          <svg viewBox="0 0 330 120" width="100%" height="120" role="img" aria-label="Each cup's rating, grouped by version">
+            <line x1="30" y1="100" x2="320" y2="100" stroke="#e0c9b0"/>
+            <text x="4" y="24" font-size="9" fill="#8a6a55">5 ★</text><text x="4" y="104" font-size="9" fill="#8a6a55">1 ★</text>
+            <line x1="30" y1="20" x2="320" y2="20" stroke="#efe2d3" stroke-dasharray="3 3"/>
+            <circle cx="70" cy="80" r="5" fill="#c9b6a4"/>
+            <circle cx="140" cy="40" r="5" fill="#6b3d2e"/><circle cx="152" cy="40" r="5" fill="#6b3d2e"/><circle cx="146" cy="60" r="5" fill="#6b3d2e"/>
+            <circle cx="216" cy="60" r="5" fill="#c9b6a4"/><circle cx="228" cy="60" r="5" fill="#c9b6a4"/>
+            <text x="62" y="116" font-size="9" fill="#8a6a55">v1</text><text x="140" y="116" font-size="9" fill="#2c1810" font-weight="700">v2</text><text x="216" y="116" font-size="9" fill="#8a6a55">v3</text><text x="284" y="116" font-size="9" fill="#8a6a55">v4</text>
+            <text x="276" y="64" font-size="9" fill="#8a6a55">none yet</text>
+          </svg>
+          <div class="btnrow"><span class="btn sec">Brew version 2 once</span><span class="btn sec">Compare graphs</span></div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad: compare any two versions.</b> The tiles show what differs and which version changed it, and each cup's rating sits under its version, so "v2 was better" is visible at a glance.</figcaption>
+  </figure>
+</div>
+<div class="decision col">
+  <div class="tag">Decided</div>
+  <p style="margin:4px 0 0"><b>No jumping back to an older version.</b> Every move is one change: "Undo the last change" puts the previous value back as a new version, and going further back is another undo or another change. If a version doesn't work, its one change tells you what to undo or adjust, and the history stays a clean list of single changes.</p>
+</div>
+
+<!-- ======================= D ======================= -->
+<h3 class="col">D · Logging a cup: right after Stop, all taps</h3>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:51</span><span class="isl"></span><span>86%</span></div>
+      <div class="screen">
+        <div class="tiles dim">
+          <div class="tile"><span class="eyebrow">Time</span><b>2:58</b></div>
+          <div class="tile"><span class="eyebrow">Weight</span><b>241<small> g</small></b></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:14px">
+          <div class="grab"></div>
+          <h4>How was it?</h4>
+          <div class="sub">Brewed 2:58 · 241 g · version 4</div>
+          <div class="bigstars">★★★★☆</div>
+          <div class="lbl">Taste <span class="sub" style="font-weight:400">tap any</span></div>
+          <div class="chips"><span class="chip">Sour</span><span class="chip">Bitter</span><span class="chip on">Sweet</span><span class="chip">Weak</span><span class="chip">Strong</span><span class="chip on">Juicy</span><span class="chip">Flat</span></div>
+          <div class="input" style="color:#2c1810;min-height:34px">Sweet, juicy. Blackcurrant shows now.</div>
+          <div class="lbl">Next time <details class="tip right"><summary aria-label="What is Next time?">?</summary><div>A note to future you. It shows above Start until you brew this recipe again, and Try it starts a change from it. Skip it if you'd brew it the same way.</div></details></div>
+          <div class="chips"><span class="chip">Finer</span><span class="chip">Coarser</span><span class="chip">Hotter</span><span class="chip">Cooler</span><span class="chip">More coffee</span><span class="chip">Less coffee</span><span class="chip">Change steps</span><span class="chip on">Same again</span></div>
+          <span class="btn">Save</span>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>iPhone, in brew mode.</b> The sheet rises when you press Stop. Taste chips add words to the notes, which stay plain text. Next time chips set a setting and a direction, each with a default amount you can nudge. They fill the same database fields as today. "Change steps" is shown in D2.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad" style="grid-template-columns:1fr">
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Kanake · 4:6 sweet</span><span class="sub">version 4</span></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Brewed</span><b>2:58</b><i>target 2:45</i></div>
+            <div class="tile"><span class="eyebrow">Weight</span><b>241<small> g</small></b><i>target 240</i></div>
+          </div>
+          <div class="eyebrow">Weight, this cup and the last one</div>
+          <svg viewBox="0 0 360 150" width="100%" height="150" role="img" aria-label="Weight over time, this brew against the previous one">
+            <line x1="30" y1="130" x2="350" y2="130" stroke="#e0c9b0"/>
+            <line x1="30" y1="10" x2="30" y2="130" stroke="#e0c9b0"/>
+            <polyline fill="none" stroke="#c9b6a4" stroke-width="2" points="30,130 60,95 90,92 120,70 150,68 180,48 210,46 240,22 270,20 330,20"/>
+            <polyline fill="none" stroke="#6b3d2e" stroke-width="2" points="30,130 58,98 92,95 118,72 152,70 176,50 214,48 236,24 280,21 345,20"/>
+            <text x="34" y="146" font-size="10" fill="#8a6a55">0:00</text><text x="318" y="146" font-size="10" fill="#8a6a55">3:00</text>
+            <text x="34" y="18" font-size="10" fill="#8a6a55">240 g</text>
+          </svg>
+          <div class="sub"><span style="color:#6b3d2e">━</span> today &nbsp; <span style="color:#c9b6a4">━</span> Nov 12</div>
+        </div>
+        <div class="pane">
+          <h4 style="font-family:var(--display);font-weight:normal;font-size:1.3rem;margin:0">How was it?</h4>
+          <div class="bigstars" style="text-align:left">★★★★☆</div>
+          <div class="lbl">Taste</div>
+          <div class="chips"><span class="chip">Sour</span><span class="chip">Bitter</span><span class="chip on">Sweet</span><span class="chip">Weak</span><span class="chip">Strong</span><span class="chip on">Juicy</span><span class="chip">Flat</span></div>
+          <div class="input" style="color:#2c1810">Sweet, juicy. Blackcurrant shows now.</div>
+          <div class="lbl">Next time</div>
+          <div class="chips"><span class="chip">Finer</span><span class="chip">Coarser</span><span class="chip on">Hotter</span><span class="chip">Cooler</span><span class="chip">Same again</span></div>
+          <div class="hrow sub" style="margin-bottom:10px">Hotter by <span class="chip" style="min-height:28px">− 1 °C +</span></div>
+          <span class="btn">Save</span>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad brew mode after Stop.</b> No sheet needed: the log form takes the right column while the graph and your numbers stay on the left, so you can rate while looking at the curve.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= D2 ======================= -->
+<h3 class="col">D2 · Changing the steps right after Stop</h3>
+<div class="col"><p class="muted">Pick <b>Change steps</b> in the log sheet and you choose: edit them now, or leave a note for next time. Editing now saves the cup against the version you just brewed, then saves the new steps as the next version. With a scale connected, each row shows what you actually did, and one tap copies it in.</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:51</span><span class="isl"></span><span>86%</span></div>
+      <div class="screen">
+        <div class="scrim"></div>
+        <div class="sheet" style="top:150px">
+          <div class="grab"></div>
+          <h4>How was it?</h4>
+          <div class="bigstars" style="font-size:1.6rem">★★★☆☆</div>
+          <div class="input" style="color:#2c1810;min-height:34px">Sour start, bloom felt rushed</div>
+          <div class="lbl">Next time</div>
+          <div class="chips"><span class="chip">Finer</span><span class="chip">Hotter</span><span class="chip">More coffee</span><span class="chip on">Change steps</span><span class="chip">Same again</span></div>
+          <div class="btnrow" style="margin-top:4px"><span class="btn">Save and edit steps now</span></div>
+          <div class="btnrow"><span class="btn sec">Save, note it for next time</span></div>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>1 · The choice.</b> "Edit now" while it's fresh, or "note it" and Brew shows "Next time: change steps" with Try it until you do.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:51</span><span class="isl"></span><span>86%</span></div>
+      <div class="screen">
+        <div class="bar" style="margin-bottom:4px"><span class="title">Change the steps</span><span class="sub">Cancel</span></div>
+        <div class="sub" style="color:#2c4a33">✓ Cup saved to version 3</div>
+        <div class="sub" style="margin-bottom:4px">Planned, with what you did <span style="color:#6b3d2e">●</span> from the scale</div>
+        <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">0:00</span><span class="ac">Bloom<small style="display:block;color:#6b3d2e;font-size:.66rem">● 44 g, held 0:38</small></span><span class="gr"><span>−</span><b>44 g</b><span>+</span></span></div>
+        <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">1:00<small style="display:block;color:#6b4a00;font-size:.62rem">was 0:45</small></span><span class="ac">Pour<small style="display:block;color:#6b3d2e;font-size:.66rem">● 96 g at 0:52</small></span><span class="gr"><span>−</span><b>96 g</b><span>+</span></span></div>
+        <div class="srow"><span class="h">⋮⋮</span><span class="tm">1:30</span><span class="ac">Pour<small style="display:block;color:#6b3d2e;font-size:.66rem">● 170 g at 1:41</small></span><span class="gr"><span>−</span><b>168 g</b><span>+</span></span></div>
+        <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:15</span><span class="ac">Pour<small style="display:block;color:#6b3d2e;font-size:.66rem">● 241 g at 2:24</small></span><span class="gr"><span>−</span><b>240 g</b><span>+</span></span></div>
+        <div class="chips"><span class="chip ghost">● Use what I did</span><span class="chip ghost">+ Step</span><span class="chip on">longer bloom</span></div>
+      </div>
+      <div class="dock"><span class="btn">Save as version 4</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>2 · Edit with your real brew beside it.</b> The ● lines come from the scale's curve (when it reached each target). "Use what I actually did" copies those times in. Without a scale the rows show just the plan. However many rows change, it's one change: the method.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:51</span><span class="isl"></span><span>86%</span></div>
+      <div class="screen">
+        <div class="green" style="margin-top:20px;font-size:.9rem"><b>Version 4 saved</b><br>Method: bloom held to 1:00 (was 0:45), for a longer bloom.</div>
+        <div class="pcard">
+          <div class="hrow"><div class="art"></div><div><div class="eyebrow">Up next</div><h4>Industry Beans Kanake</h4></div></div>
+          <div class="sub" style="margin-top:6px">4:6 sweet · version 4 · 165 g left</div>
+          <div class="steps" style="margin-top:6px">
+            <div><span class="t">0:00</span>Bloom<span class="g">to 44 g</span></div>
+            <div style="background:#fff4e0;border-radius:6px"><span class="t">1:00</span>Pour<span class="g">to 96 g</span></div>
+            <div><span class="t">1:30</span>Pour<span class="g">to 168 g</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><span class="btn sec">Done</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>3 · Done.</b> The cup stays with version 3 (it's what you brewed); tomorrow's Up next is version 4 with the changed step highlighted the first time you see it.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad" style="grid-template-columns:1fr">
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Kanake · 4:6 sweet</span><span class="sub">cup saved to version 3</span></div>
+          <div class="eyebrow">This brew against the plan</div>
+          <svg viewBox="0 0 360 170" width="100%" height="170" role="img" aria-label="Weight over time with the planned step targets">
+            <line x1="30" y1="150" x2="350" y2="150" stroke="#e0c9b0"/>
+            <polyline fill="none" stroke="#c9b6a4" stroke-width="1.5" stroke-dasharray="4 3" points="30,150 30,123 95,123 95,101 160,101 160,71 225,71 225,40 340,40"/>
+            <polyline fill="none" stroke="#6b3d2e" stroke-width="2" points="30,150 40,124 105,123 115,101 175,100 186,70 240,70 250,40 345,39"/>
+            <circle cx="115" cy="101" r="4" fill="#6b3d2e"/><text x="120" y="96" font-size="9" fill="#6b3d2e">96 g at 0:52</text>
+            <text x="32" y="164" font-size="9" fill="#8a6a55">0:00</text><text x="318" y="164" font-size="9" fill="#8a6a55">3:00</text><text x="300" y="34" font-size="9" fill="#8a6a55">240 g</text>
+          </svg>
+          <div class="sub"><span style="color:#6b3d2e">━</span> what you did &nbsp; <span style="color:#c9b6a4">┅</span> the plan</div>
+          <div class="note" style="margin-top:10px">Sour start, bloom felt rushed · ★★★</div>
+        </div>
+        <div class="pane">
+          <div class="topline"><span class="title">Change the steps</span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">0:00</span><span class="ac">Bloom</span><span class="gr"><span>−</span><b>44 g</b><span>+</span></span></div>
+          <div class="srow changed"><span class="h">⋮⋮</span><span class="tm">1:00</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>96 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">1:30</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>168 g</b><span>+</span></span></div>
+          <div class="srow"><span class="h">⋮⋮</span><span class="tm">2:15</span><span class="ac">Pour</span><span class="gr"><span>−</span><b>240 g</b><span>+</span></span></div>
+          <div class="chips"><span class="chip ghost">● Use what I actually did</span><span class="chip ghost">+ Add a step</span></div>
+          <div class="btnrow" style="position:absolute;left:16px;right:16px;bottom:16px"><span class="btn">Save as version 4</span></div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad brew mode after Stop.</b> The curve against the plan on the left (the step targets brew mode already draws), the step editor on the right. Tapping a point on the curve can set that row's time.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= E ======================= -->
+<h3 class="col">E · Coffees: list and detail, one home per coffee</h3>
+<div class="col"><p class="muted">Browse plus the coffee half of Manage. Bags, recipes and history for a coffee all live on its page, and history reads "Temp 91 → 93 °C" (real values, as the share export already does) instead of <code>temp_c 2.0</code>.</p></div>
+<div class="mock-row">
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span><i>☕</i>Brew</span><span class="on"><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body split">
+        <div class="pane" style="padding:14px 10px 0">
+          <div class="topline"><span class="title">Coffees</span><span class="chip ghost">+ Add</span></div>
+          <div class="input" style="margin-top:0">Search</div>
+          <div class="list">
+            <div class="sel"><div class="art sm"></div><span>Industry Beans Kanake<span class="d">165 g · today</span></span></div>
+            <div><div class="art sm b"></div><span>Fabrica – Jaén<span class="d">80 g · low · 3 days</span></span></div>
+            <div><div class="art sm c"></div><span>Caramelo Doce<span class="d">220 g · new</span></span></div>
+            <div><div class="art sm d"></div><span>729 Grams Decaf<span class="d">185 g · Jun 14</span></span></div>
+          </div>
+          <div class="sub" style="margin-top:8px">Finished (14) ›</div>
+        </div>
+        <div class="pane">
+          <div class="hrow"><div class="art" style="width:64px;height:64px;flex-basis:64px"></div><div><h4 style="font-family:var(--display);font-weight:normal;font-size:1.35rem;margin:0">Industry Beans Kanake</h4><div class="sub">Kenya · light · blackcurrant, cane sugar</div></div><span class="sub" style="margin-left:auto">Edit</span></div>
+          <div class="eyebrow" style="margin-top:14px">Bags</div>
+          <div class="chips"><span class="chip">165 g of 250 left · roasted Jul 27</span><span class="chip ghost">+ New bag</span></div>
+          <div class="eyebrow" style="margin-top:8px">Recipes</div>
+          <div class="list">
+            <div><span>4:6 sweet<span class="d">version 3 · 6 cups · Switch + C2s</span></span><span class="stars" style="margin-left:auto">★★★★</span></div>
+            <div><span>Default<span class="d">version 5 · 11 cups · V60 + C2s</span></span><span class="stars" style="margin-left:auto">★★★</span></div>
+          </div>
+          <div class="eyebrow" style="margin-top:12px">How 4:6 sweet changed</div>
+          <div class="brewlog">v3 · <b>Grind 21 → 22</b> · <i>a touch bitter</i> · 2 cups</div>
+          <div class="brewlog">v2 · <b>Temp 91 → 93 °C</b> · <i>flat</i> · 3 cups</div>
+          <div class="brewlog">v1 · started at 15 g, 240 ml, 91 °C · 1 cup</div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad split view.</b> The list stays put while you look through coffees, like Mail or Notes. Finished coffees fold into one row at the bottom instead of a separate archive section.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>9:10</span><span class="isl"></span><span>80%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="sub">‹ Coffees</span><span class="sub">Edit</span></div>
+        <div class="hrow"><div class="art"></div><div><h4 style="font-family:var(--display);font-weight:normal;font-size:1.2rem;margin:0">Industry Beans Kanake</h4><div class="sub">Kenya · light</div></div></div>
+        <div class="chips"><span class="chip">165 g left</span><span class="chip ghost">+ New bag</span></div>
+        <div class="seg"><span class="on">Recipes</span><span>Cups</span><span>Bags</span></div>
+        <div class="list">
+          <div><span>4:6 sweet<span class="d">v3 · 6 cups · ★★★★</span></span><span class="chev">›</span></div>
+          <div><span>Default<span class="d">v5 · 11 cups · ★★★</span></span><span class="chev">›</span></div>
+        </div>
+        <div class="eyebrow" style="margin-top:12px">How 4:6 sweet changed</div>
+        <div class="brewlog">v3 · <b>Grind 21 → 22</b> · <i>a touch bitter</i></div>
+        <div class="brewlog">v2 · <b>Temp 91 → 93 °C</b> · <i>flat</i></div>
+      </div>
+      <div class="dock"><span class="btn">▶ Brew this coffee</span></div>
+      <div class="tabbar"><span><i>☕</i>Brew</span><span class="on"><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>iPhone.</b> The same page pushed over the list, with a segmented control in place of three collapsible sections, and a Brew button so Coffees is also a way in.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= F ======================= -->
+<h3 class="col">F · First run: a checklist where you land</h3>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:02</span><span class="isl"></span><span>95%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Hi, Madhav</span></div>
+        <div class="pcard">
+          <h4>Set up your first cup</h4>
+          <div class="progress"><span style="width:34%"></span></div>
+          <div class="sub">1 of 3 done · about two minutes</div>
+          <div class="check done"><span class="dot">✓</span><div><div class="t">Add your coffee</div><div class="sub">Blue Tokai Attikan · 250 g</div></div></div>
+          <div class="check now"><span class="dot">2</span><div style="flex:1"><div class="t">What do you brew with?</div>
+            <div class="chips"><span class="chip on">V60</span><span class="chip">AeroPress</span><span class="chip">French press</span><span class="chip">Moka pot</span><span class="chip ghost">Other</span></div>
+            <div class="chips"><span class="chip">Hand grinder</span><span class="chip">Electric</span><span class="chip on">Pre-ground</span></div></div></div>
+          <div class="check"><span class="dot">3</span><div><div class="t">Pick a starting recipe</div><div class="sub">Then brew it with the timer</div></div></div>
+        </div>
+      </div>
+      <div class="dock"><span class="btn">Continue</span></div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Replaces the one-time popup.</b> It stays on Brew until it's done, shows progress, and each step happens right there. "Pre-ground" is a built-in choice, so nobody invents a "No Grinder".</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:01</span><span class="isl"></span><span>95%</span></div>
+      <div class="screen">
+        <div class="pcard dim" style="height:200px;margin-top:30px"></div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:18px">
+          <div class="grab" style="margin-bottom:6px"></div>
+          <h4>Add your coffee</h4>
+          <div class="lbl" style="margin-top:4px">Name</div><div class="input" style="color:#2c1810;margin-bottom:4px">Blue Tokai Attikan</div>
+          <div class="lbl" style="margin-top:4px">Bag size</div>
+          <div class="seg" style="margin:4px 0"><span>200 g</span><span>250 g</span><span>500 g</span><span>1 kg</span><span class="on">Other</span></div>
+          <div class="stepper" style="margin:2px 0"><button type="button" aria-label="10 g less" style="width:42px;height:42px">−</button><div class="val"><b style="font-size:1.4rem">340 g</b><i>or tap to type</i></div><button type="button" aria-label="10 g more" style="width:42px;height:42px">+</button></div>
+          <div class="lbl" style="margin-top:4px">Tasting notes on the bag <details class="tip"><summary aria-label="What are these?">?</summary><div>What the roaster says it tastes like. They show on the coffee's card and in the picker, and help you name what you taste.</div></details></div>
+          <div class="chips" style="margin:4px 0"><span class="chip on">Chocolate</span><span class="chip">Citrus</span><span class="chip">Berry</span><span class="chip on">Caramel</span><span class="chip">Floral</span><span class="chip">Nutty</span><span class="chip">Stone fruit</span></div>
+          <div class="input" style="color:#2c1810;margin:2px 0 6px">Chocolate, caramel, <span style="color:#8a6a55">add your own…</span></div>
+          <div class="chips" style="margin:2px 0 8px"><span class="chip ghost">📅 Roast date</span><span class="chip ghost">📷 Photo</span><span class="chip ghost">Origin, roast</span></div>
+          <span class="btn">Add coffee</span>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Coffee and bag in one sheet.</b> Name, size and date. "Other" opens a stepper for any bag size (10 g steps, or tap the number to type it, say 340 g). Tasting notes from the bag: tap common ones, type the rest; they're saved as the same text field as today. Roast date, photo and origin are optional chips; frozen and low-stock move to the bag's own Edit.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="body two">
+        <div class="pane">
+          <div class="topline"><span class="title">Set up your first cup</span></div>
+          <div class="progress"><span style="width:67%"></span></div>
+          <div class="check done"><span class="dot">✓</span><div><div class="t">Add your coffee</div><div class="sub">Blue Tokai Attikan · 250 g</div></div></div>
+          <div class="check done"><span class="dot">✓</span><div><div class="t">What do you brew with?</div><div class="sub">V60 · pre-ground</div></div></div>
+          <div class="check now"><span class="dot">3</span><div><div class="t">Pick a starting recipe</div><div class="sub">Only the starting numbers. You'll adjust after the first cup.</div></div></div>
+        </div>
+        <div class="pane">
+          <div class="eyebrow">Starting recipes for a V60</div>
+          <div class="list" style="margin-top:8px">
+            <div class="sel"><span><b>Simple V60</b><span class="d">15 g · 250 ml · 94 °C · bloom + 2 pours · 3:00</span></span><span class="chev">›</span></div>
+            <div><span><b>One-cup 4:6</b><span class="d">15 g · 240 ml · 92 °C · 5 pours · 3:30</span></span><span class="chev">›</span></div>
+            <div><span><b>Strong and short</b><span class="d">18 g · 250 ml · 96 °C · 2:30</span></span><span class="chev">›</span></div>
+            <div><span><b>My own numbers</b><span class="d">start from blank</span></span><span class="chev">›</span></div>
+          </div>
+          <p class="sub" style="margin-top:10px">Pre-ground has no grind setting, so that tile will say "pre-ground".</p>
+          <span class="btn">Use Simple V60</span>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad.</b> Steps on the left, choices on the right. A starting recipe is just version 1 of a normal recipe, so it needs nothing new in the database.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= G ======================= -->
+<h3 class="col">G · Settings: gear, stats and switches</h3>
+<div class="col"><p class="muted">Brewers and grinders get a home in Settings under "Your gear". You can also add one from anywhere you pick gear: the gear sheet on Brew (B) and the first-run checklist (F) both have a "+ Add" chip that opens the same sheet. Savings and streak move here too, so Brew stays about the next cup.</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>9:12</span><span class="isl"></span><span>80%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Settings</span></div>
+        <div class="tiles" style="margin-top:0">
+          <div class="tile"><span class="eyebrow">Saved</span><b>₹27,000</b><i>90 cups vs a café</i></div>
+          <div class="tile"><span class="eyebrow">Streak</span><b>4<small> days</small></b><i>longest 19</i></div>
+        </div>
+        <div class="eyebrow" style="margin:6px 0 4px">Your gear</div>
+        <div class="list">
+          <div>Brewers <span class="d" style="margin-left:auto">5</span><span class="chev" style="margin-left:6px">›</span></div>
+          <div>Grinders <span class="d" style="margin-left:auto">3</span><span class="chev" style="margin-left:6px">›</span></div>
+        </div>
+        <div class="eyebrow" style="margin:10px 0 4px">Brew mode</div>
+        <div class="list">
+          <div>Brewer animation <span class="switch"></span></div>
+          <div>Live graph with a scale <span class="switch off"></span></div>
+        </div>
+        <div class="eyebrow" style="margin:10px 0 4px">You</div>
+        <div class="list">
+          <div>Password and sign out <span class="chev">›</span></div>
+          <div>People <span class="d" style="margin-left:auto">admin</span><span class="chev" style="margin-left:6px">›</span></div>
+          <div>How this works <span class="chev">›</span></div>
+        </div>
+      </div>
+      <div class="tabbar"><span><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span class="on"><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>One short page of rows.</b> Each row opens its own page, like iOS Settings. Today's Manage page puts all of this, plus every coffee, on one long scroll.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>9:12</span><span class="isl"></span><span>80%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="sub">‹ Settings</span><span class="title">Brewers</span><span class="sub" style="visibility:hidden">x</span></div>
+        <div class="list dim">
+          <div>Hario Switch v60 <span class="d" style="margin-left:auto">12 cups</span></div>
+          <div>Kalita Mino <span class="d" style="margin-left:auto">4 cups</span></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet" style="top:56px">
+          <div class="grab"></div>
+          <h4>Add a brewer</h4>
+          <div class="sub">Pick the closest. You can rename it.</div>
+          <div class="chips"><span class="chip">V60</span><span class="chip">Switch</span><span class="chip on">AeroPress</span><span class="chip">Kalita Wave</span><span class="chip">Chemex</span><span class="chip">French press</span><span class="chip">Moka pot</span><span class="chip">Espresso</span><span class="chip ghost">Something else</span></div>
+          <div class="lbl">Name</div>
+          <div class="input" style="color:#2c1810">AeroPress</div>
+          <p class="sub" style="margin:0 0 10px">Picking a type also picks the drawing brew mode animates (an AeroPress here) and the starting recipes offered for it.
+            <details class="tip left"><summary aria-label="Why a type?">?</summary><div>Today the app guesses the drawing from the name you type. Picking a type makes it certain, and "Office AeroPress" still gets the right one.</div></details></p>
+          <span class="btn">Add brewer</span>
+        </div>
+      </div>
+      <div class="tabbar"><span><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span class="on"><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Add by tapping a type.</b> Usually two taps: a type, then Add, with the name filled in. The type can go in the brewer's existing <code>method</code> field, so nothing new is stored. Grinders work the same way, with "Pre-ground" always there and no need to create it.</figcaption>
+  </figure>
+
+  <figure class="mock wide">
+    <div class="frame-scroll"><div class="ipad">
+      <div class="rail"><span><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span class="on"><i>⚙</i>Settings</span></div>
+      <div class="body split">
+        <div class="pane" style="padding:14px 10px 0">
+          <div class="topline"><span class="title">Settings</span></div>
+          <div class="list">
+            <div class="sel">Your gear <span class="chev">›</span></div>
+            <div>Stats <span class="chev">›</span></div>
+            <div>Brew mode <span class="chev">›</span></div>
+            <div>Password and sign out <span class="chev">›</span></div>
+            <div>People <span class="chev">›</span></div>
+            <div>How this works <span class="chev">›</span></div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="topline"><span class="title">Your gear</span></div>
+          <div class="hrow" style="justify-content:space-between"><span class="eyebrow">Brewers</span><span class="chip ghost">+ Add brewer</span></div>
+          <div class="list" style="margin:6px 0 12px">
+            <div>Hario Switch v60<span class="d" style="margin-left:auto">Switch · 12 cups</span><span class="chev" style="margin-left:8px">Edit</span></div>
+            <div>Kalita Mino<span class="d" style="margin-left:auto">Kalita Wave · 4 cups</span><span class="chev" style="margin-left:8px">Edit</span></div>
+            <div>Aeropress with Flow Control Cap<span class="d" style="margin-left:auto">AeroPress · 9 cups</span><span class="chev" style="margin-left:8px">Edit</span></div>
+          </div>
+          <div class="hrow" style="justify-content:space-between"><span class="eyebrow">Grinders <details class="tip right"><summary aria-label="About grinders">?</summary><div>Grind numbers only mean something on the grinder they came from, so each recipe belongs to one grinder. Deleting a grinder deletes its recipes.</div></details></span><span class="chip ghost">+ Add grinder</span></div>
+          <div class="list" style="margin-top:6px">
+            <div>Timemore Chestnut C2s<span class="d" style="margin-left:auto">hand · 70 cups</span><span class="chev" style="margin-left:8px">Edit</span></div>
+            <div>Budan Electric Grinder<span class="d" style="margin-left:auto">electric · 6 cups</span><span class="chev" style="margin-left:8px">Edit</span></div>
+            <div>Pre-ground<span class="d" style="margin-left:auto">built in</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><b>iPad.</b> The same rows as a split view. Each piece of gear shows how many cups it has made, so deleting one isn't a surprise.</figcaption>
+  </figure>
+</div>
+<!-- ======================= H ======================= -->
+<h3 class="col">H · Fixing things afterwards</h3>
+<div class="col"><p class="muted">Cups and versions can both be corrected. Tasting notes, rating and "Next time" on any cup are always editable, because a cup tastes different once it cools. Versions can be corrected too, within the one-change rule.</p></div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="pcard">
+          <div class="hrow"><div class="art"></div><div><div class="eyebrow">Up next</div><h4>Industry Beans Kanake</h4></div></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile"><span class="eyebrow">Grind</span><b>22</b></div>
+          </div>
+          <div class="note" style="display:block"><b>Your last cup, 20 min ago</b><br>"Warm, slightly acidic, a bit sour" · ★★★
+            <div class="btnrow"><span class="btn small" style="flex:1;justify-content:center">How is it now it's cooled?</span><span class="btn small sec">Edit</span></div></div>
+        </div>
+      </div>
+      <div class="dock"><span class="btn">▶ Start brewing</span></div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>A nudge while it cools.</b> For an hour after logging, Brew shows your last cup with "How is it now it's cooled?". It's only on the page, no notifications.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="scrim"></div>
+        <div class="sheet" style="top:28px">
+          <div class="grab"></div>
+          <h4>Cup · today 7:51</h4>
+          <div class="sub">Kanake · 4:6 sweet v3 · 2:58 · 241 g</div>
+          <div class="bigstars" style="font-size:1.7rem">★★★★☆</div>
+          <div class="lbl">Tasting notes</div>
+          <div class="input" style="color:#2c1810">Warm, slightly acidic, a bit sour.<br><b>Cooled:</b> much sweeter, blackcurrant clear, sourness gone.</div>
+          <div class="chips" style="margin-top:0"><span class="chip ghost">+ Cooled note</span></div>
+          <div class="lbl">Next time</div>
+          <div class="chips"><span class="chip">Finer</span><span class="chip">Hotter</span><span class="chip on">Same again</span><span class="chip">Change steps</span></div>
+          <div class="sub" style="margin:-2px 0 6px">Was "hotter by 3 °C". Brew's note updates when you save.</div>
+          <div class="list" style="margin-bottom:8px"><div>Bag <span class="d" style="margin-left:auto">Kanake · Jul 27 ›</span></div></div>
+          <div class="btnrow" style="margin-top:0"><span class="btn">Save</span><span class="btn sec" style="flex:0 0 auto;color:#a3332a">Delete</span></div>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Every cup opens like this.</b> Tap any cup on Brew, Coffees or the versions page. "+ Cooled note" adds a "Cooled:" line, so the first impression stays. Changing the Next time choice updates Brew's note straight away. Changing the bag moves the 15 g to the right bag. Deleting gives you an Undo (section I).</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="scrim"></div>
+        <div class="sheet" style="top:40px">
+          <div class="grab"></div>
+          <h4>Fix version 4</h4>
+          <div class="sub">Temp 93 → 96 °C · for more sweetness</div>
+          <div class="lbl">Temperature <span class="sub" style="font-weight:400">the change this version made</span></div>
+          <div class="stepper" style="margin:4px 0"><button type="button" aria-label="Cooler" style="width:44px;height:44px">−</button><div class="val"><b style="font-size:1.6rem">95 °C</b><i>v3 had 93</i></div><button type="button" aria-label="Hotter" style="width:44px;height:44px">+</button></div>
+          <div class="lbl">Why</div>
+          <div class="input" style="color:#2c1810">for more sweetness</div>
+          <div class="list locked-row" style="margin-bottom:6px"><div>Coffee · grind · water · method <span class="d" style="margin-left:auto">🔒 same as v3</span></div></div>
+          <div class="warnbox">2 cups were brewed with version 4. They'll now say 95 °C. If you really brewed at 96, use <b>Try a change</b> instead.</div>
+          <span class="btn">Save fix</span>
+          <div class="sub" style="text-align:center;margin-top:6px"><u style="color:#a3332a">Delete version 4</u> (only while it has no cups)</div>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Fixing a version, safely.</b> Only the newest version can be fixed, and only its own change and reason, so it stays one change from version 3 and nothing later depends on it. Older versions can have their reason edited. A version with no cups can be deleted, which covers "saved by mistake".</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= I ======================= -->
+<h3 class="col">I · Form checks that never lose your work</h3>
+<div class="col">
+  <p class="muted">Today 17 checks happen only on the server, and a failure is a plain text page that throws away what you typed. In the new design the page catches problems as you go, and the server's checks stay as a backstop that brings you back to the form with everything still filled in.</p>
+  <div class="principles">
+    <div><b>Impossible by design</b>Steppers have sensible limits (coffee 5–60 g, water 50–1,000 ml, temperature 70–100 °C, grind within the grinder's range), and Try a change locks the other tiles.</div>
+    <div><b>Say it beside the field</b>Problems show in red under the field as soon as you leave it, never in a pop-up. Save stays greyed out and says why.</div>
+    <div><b>Warn, don't block</b>Unusual but possible things (a 1:25 ratio, a bag with less than a dose left, a roast date in the future) get an amber note and still save.</div>
+    <div><b>Nothing typed is lost</b>Tasting notes are saved as a draft on the device while you type, and come back after a reload or a dropped connection.</div>
+    <div><b>Undo, not "Are you sure?"</b>Deleting a cup or a bag shows Undo for 10 seconds. Big deletes (a recipe with all its versions) still ask, and say what goes with them.</div>
+    <div><b>Server as a backstop</b>If the server still refuses something, the form comes back filled in, with the message beside the field, and the same checks run on both sides.</div>
+  </div>
+</div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">New recipe</span><span class="sub">Cancel</span></div>
+        <div class="sub">Kanake · Hario Switch · Timemore C2s</div>
+        <div class="lbl">Name</div>
+        <div class="input bad">4:6 sweet</div>
+        <div class="err">You already have "4:6 sweet" for this coffee and gear. Try "4:6 sweet 2" or another name.</div>
+        <div class="lbl">Coffee and water</div>
+        <div class="tiles" style="margin-top:4px">
+          <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+          <div class="tile"><span class="eyebrow">Water</span><b>380<small> ml</small></b></div>
+        </div>
+        <div class="warnbox">That's 1:25, much weaker than most recipes (1:15 to 1:17). Still fine to save if it's what you meant.</div>
+        <div class="lbl">Grind</div>
+        <div class="input bad"> </div>
+        <div class="err">Add a grind setting. For pre-ground, pick Pre-ground as the grinder.</div>
+      </div>
+      <div class="dock"><span class="btn off">Fix 2 things to save</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Inline, as you go.</b> The name clash is caught before you press Save (the page already knows your recipe names). The ratio gets a warning but doesn't block. The button counts what's left to fix.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="scrim"></div>
+        <div class="sheet" style="top:120px">
+          <div class="grab"></div>
+          <h4>How was it?</h4>
+          <div class="note" style="display:block">Your notes from 7:52 were brought back after the page reloaded.</div>
+          <div class="input" style="color:#2c1810;min-height:46px">Sour start, bloom felt rushed, then sweet as it</div>
+          <div class="warnbox">The Kanake bag has only 8 g left, less than this recipe's 15 g. <u>Use the new bag</u> or save anyway; the bag will show 0 g.</div>
+          <span class="btn">Save</span>
+        </div>
+      </div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Drafts and soft warnings.</b> Half-written notes survive a reload, a lock screen or a lost connection. A nearly empty bag is a warning with a one-tap fix, not an error.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>8:20</span><span class="isl"></span><span>84%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">4:6 sweet</span></div>
+        <div class="seg" style="margin-top:0"><span>Versions</span><span class="on">Cups</span><span>Graphs</span></div>
+        <div class="brewlog"><span class="stars">★★★★☆</span> <span class="sub">Nov 9 · v2</span><br>Sweet, juicy, a little flat at the end.</div>
+        <div class="brewlog"><span class="stars">★★★☆☆</span> <span class="sub">Nov 6 · v1</span><br>Bitter finish.</div>
+        <div class="toast">Cup from today deleted. 15 g back in the Kanake bag. <b>Undo</b></div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>Undo instead of confirm.</b> Deleting a cup puts its grams back and shows Undo for 10 seconds. The server keeps it for that long, so Undo works even after you've moved to another page.</figcaption>
+  </figure>
+</div>
+
+<div class="decision col" style="border-left-color:#8a6a55">
+  <div class="tag" style="color:#8a6a55">Also on the list</div>
+  <ul style="margin:6px 0 0;padding-left:20px">
+    <li><b>Which bag:</b> a coffee with two open bags uses the oldest one that isn't frozen, shown as a chip you can switch.</li>
+    <li><b>Finishing a bag:</b> when less than a dose is left, the log sheet offers "Mark this bag finished".</li>
+    <li><b>Gear with history:</b> archive instead of delete, so old recipes stay readable.</li>
+    <li><b>Grind steppers:</b> each grinder has a step size and range; settings like "2.5.0" fall back to text.</li>
+    <li><b>One Share sheet:</b> a live preview with switches for curve, tasting note, story size and rating, instead of three links and a page that reloads for each extra.</li>
+    <li><b>Tidy into steps</b> becomes a "Turn into steps" button inside the step editor.</li>
+    <li><b>Brew mode's bar</b> only shows the buttons that apply right now (no Tare without a scale, no Reset beside Stop while brewing).</li>
+  </ul>
+</div>
+</section>
+
+<!-- ======================= HELP ======================= -->
+<section id="help">
+<div class="col">
+<h2>3 · Tooltips and help</h2>
+<p>Touch screens have no hover, so every tip opens on a tap. There are three layers:</p>
+</div>
+<div class="mock-row">
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:42</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Up next</span></div>
+        <div class="pcard" style="padding-bottom:150px">
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile"><span class="eyebrow">Grind <details class="tip left" open><summary aria-label="About grind">?</summary><div><b>The number on your grinder's dial.</b> It only means something on that grinder, so recipes are kept per grinder. Finer makes it stronger and slower to drain. <a href="#help">More</a></div></details></span><b>22</b></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>240<small> ml</small></b></div>
+            <div class="tile"><span class="eyebrow">Temp</span><b>93<small> °C</small></b></div>
+          </div>
+        </div>
+      </div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>1 · "?" popovers.</b> A small ? beside a label opens a dark bubble pointing at it. Tapping anywhere else closes it. Built with the browser's Popover API (iOS 17 and later, so Bluefy and iPad Safari), which handles closing and screen readers for free.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:42</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="bar"><span class="title">Morning, Madhav</span></div>
+        <div class="pcard">
+          <div class="hrow"><div class="art b"></div><div><div class="eyebrow">Up next</div><h4>Blue Tokai Attikan</h4></div></div>
+          <div class="tiles">
+            <div class="tile"><span class="eyebrow">Coffee</span><b>15<small> g</small></b></div>
+            <div class="tile"><span class="eyebrow">Grind</span><b>pre</b></div>
+            <div class="tile"><span class="eyebrow">Water</span><b>250<small> ml</small></b></div>
+            <div class="tile"><span class="eyebrow">Temp</span><b>94<small> °C</small></b></div>
+          </div>
+        </div>
+        <div class="coach" style="position:absolute;left:12px;right:12px;bottom:12px;z-index:3;flex-direction:column">
+          <span><b>Ready for your first cup?</b> Start brewing opens a timer that walks you through each pour and beeps at every step. You'll rate the cup when you press Stop.</span>
+          <span style="display:flex;width:100%;justify-content:space-between;opacity:.85"><span>2 of 3</span><span><u>Skip</u> &nbsp; <b>Next</b></span></span>
+        </div>
+      </div>
+      <div class="dock" style="position:relative"><span class="spot" style="inset:4px 8px"></span><span class="btn">▶ Start brewing</span></div>
+      <div class="tabbar"><span class="on"><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>2 · A short tour, once.</b> Three spotlight cards the first time someone reaches a set-up Brew page (the card, Start, Next time), and one for brew mode. They're remembered per person, so they don't come back on a second device.</figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="phone">
+      <div class="status"><span>7:42</span><span class="isl"></span><span>87%</span></div>
+      <div class="screen">
+        <div class="scrim"></div>
+        <div class="sheet" style="top:40px">
+          <div class="grab"></div>
+          <h4>How this works</h4>
+          <div class="check"><span class="dot">1</span><div><div class="t">Add a coffee</div><div class="sub">and the bag you bought</div></div></div>
+          <div class="check"><span class="dot">2</span><div><div class="t">Brew it</div><div class="sub">the timer walks you through it</div></div></div>
+          <div class="check"><span class="dot">3</span><div><div class="t">Rate it</div><div class="sub">and say what to try next time</div></div></div>
+          <div class="check"><span class="dot">4</span><div><div class="t">Try one change</div><div class="sub">saved as a new version</div></div></div>
+          <div class="check"><span class="dot">5</span><div><div class="t">Repeat</div><div class="sub">until it's the cup you want</div></div></div>
+          <div class="list" style="margin-top:8px"><div>Replay the tour <span class="chev">›</span></div></div>
+        </div>
+      </div>
+      <div class="tabbar"><span><i>☕</i>Brew</span><span><i>▦</i>Coffees</span><span class="on"><i>⚙</i>Settings</span></div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption><b>3 · "How this works".</b> A sheet from Settings (and from every tip's "More"), with the five-step loop and a way to replay the tour.</figcaption>
+  </figure>
+</div>
+
+<div class="col">
+<h3>Where the tips go, and what they say</h3>
+<p class="muted">First drafts, two sentences at most. ★ marks the places a new person reaches first.</p>
+</div>
+<div class="tablewrap">
+<table class="terms" style="min-width:640px">
+  <thead><tr><th>Where</th><th>Tip text</th></tr></thead>
+  <tbody>
+    <tr><td>★ Brew · the "Up next" card</td><td>The coffee you'll brew next. Tap the gear to change brewer, grinder or recipe; it's remembered for this coffee.</td></tr>
+    <tr><td>★ Brew · Start brewing (tour)</td><td>Opens a timer that walks you through each pour and beeps at every step. Rate the cup when you press Stop.</td></tr>
+    <tr><td>★ Brew · Next time note</td><td>A note you left after your last cup. Try it makes a new version with only that one thing changed.</td></tr>
+    <tr><td>★ Try a change</td><td>If you change two things and the cup gets better, you can't tell which one helped. One change per version keeps every lesson clear.</td></tr>
+    <tr><td>★ Log · Next time</td><td>A note to future you. It shows above Start until you brew this recipe again. Skip it if you'd brew it the same.</td></tr>
+    <tr><td>★ Tile · Grind</td><td>The number on your grinder's dial. It only means something on that grinder, so recipes are kept per grinder.</td></tr>
+    <tr><td>Tile · Water / "1:16"</td><td>Grams of water for every gram of coffee. A bigger number makes a lighter cup.</td></tr>
+    <tr><td>Recipe · "version 4"</td><td>Each change you save makes a new version. Older versions and their cups stay in the coffee's history.</td></tr>
+    <tr><td>Gear sheet · Recipe</td><td>Keep separate recipes for the same coffee and gear, say one cup and two. Each has its own versions and history.</td></tr>
+    <tr><td>Plan for next time</td><td>Puts this coffee and recipe at the top of Brew next time you open the app, on any device.</td></tr>
+    <tr><td>Log · Rating</td><td>Only you see it. It's never on a shared recipe unless you choose to show it.</td></tr>
+    <tr><td>Log · Save</td><td>Saving takes the coffee's dose out of the bag, so the grams left stay right.</td></tr>
+    <tr><td>Brew mode · Scale</td><td>Connect a Bookoo scale to see the weight against each step's target. Works in Bluefy and Chrome.</td></tr>
+    <tr><td>Brew mode · Pour to</td><td>What the scale should read at the end of this step, counting everything poured so far.</td></tr>
+    <tr><td>Tidy into steps</td><td>Turns a written method into timed steps, so brew mode can time and beep each one. Your old text stays as the previous version.</td></tr>
+    <tr><td>Share</td><td>Makes a picture or text of this recipe for friends. Your tasting notes, ratings and bags stay private.</td></tr>
+    <tr><td>Bag · Frozen</td><td>Frozen bags stay out of the picker until you thaw them.</td></tr>
+    <tr><td>Bag · Low-stock alert</td><td>The bag shows as low when fewer grams than this are left.</td></tr>
+    <tr><td>Graph</td><td>Weight and flow from the scale, over your previous cup of this recipe, so you can see what changed.</td></tr>
+    <tr><td>Savings / Streak</td><td>Each cup you log counts as one café cup (₹300). A streak is days in a row with at least one cup.</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="col">
+<p class="muted" style="margin-top:10px">Build: one Jinja macro, <code>tip('grind')</code>, renders the ? button and its popover. The copy lives in one <code>tips.py</code> dict, so the wording is easy to review and to test. Whether someone has seen the tour can live in <code>localStorage</code> (per device, no schema change) or in a small column on the user (follows them across devices).</p>
+</div>
+</section>
+
+<section class="col" id="order">
+<h2>4 · Order of work</h2>
+<p class="muted">Smallest and safest first. Each step ships and can be tried on its own; only the tour's "seen" flag might need a new column.</p>
+<ol class="order">
+  <li><b>Words and paper cuts</b><span>Recipe / Version / Try a change / Next time / Up next; drop "ID", ".0" and the footer; real dates and "before → after" in history; coffees ordered by last brewed. Templates only.</span></li>
+  <li><b>Fixing cups</b><span>Edit any cup's notes, rating, Next time and bag, "+ Cooled note", delete with Undo. A small, separate change that helps straight away; no schema change.</span></li>
+  <li><b>Touch shell</b><span>Bottom tab bar on phones, side rail on a landscape iPad, a pinned main button, and one reusable sheet/popover component (a <code>&lt;dialog&gt;</code> that's a bottom sheet on a phone and a popover on an iPad). Update AGENTS.md: it still says Kindle first.</span></li>
+  <li><b>Help layer</b><span>The tip macro with about 20 tips, the three-card tour, and the How this works sheet.</span></li>
+  <li><b>Try a change by tapping a tile</b><span>Includes the step editor for the method (rows with − and + for grams, a time stepper, action chips). The server takes the changed setting and amount from the values, and saving no longer logs a brew quietly. The one-change rule is unchanged, just visible.</span></li>
+  <li><b>Logging in a sheet after Stop</b><span>Includes "Change steps": edit now (with the scale's actual times beside each row) or note it for next time. Stars, taste chips and Next time chips, in brew mode and from Brew. Same fields as today; old brews look the same.</span></li>
+  <li><b>Brew page and coffee picker</b><span>The Up next card with tiles, the two-column iPad layout, the recent-first picker, and gear remembered from the last brew.</span></li>
+  <li><b>Versions page</b><span>One line per version with ratings, compare two versions, "Brew it once" for an older version, and Undo the last change. No jumping back: further back is another undo. Fix the newest version (its own change and reason), delete a version with no cups.</span></li>
+  <li><b>Form checks</b><span>Limits on every stepper, inline messages, drafts of tasting notes, Undo for deletes, and server errors that come back to the filled-in form. Built into each step above as it lands, plus one pass over today's 17 server-only checks.</span></li>
+  <li><b>Coffees, Settings and first run</b><span>Coffees as list and detail (merging Browse); Settings for gear, brew mode, account and users; the first-run checklist with Pre-ground and starting recipes.</span></li>
+</ol>
+</section>
+</div>
+</body>
+</html>
