@@ -107,7 +107,7 @@
         // with a note or a curve on a post, everything above the method is a little smaller,
         // so the method still gets room
         compact = !card.story && !!(note || card.curve);
-        var photoSize = compact ? 170 : 210, textW = CW;
+        var photoSize = compact ? 190 : 210, textW = CW;
         if (photo) {
             textW = CW - photoSize - 32;
             var px = X + CW - photoSize, scale = Math.max(photoSize / photo.width, photoSize / photo.height);
@@ -119,7 +119,7 @@
             ctx.restore();
         }
 
-        var heading = fitLines(card.title, textW, 3, 'normal', 66, 44, SERIF);
+        var heading = fitLines(card.title, textW, compact ? 2 : 3, 'normal', compact ? 60 : 66, 44, SERIF);
         ctx.fillStyle = INK;
         heading.lines.forEach(function (line) {
             y += heading.size * 1.12;
@@ -146,9 +146,9 @@
             drawSteps(X, CW, drawMethodHeading(X, drawParams(X, CW, drawCurveBlock(X, CW, drawNoteBlock(X, CW, top0), STORY_CURVE_H))), bottom);
         } else {
             y = drawParams(X, CW, top0);
-            var curveH = note ? 170 : CURVE_H;
+            var curveH = note ? 180 : CURVE_H;
             if (card.curve) { bottom -= curveH + 16; drawCurve(X, CW, bottom + 16, curveH); }
-            if (note) { var nh = noteHeight(CW); bottom -= nh + 20; drawNote(X, CW, bottom + 10, nh); }
+            if (note) { var nh = noteHeight(CW); bottom -= nh + 28; drawNote(X, CW, bottom + 12, nh); }
             if (card.steps.length) drawSteps(X, CW, drawMethodHeading(X, y), bottom);
         }
 
@@ -169,7 +169,7 @@
     // Every parameter, as tiles; returns the y below them
     var compact = false;
     function drawParams(X, CW, y) {
-        var gap = compact ? 12 : 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = compact ? 96 : 128;
+        var gap = compact ? 14 : 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = compact ? 100 : 128;
         card.params.forEach(function (param, i) {
             var tx = X + (i % cols) * (tileW + gap), ty = y + Math.floor(i / cols) * (tileH + gap);
             ctx.fillStyle = soft;
@@ -177,13 +177,13 @@
             ctx.fill();
             font('normal', 24, SANS);
             ctx.fillStyle = LABEL;
-            ctx.fillText(param[0], tx + 22, ty + (compact ? 32 : 40));
-            var size = compact ? 44 : 52;
+            ctx.fillText(param[0], tx + 22, ty + (compact ? 34 : 40));
+            var size = compact ? 48 : 52;
             do { font('bold', size, SANS); size -= 2; } while (ctx.measureText(param[1]).width > tileW - 44 && size > 22);
             ctx.fillStyle = VALUE;
-            ctx.fillText(param[1], tx + 22, ty + (compact ? 78 : 100));
+            ctx.fillText(param[1], tx + 22, ty + (compact ? 82 : 100));
         });
-        return y + Math.ceil(card.params.length / cols) * (tileH + gap) + (compact ? 14 : 26);
+        return y + Math.ceil(card.params.length / cols) * (tileH + gap) + (compact ? 18 : 26);
     }
 
     function drawMethodHeading(X, y) {
@@ -199,7 +199,7 @@
     function noteLines(CW) {
         var text = note.text.replace(/\s+/g, ' ').trim();
         return card.story ? fitLines(text, CW - 2 * NOTE_PAD - 12, 5, 'italic', 46, 30, SERIF)
-                          : fitLines(text, CW - 2 * NOTE_PAD - 12, 2, 'italic', 36, 26, SERIF);
+                          : fitLines(text, CW - 2 * NOTE_PAD - 12, 2, 'italic', 38, 32, SERIF);
     }
     function noteHeight(CW) {
         var fitted = noteLines(CW);
@@ -245,7 +245,7 @@
         drawNote(X, CW, y, h);
         return y + h + 30;
     }
-    var STORY_CURVE_H = 400;
+    var STORY_CURVE_H = 330;
     function drawCurveBlock(X, CW, y, h) {
         if (!card.curve) return y;
         drawCurve(X, CW, y, h);
@@ -302,8 +302,8 @@
     // The method, at the largest size that fits; any steps that still don't are counted
     function drawSteps(X, CW, top, bottom) {
         var timed = card.steps.some(function (s) { return s.time; });
-        var size, layout, shown;
-        for (size = 32; size >= 22; size -= 2) {
+        var size, layout, shown, smallest = compact ? 26 : card.story ? 26 : 22;
+        for (size = card.story ? 34 : 32; size >= smallest; size -= 2) {
             font('bold', size, SANS);
             var timeW = timed ? ctx.measureText('00:00').width + 24 : 0;
             font('normal', size, SANS);
@@ -318,7 +318,7 @@
             }
             if (shown === layout.length) break;
         }
-        size = Math.max(size, 22);
+        size = Math.max(size, smallest);
         font('bold', size, SANS);
         var timeW2 = timed ? ctx.measureText('00:00').width + 24 : 0;
         var y = top;
