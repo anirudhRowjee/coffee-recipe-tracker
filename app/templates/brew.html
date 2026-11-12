@@ -118,18 +118,37 @@
         // the step without the bullet or number the method may start it with
         function stepText(li) { return li.textContent.replace(/^\s*(?:[\u2022*-]|\d+[.)])\s+/, ''); }
 
-        function beep() {
+        // [frequency, delay, length]: a new step is one beep, the countdown ticks low and
+        // ends high, and reaching a step's weight (static/scale.js) is a rising double chirp
+        var SOUNDS = {
+            step: [[880, 0, 0.3]],
+            tick: [[523, 0, 0.12]],
+            go: [[1047, 0, 0.5]],
+            reached: [[1319, 0, 0.08], [1760, 0.11, 0.14]]
+        };
+        function beep(kind) {
             if (!audio) return;
             try {
-                var osc = audio.createOscillator(), gain = audio.createGain();
-                osc.frequency.value = 880;
-                gain.gain.value = 0.2;
-                osc.connect(gain);
-                gain.connect(audio.destination);
-                osc.start();
-                osc.stop(audio.currentTime + 0.3);
+                (SOUNDS[kind] || SOUNDS.step).forEach(function (tone) {
+                    var osc = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime + tone[1];
+                    osc.frequency.value = tone[0];
+                    gain.gain.value = 0.2;
+                    osc.connect(gain);
+                    gain.connect(audio.destination);
+                    osc.start(at);
+                    osc.stop(at + tone[2]);
+                });
             } catch (e) { /* no sound is fine */ }
         }
+        window.brewBeep = beep;
+        // Browsers only allow sound after a tap, so wake it on any tap (Start, or Scale:
+        // a brew the scale starts has no tap of its own).
+        function wakeAudio() {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx && !audio) { try { audio = new Ctx(); } catch (e) { audio = null; } }
+            if (audio && audio.state === 'suspended' && audio.resume) audio.resume();
+        }
+        document.addEventListener('click', wakeAudio, true);
 
         function keepAwake() {
             if (!('wakeLock' in navigator)) return;
@@ -186,9 +205,46 @@
             }
         }
 
+        // Start from zero counts down first, so there's time to pick up the kettle:
+        // a low beep each second, a high one on "go". Pressing again cancels it.
+        var COUNTDOWN = 5, countdown = null;  // {end: Date.now() at go, shown, interval}
+        function countdownTick() {
+            var left = Math.ceil((countdown.end - Date.now()) / 1000);
+            if (left <= 0) {
+                endCountdown();
+                beep('go');
+                start();
+                if (window.brewScaleGo) window.brewScaleGo();  // the scale tares and starts now
+                return;
+            }
+            if (left !== countdown.shown) {
+                countdown.shown = left;
+                clock.textContent = String(left);
+                beep('tick');
+            }
+        }
+        function beginCountdown() {
+            wakeAudio();
+            keepAwake();
+            countdown = { end: Date.now() + COUNTDOWN * 1000, shown: null, interval: setInterval(countdownTick, 100) };
+            startBtn.textContent = 'Cancel';
+            next.textContent = 'Pick up the kettle';
+            timer.className = 'brew-timer brew-counting';
+            countdownTick();
+        }
+        function endCountdown() {
+            clearInterval(countdown.interval);
+            countdown = null;
+            timer.className = 'brew-timer';
+        }
+        // the scale saw the brew start (its button, or its auto-start): no countdown
+        window.brewTimerStartNow = function () {
+            if (startedAt !== null) return;
+            if (countdown) endCountdown();
+            start();
+        };
+
         function start() {
-            var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (Ctx && !audio) { try { audio = new Ctx(); } catch (e) { audio = null; } }
             startedAt = Date.now() - stoppedAt * 1000;
             tick = setInterval(render, 250);
             keepAwake();
@@ -197,7 +253,12 @@
             render();
         }
 
-        startBtn.addEventListener('click', function () { if (startedAt === null) { start(); } else { stop(); } });
+        startBtn.addEventListener('click', function () {
+            if (countdown) { endCountdown(); letSleep(); startBtn.textContent = 'Start'; render(); }
+            else if (startedAt !== null) stop();
+            else if (stoppedAt === 0) beginCountdown();
+            else start();  // Resume: mid-brew, so straight away
+        });
         resetBtn.addEventListener('click', function () {
             stoppedAt = 0;
             lastEvent = -1;

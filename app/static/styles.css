@@ -1447,3 +1447,6 @@ textarea[hidden] {
 .graph-compare label { font-size: 0.95rem; }
 .graph-compare select { width: auto; min-width: 0; max-width: 100%; flex: 1 1 12rem; }
 .brew-graph-link { margin-left: 8px; font-size: 0.9rem; }
+
+/* the countdown before a brew starts (brew.html) */
+.brew-counting .brew-clock { color: var(--accent, #b45309); }
