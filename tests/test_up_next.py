@@ -99,3 +99,14 @@ def test_another_coffee_lets_you_pick_the_recipe_and_so_the_gear(app):
     assert "/lines/1/brew?bag_id=1" in panel and "/lines/2/brew?bag_id=1" in panel
     assert "/?bag_id=1&amp;gear=pick" in panel
     assert "What are you brewing it with?" in home(app, bag_id=1, gear="pick")
+
+
+def test_plan_another_coffee_from_the_recipe_step(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/recipes", {**BASELINE, "grinder_id": 2})
+    panel = home(app, pick=1).split('class="coffee-recipes" data-for="1"')[1]
+    assert 'action="/plan"' in panel and 'name="line_id" value="2"' in panel
+    post(app, "/plan", {"bag_id": 1, "line_id": 2})
+    assert app.rows("select bag_id, brewer_id, grinder_id, line_id from plannedbrew") == [
+        {"bag_id": 1, "brewer_id": 1, "grinder_id": 2, "line_id": 2}]  # the gear came from the recipe
+    assert 'data-planned="1"' in home(app)

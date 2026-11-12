@@ -1870,3 +1870,8 @@ button.coffee-card { padding: 0; text-align: left; font: inherit; min-height: 15
 .link-back { width: auto; min-height: 36px; padding: 0; background: none; border: 0; color: #6b3d2e; font-weight: 600; font-size: 0.9rem; }
 .action-list > button { cursor: pointer; }
 dialog.sheet .sheet-close { margin-left: auto; }
+/* a recipe choice: brew it now (the row) or plan it (📅) */
+.action-list > .choice-row { display: flex; align-items: center; border-bottom: 1px solid #efe2d3; }
+.choice-row > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 10px 6px 10px 14px; color: #2c1810; text-decoration: none; }
+.choice-row > form { flex: 0 0 auto; padding-right: 10px; }
+.plan-chip { white-space: nowrap; }
