@@ -6,7 +6,7 @@ import secrets
 import time
 from datetime import date as date_type, datetime, timezone
 
-from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, HTTPException, UploadFile
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -386,6 +386,38 @@ def delete_user(target_user_id: int, request: Request, admin_password: str = For
     return RedirectResponse(url="/manage", status_code=303)
 
 
+class _Shown:
+    """A recipe with one value swapped, for showing a change that isn't saved yet
+    (brew mode's "Brew with change"). Everything else reads through to the real version."""
+    def __init__(self, base, overrides: dict):
+        self._base, self._overrides = base, overrides
+
+    def __getattr__(self, name):
+        return self._overrides[name] if name in self._overrides else getattr(self._base, name)
+
+
+def _applied_change(latest: Optional[models.Recipe], rec) -> Optional[dict]:
+    """What the Next time note (or planned change) would make the recipe, if it can be applied
+    without asking: a number with an amount (coffee, water, temp, or a plain-number grind).
+    None for a method change or a grind like "2.5.0", which need Try a change."""
+    if not latest or not rec or rec.recommended_delta is None or rec.recommended_param not in ("dose_g", "water_ml", "temp_c", "grind_size"):
+        return None
+    param, before = rec.recommended_param, getattr(latest, rec.recommended_param)
+    try:
+        after_num = round(float(before) + rec.recommended_delta, 3)
+    except (TypeError, ValueError):
+        return None
+    if param == "grind_size":
+        after = words.num(after_num) if "." in str(before) or after_num % 1 else str(int(after_num))
+    else:
+        after = after_num
+    if after == before or (param != "grind_size" and after_num <= 0):
+        return None
+    return {"param": param, "value": after, "label": words.change(param, rec.recommended_delta),
+            "before_after": f"{words.label(param)} {words.num(before)} → {words.num(after)}{words.UNITS[param]}",
+            "rationale": rec.recommended_rationale}
+
+
 class _Rec(NamedTuple):
     recommended_param: str
     recommended_delta: Optional[float]
@@ -490,6 +522,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         if 0 <= minutes < 60:
             cooling_brew, cooling_minutes = recent_brews[0], max(minutes, 1)
     return {
+        "trial": _applied_change(latest, rec),
         "version": crud.version_number(session, latest) if latest else 0,
         "brewer": session.get(models.Brewer, brewer_id_int),
         "grinder": session.get(models.Grinder, grinder_id_int),
@@ -1052,7 +1085,7 @@ def rename_line(request: Request, line_id: int, name: str = Form(...)):
 
 @app.get("/lines/{line_id}/brew", response_class=HTMLResponse)
 def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan_id: Optional[int] = None,
-              recipe_id: Optional[int] = None):
+              recipe_id: Optional[int] = None, try_change: int = Query(0, alias="try")):
     """Brew mode: the named recipe's current version in large type, with a
     timer that follows the times written in the method, and the log form."""
     with Session(db.engine) as session:
@@ -1077,7 +1110,19 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
                 and (plan.brewer_id, plan.grinder_id) == (line.brewer_id, line.grinder_id)
                 and plan.line_id in (None, line.id)):
             plan = None
+        # "Brew with change": the Next time note (or the plan's change) applied for this brew
+        # only; it becomes a new version when the cup is logged, not before
+        trial = None
+        if try_change and not older_version:
+            rec_brew = crud.line_recommendation(session, line_id)
+            rec = (_Rec(rec_brew.recommended_param, rec_brew.recommended_delta, rec_brew.recommended_rationale, False) if rec_brew  # type: ignore[arg-type]
+                   else _Rec(plan.suggested_param, plan.suggested_delta, plan.suggested_rationale, True) if plan and plan.suggested_param else None)  # type: ignore[arg-type]
+            trial = _applied_change(latest, rec)
+            if trial:
+                trial["version"] = crud.version_number(session, latest) + 1
+                latest = _Shown(latest, {trial["param"]: trial["value"]})  # type: ignore[assignment]
         return templates.TemplateResponse("brew.html", {
+            "trial": trial,
             "request": request,
             "current_user": user,
             "line": line,
@@ -1505,6 +1550,9 @@ def create_brew(
     curve: str = Form(None),
     then: str = Form(None),
     finish_bag: str = Form(None),
+    try_param: str = Form(None),
+    try_value: str = Form(None),
+    try_rationale: str = Form(None),
 ):
     rec_delta: Optional[float] = None
     if recommended_delta and recommended_delta.strip():
@@ -1518,6 +1566,17 @@ def create_brew(
         _owned(session, user, models.BeanBag, bag_id)
         if planned_brew_id:
             _owned(session, user, models.PlannedBrew, planned_brew_id)
+        if try_param:  # brewed with the Next time change: that change becomes the next version now
+            base = session.get(models.Recipe, recipe_id)
+            if try_param not in ("dose_g", "water_ml", "temp_c", "grind_size") or crud.get_latest_recipe(session, base.line_id).id != base.id:  # type: ignore[union-attr,arg-type]
+                raise HTTPException(status_code=400, detail="That change can't be saved: the recipe has a newer version now.")
+            value = (try_value or "").strip() if try_param == "grind_size" else _parse_amount(try_value)
+            if value in (None, ""):
+                raise HTTPException(status_code=400, detail="The change to save is missing its value.")
+            saved = crud.save_variation(session, base, try_param, value, (try_rationale or "").strip() or None)  # type: ignore[arg-type]
+            if not saved:
+                raise HTTPException(status_code=400, detail="That change is the same as the current recipe.")
+            recipe_id = saved.id  # type: ignore[assignment]
         new_brew = crud.create_brew(
             session,
             recipe_id=recipe_id,

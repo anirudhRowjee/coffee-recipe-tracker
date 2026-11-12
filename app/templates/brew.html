@@ -27,6 +27,7 @@
         <button type="button" id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden>+ Scale</button>{{ tip('scale') }}
         <span class="brew-pill brew-pill-on" id="brew-scale-status" hidden><i></i>Scale</span>
     </div>
+    {% if trial %}<p class="brew-trial"><strong>Trying {{ trial.before_after }}</strong>{% if trial.rationale %} · {{ trial.rationale }}{% endif %}<br /><span>Saved as version {{ trial.version }} only if you log this cup.</span></p>{% endif %}
 
     {# Two columns on a landscape iPad: this one, then .brew-side; one column everywhere else #}
     <div class="brew-main">
@@ -34,10 +35,10 @@
     <div class="brew-prep" id="brew-prep">
         <p class="brew-kicker">Before you start</p>
         <dl class="brew-params">
-            <div><dt>Coffee</dt><dd>{{ '%g'|format(latest.dose_g) }}<small>g</small></dd><dd class="brew-use">beans to weigh</dd></div>
-            <div><dt>Grind</dt><dd>{{ latest.grind_size }}</dd><dd class="brew-use">on the {{ latest.grinder.name }}</dd></div>
-            <div><dt>Water</dt><dd>{{ '%g'|format(latest.water_ml) }}<small>ml</small></dd><dd class="brew-use">in the kettle · {{ ratio }}</dd></div>
-            <div><dt>Temperature</dt><dd>{{ '%g'|format(latest.temp_c) }}<small>°C</small></dd><dd class="brew-use">kettle set to</dd></div>
+            <div{% if trial and trial.param == 'dose_g' %} class="brew-tried"{% endif %}><dt>Coffee</dt><dd>{{ '%g'|format(latest.dose_g) }}<small>g</small></dd><dd class="brew-use">beans to weigh</dd></div>
+            <div{% if trial and trial.param == 'grind_size' %} class="brew-tried"{% endif %}><dt>Grind</dt><dd>{{ latest.grind_size }}</dd><dd class="brew-use">on the {{ latest.grinder.name }}</dd></div>
+            <div{% if trial and trial.param == 'water_ml' %} class="brew-tried"{% endif %}><dt>Water</dt><dd>{{ '%g'|format(latest.water_ml) }}<small>ml</small></dd><dd class="brew-use">in the kettle · {{ ratio }}</dd></div>
+            <div{% if trial and trial.param == 'temp_c' %} class="brew-tried"{% endif %}><dt>Temperature</dt><dd>{{ '%g'|format(latest.temp_c) }}<small>°C</small></dd><dd class="brew-use">kettle set to</dd></div>
         </dl>
         {% if prep %}<p class="brew-prep-note">{{ prep }}</p>{% endif %}
     </div>
@@ -136,7 +137,7 @@
 {% if bag %}
 <section class="card brew-log-card" id="brew-log-card">
     <h3>Log this brew</h3>
-    {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id, log_bag_left=bag_left, log_dose=latest.dose_g %}
+    {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id, log_bag_left=bag_left, log_dose=latest.dose_g, log_trial=trial %}
     {% include 'partials/log_brew_form.html' %}
     {% endwith %}
 </section>

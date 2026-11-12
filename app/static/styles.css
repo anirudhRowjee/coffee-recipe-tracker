@@ -1884,3 +1884,16 @@ dialog.sheet .sheet-close { margin-left: auto; }
 .gear-sheet .eyebrow { margin: 14px 0 4px; }
 .gear-sheet .sheet-head + .eyebrow { margin-top: 4px; }
 .gear-none { margin-top: 4px; }
+/* Start brewing split 30:70: as it is, or with the Next time change */
+.split-start { display: flex; gap: 8px; }
+.split-start .btn-start { margin-top: 6px; min-width: 0; }
+.split-start .btn-start-plain { flex: 3; background: #f0e4d4; color: #3b1f0e; border: 1px solid #e0c9b0; }
+.split-start .btn-start:not(.btn-start-plain) { flex: 7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brew-tried dd:first-of-type { color: #6b4a00; }
+.brew-tried { background: #fff4e0; border-radius: 10px; }
+.brew-trial { display: block; margin-top: 4px; }
+.split-start .btn-start-change { flex: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; padding: 8px 10px; white-space: normal; }
+.split-start .btn-start-change small { font-size: 0.82rem; font-weight: 500; opacity: 0.9; }
+.split-start .btn-start-plain { display: flex; align-items: center; justify-content: center; }
+.brew-trial { margin: 8px 0 4px; padding: 8px 12px; border-radius: 10px; background: #fff4e0; color: #4a3300; font-size: 0.9rem; line-height: 1.4; }
+.brew-trial span { color: #7d5f4b; font-size: 0.85rem; }

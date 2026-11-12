@@ -91,7 +91,15 @@
     {% endif %}
 
     <div class="dock">
+        {% if trial %}
+        {# 30:70 — brew it as it is, or with the Next time change (saved only when the cup is logged) #}
+        <div class="split-start">
+            <a class="btn-brew btn-start btn-start-plain" href="/lines/{{ line.id }}/brew?{{ query }}" aria-label="Brew it as it is">▶ Brew</a>
+            <a class="btn-brew btn-start btn-start-change" data-tour="2" data-tour-text="{{ TIPS.start }}" href="/lines/{{ line.id }}/brew?{{ query }}&amp;try=1"><span>▶ Brew with change</span><small>{{ trial.label }}</small></a>
+        </div>
+        {% else %}
         <a class="btn-brew btn-start" data-tour="2" data-tour-text="{{ TIPS.start }}" href="/lines/{{ line.id }}/brew?{{ query }}">▶ Start brewing</a>
+        {% endif %}
         <button type="button" class="link-button" data-sheet="log-sheet">or log a cup without the timer</button>
     </div>
 </div>

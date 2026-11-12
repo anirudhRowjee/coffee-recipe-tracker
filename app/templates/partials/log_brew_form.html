@@ -11,6 +11,13 @@
     {# brew mode's scale readings (static/scale.js fills it when the timer stops) #}
     <input type="hidden" name="curve" id="log-curve" value="" />
     <input type="hidden" name="then" id="log-then" value="" />
+    {% if log_trial is defined and log_trial %}
+    {# brewed with the Next time change: logging saves it as the next version #}
+    <input type="hidden" name="try_param" value="{{ log_trial.param }}" />
+    <input type="hidden" name="try_value" value="{{ log_trial.value|num }}" />
+    <input type="hidden" name="try_rationale" value="{{ log_trial.rationale or '' }}" />
+    <p class="form-note">Logging saves {{ log_trial.before_after }} as version {{ log_trial.version }}.</p>
+    {% endif %}
 
     <label style="margin-top:4px">Rating {{ tip('rating') }}</label>
     <div class="star-input-big">{% with star_name='rating' %}{% include 'partials/star_input.html' %}{% endwith %}</div>

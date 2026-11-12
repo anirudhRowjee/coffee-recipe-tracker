@@ -572,6 +572,26 @@ def brews_of(session: Session, recipe_ids: List[int]) -> Dict[int, List[models.B
 VALUE_FIELDS = ("dose_g", "water_ml", "temp_c", "grind_size", "recipe_text")
 
 
+def save_variation(session: Session, base: models.Recipe, param: str, value, rationale: Optional[str]) -> Optional[models.Recipe]:
+    """The next version of base with one value changed (and the delta into it, from the real
+    values). None if that wouldn't be exactly one change."""
+    values = {f: getattr(base, f) for f in VALUE_FIELDS}
+    values[param] = value
+    valid, changed = validate_one_parameter_delta(base, values)
+    if not valid:
+        return None
+    new = create_recipe(session, bean_id=base.bean_id, brewer_id=base.brewer_id, grinder_id=base.grinder_id,
+                        line_id=base.line_id, dose_g=values["dose_g"], water_ml=values["water_ml"], temp_c=values["temp_c"],  # type: ignore[arg-type]
+                        grind_size=values["grind_size"], recipe_text=values["recipe_text"], previous_recipe_id=base.id)
+    try:
+        amount = round(float(values[param]) - float(getattr(base, param)), 3)
+    except (TypeError, ValueError):
+        amount = 0.0
+    create_delta(session, from_recipe_id=base.id, to_recipe_id=new.id, changed_param=param,  # type: ignore[arg-type]
+                 delta_amount=amount, rationale=rationale)
+    return new
+
+
 def undo_last_change(session: Session, line_id: int) -> Optional[models.Recipe]:
     """A new version with the newest version's one change put back: still a single change.
     None if the newest version is the first."""
