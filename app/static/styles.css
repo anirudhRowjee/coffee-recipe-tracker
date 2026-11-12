@@ -1426,3 +1426,10 @@ textarea[hidden] {
     .brew-anim, .brew-fresh .brew-anim { width: 130px; }
     .brew-tile strong { font-size: min(6rem, 34cqi); }
 }
+
+/* Share page: the note picker */
+.share-note { margin: 4px 0 14px; padding: 12px; border-radius: 8px; background: #faf4ec; }
+.share-note-rating { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.share-note-rating input { width: auto; margin: 0; }
+.share-note-rating[hidden] { display: none; }
+.share-options .share-links { margin: 4px 0; }

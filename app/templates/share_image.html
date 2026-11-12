@@ -4,12 +4,33 @@
 <div class="grid">
     <section class="card">
         <h2>Share as image</h2>
-        <p class="muted">{{ title }}: sized for an Instagram post (4:5). No tasting notes or ratings are on it.</p>
-        {% if has_curve %}
-        {# off unless asked for: the curve is from one of your brews, not the recipe #}
-        <p class="share-links">{% if with_curve %}<a href="/lines/{{ line.id }}/share-image">Remove the weight curve</a>
-            {% else %}<a href="/lines/{{ line.id }}/share-image?curve=1">Add the weight curve of my last brew</a>{% endif %}</p>
-        {% endif %}
+        <p class="muted">{{ title }}, sized for {{ 'an Instagram story (9:16)' if state.story else 'an Instagram post (4:5)' }}.
+            {% if not state.notes %}No tasting notes or ratings are on it.{% endif %}</p>
+        {# Everything from your own brews is off unless switched on here, for this card only #}
+        <div class="share-options">
+            <p class="share-links">
+                {% if state.story %}<a href="{{ link(story=False) }}">Post (4:5)</a> · <b>Story (9:16)</b>
+                {% else %}<b>Post (4:5)</b> · <a href="{{ link(story=True) }}">Story (9:16)</a>{% endif %}
+            </p>
+            {% if has_curve %}
+            <p class="share-links">{% if state.curve %}<a href="{{ link(curve=False) }}">Remove the weight curve</a>
+                {% else %}<a href="{{ link(curve=True) }}">Add the weight curve of my last brew</a>{% endif %}</p>
+            {% endif %}
+            {% if has_notes %}
+            <p class="share-links">{% if state.notes %}<a href="{{ link(notes=False) }}">Remove the tasting note</a>
+                {% else %}<a href="{{ link(notes=True) }}">Add one of my tasting notes</a>{% endif %}</p>
+            {% endif %}
+            {% if state.notes %}
+            {# picked and trimmed here, in the browser: nothing typed is saved or sent anywhere #}
+            <div class="share-note stacked-form" id="share-note-form">
+                <label for="share-note-pick">Which note</label>
+                <select id="share-note-pick"></select>
+                <label for="share-note-text">On the card (trim it to what you'd tell a friend)</label>
+                <textarea id="share-note-text" rows="3"></textarea>
+                <label class="share-note-rating" id="share-note-rating-row" hidden><input type="checkbox" id="share-note-rating" /> Show my rating</label>
+            </div>
+            {% endif %}
+        </div>
         <div id="share-card" data-card="{{ card }}">
             <p class="muted" id="share-status">Drawing the image…</p>
             <img class="share-preview" id="share-preview" alt="Recipe card for {{ title }}" hidden />

@@ -1,16 +1,21 @@
-// Share as image: draws a recipe card (1080×1350, Instagram's 4:5 post size) on a
-// canvas from the data export.card_data put in data-card, then offers the phone's
-// share sheet and a download. Drawn here because the server has no imaging library.
+// Share as image: draws a recipe card (1080×1350, Instagram's 4:5 post size, or
+// 1080×1920 for a story) on a canvas from the data export.card_data put in data-card,
+// then offers the phone's share sheet and a download. Drawn here because the server
+// has no imaging library. A tasting note, when offered (?notes=1), is picked and
+// trimmed on the page and redrawn here: the text never leaves the browser.
 (function () {
     var host = document.getElementById('share-card');
     if (!host) return;
     var card = JSON.parse(host.getAttribute('data-card'));
 
-    var W = 1080, H = 1350;
+    var W = 1080, H = card.story ? 1920 : 1350;
     var BORDER = 32, PAD = 56;  // the bag's colours around the card; space inside it
     var SERIF = "Georgia, 'Palatino Linotype', Palatino, serif";
     var SANS = "-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif";
     var INK = '#2c1810', MUTED = '#7a5a44', LABEL = '#8c6a4f', VALUE = '#3b1f0e', PAPER = '#faf6f0';
+    var PLAN = '#a8927c', LINE = '#e3d5c3', NOTE_BG = '#fffdf9';
+    // the note on the card: {text, when, rating}, or null; set from the page's controls
+    var note = null;
     var accent = card.colors.accent, soft = card.colors.soft;
 
     var canvas = document.createElement('canvas');
@@ -99,7 +104,10 @@
         var X = BORDER + PAD, CW = W - 2 * (BORDER + PAD), y = BORDER + PAD;
         ctx.textBaseline = 'alphabetic';
 
-        var photoSize = 210, textW = CW;
+        // with a note or a curve on a post, everything above the method is a little smaller,
+        // so the method still gets room
+        compact = !card.story && !!(note || card.curve);
+        var photoSize = compact ? 170 : 210, textW = CW;
         if (photo) {
             textW = CW - photoSize - 32;
             var px = X + CW - photoSize, scale = Math.max(photoSize / photo.width, photoSize / photo.height);
@@ -129,38 +137,19 @@
             });
         });
         if (photo) y = Math.max(y, BORDER + PAD + photoSize);
-        y += 36;
-
-        // Every parameter, as tiles
-        var gap = 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = 128;
-        card.params.forEach(function (param, i) {
-            var tx = X + (i % cols) * (tileW + gap), ty = y + Math.floor(i / cols) * (tileH + gap);
-            ctx.fillStyle = soft;
-            roundRect(tx, ty, tileW, tileH, 18);
-            ctx.fill();
-            font('normal', 24, SANS);
-            ctx.fillStyle = LABEL;
-            ctx.fillText(param[0], tx + 22, ty + 40);
-            var size = 52;
-            do { font('bold', size, SANS); size -= 2; } while (ctx.measureText(param[1]).width > tileW - 44 && size > 22);
-            ctx.fillStyle = VALUE;
-            ctx.fillText(param[1], tx + 22, ty + 100);
-        });
-        y += Math.ceil(card.params.length / cols) * (tileH + gap) + 26;
+        var top0 = y + 36;
 
         var footerY = H - BORDER - PAD + 12;
-        var stepsBottom = footerY - 34;
-        if (card.curve) {  // only when asked for (?curve=1): the weight through one brew
-            stepsBottom -= CURVE_H + 20;
-            drawCurve(X, CW, stepsBottom + 20);
-        }
-        if (card.steps.length) {
-            font('normal', 38, SERIF);
-            ctx.fillStyle = INK;
-            y += 38;
-            ctx.fillText('Method', X, y);
-            y += 22;
-            drawSteps(X, CW, y, stepsBottom);
+        var bottom = footerY - 34;
+        if (card.story) {
+            // a story: the note and the brew up top, the whole recipe under them
+            drawSteps(X, CW, drawMethodHeading(X, drawParams(X, CW, drawCurveBlock(X, CW, drawNoteBlock(X, CW, top0), STORY_CURVE_H))), bottom);
+        } else {
+            y = drawParams(X, CW, top0);
+            var curveH = note ? 170 : CURVE_H;
+            if (card.curve) { bottom -= curveH + 16; drawCurve(X, CW, bottom + 16, curveH); }
+            if (note) { var nh = noteHeight(CW); bottom -= nh + 20; drawNote(X, CW, bottom + 10, nh); }
+            if (card.steps.length) drawSteps(X, CW, drawMethodHeading(X, y), bottom);
         }
 
         ctx.strokeStyle = '#e3d5c3';
@@ -177,14 +166,115 @@
         ctx.textAlign = 'left';
     }
 
-    var CURVE_H = 200;
-    function drawCurve(X, CW, top) {
-        var t = card.curve.t, g = card.curve.g, end = t[t.length - 1] || 1;
-        var max = Math.max.apply(null, g.concat([1]));
-        var plotTop = top + 44, plotH = CURVE_H - 56, plotW = CW - 120;
+    // Every parameter, as tiles; returns the y below them
+    var compact = false;
+    function drawParams(X, CW, y) {
+        var gap = compact ? 12 : 16, cols = 3, tileW = (CW - gap * (cols - 1)) / cols, tileH = compact ? 96 : 128;
+        card.params.forEach(function (param, i) {
+            var tx = X + (i % cols) * (tileW + gap), ty = y + Math.floor(i / cols) * (tileH + gap);
+            ctx.fillStyle = soft;
+            roundRect(tx, ty, tileW, tileH, 18);
+            ctx.fill();
+            font('normal', 24, SANS);
+            ctx.fillStyle = LABEL;
+            ctx.fillText(param[0], tx + 22, ty + (compact ? 32 : 40));
+            var size = compact ? 44 : 52;
+            do { font('bold', size, SANS); size -= 2; } while (ctx.measureText(param[1]).width > tileW - 44 && size > 22);
+            ctx.fillStyle = VALUE;
+            ctx.fillText(param[1], tx + 22, ty + (compact ? 78 : 100));
+        });
+        return y + Math.ceil(card.params.length / cols) * (tileH + gap) + (compact ? 14 : 26);
+    }
+
+    function drawMethodHeading(X, y) {
+        if (!card.steps.length) return y;
+        font('normal', 38, SERIF);
+        ctx.fillStyle = INK;
+        ctx.fillText('Method', X, y + 38);
+        return y + 60;
+    }
+
+    // The tasting note: on the plain card (never on the colours), the bag's colour down its edge
+    var NOTE_PAD = 26;
+    function noteLines(CW) {
+        var text = note.text.replace(/\s+/g, ' ').trim();
+        return card.story ? fitLines(text, CW - 2 * NOTE_PAD - 12, 5, 'italic', 46, 30, SERIF)
+                          : fitLines(text, CW - 2 * NOTE_PAD - 12, 2, 'italic', 36, 26, SERIF);
+    }
+    function noteHeight(CW) {
+        var fitted = noteLines(CW);
+        return NOTE_PAD + fitted.lines.length * fitted.size * 1.32 + 16 + 26 + NOTE_PAD - 6;
+    }
+    function drawNote(X, CW, top, h) {
+        ctx.fillStyle = NOTE_BG;
+        roundRect(X, top, CW, h, 18);
+        ctx.fill();
+        ctx.strokeStyle = LINE;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.save();
+        roundRect(X, top, CW, h, 18);
+        ctx.clip();
+        ctx.fillStyle = accent;
+        ctx.fillRect(X, top, 10, h);
+        ctx.restore();
+        var fitted = noteLines(CW), y = top + NOTE_PAD;
+        ctx.fillStyle = INK;
+        font('italic', fitted.size, SERIF);
+        fitted.lines.forEach(function (line) {
+            y += fitted.size * 1.32;
+            ctx.fillText(line, X + NOTE_PAD + 12, y - fitted.size * 0.25);
+        });
+        y += 16;
         font('normal', 24, SANS);
         ctx.fillStyle = LABEL;
-        ctx.fillText('Weight through a brew', X, top + 26);
+        var label = 'From my notes' + (note.when ? ' · ' + note.when : '');
+        ctx.fillText(label, X + NOTE_PAD + 12, y + 14);
+        if (note.rating) {
+            var lx = X + NOTE_PAD + 12 + ctx.measureText(label + '   ').width;
+            font('normal', 28, SANS);
+            for (var i = 0; i < 5; i++) {
+                ctx.fillStyle = i < note.rating ? '#c68a3d' : '#e2d3bd';
+                ctx.fillText('★', lx + i * 30, y + 16);
+            }
+        }
+    }
+    function drawNoteBlock(X, CW, y) {  // the story's: returns the y below it
+        if (!note) return y;
+        var h = noteHeight(CW);
+        drawNote(X, CW, y, h);
+        return y + h + 30;
+    }
+    var STORY_CURVE_H = 400;
+    function drawCurveBlock(X, CW, y, h) {
+        if (!card.curve) return y;
+        drawCurve(X, CW, y, h);
+        return y + h + 26;
+    }
+
+    // The weight through one brew, against this version's step targets (dashed)
+    var CURVE_H = 200;
+    function drawCurve(X, CW, top, height) {
+        var t = card.curve.t, g = card.curve.g, plan = card.curve.targets || [];
+        var end = Math.max(t[t.length - 1] || 1, plan.length ? plan[plan.length - 1][0] + 15 : 0);
+        var max = Math.max.apply(null, g.concat(plan.map(function (p) { return p[1]; })).concat([1]));
+        var plotTop = top + 44, plotH = height - 56, plotW = CW - 120;
+        font('normal', 24, SANS);
+        ctx.fillStyle = LABEL;
+        ctx.fillText(plan.length ? 'My brew against the plan (dashed)' : 'Weight through a brew', X, top + 26);
+        if (plan.length) {
+            ctx.strokeStyle = PLAN;
+            ctx.lineWidth = 3;
+            ctx.setLineDash([12, 10]);
+            ctx.beginPath();
+            plan.forEach(function (p, i) {
+                var until = i + 1 < plan.length ? plan[i + 1][0] : end, py = plotTop + plotH - p[1] / max * plotH;
+                ctx.moveTo(X + p[0] / end * plotW, py);
+                ctx.lineTo(X + until / end * plotW, py);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
         ctx.strokeStyle = '#e3d5c3';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -200,7 +290,7 @@
             if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
         });
         ctx.stroke();
-        var last = g[g.length - 1], secs = Math.round(end);
+        var last = g[g.length - 1], secs = Math.round(t[t.length - 1] || 0);
         font('bold', 36, SANS);
         ctx.fillStyle = VALUE;
         ctx.fillText(Math.round(last) + ' g', X + plotW + 20, plotTop + plotH - Math.max(0, last) / max * plotH + 12);
@@ -251,9 +341,12 @@
         }
     }
 
+    var file = null, lastUrl = null;
     function finish() {
         canvas.toBlob(function (blob) {
             var url = URL.createObjectURL(blob);
+            if (lastUrl) URL.revokeObjectURL(lastUrl);
+            lastUrl = url;
             var preview = document.getElementById('share-preview');
             preview.src = url;
             preview.hidden = false;
@@ -265,9 +358,10 @@
             save.download = card.filename;
             save.hidden = false;
 
-            var file = window.File ? new File([blob], card.filename, { type: 'image/png' }) : null;
+            var first = !file;
+            file = window.File ? new File([blob], card.filename, { type: 'image/png' }) : null;
             var button = document.getElementById('share-button');
-            if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+            if (first && file && navigator.canShare && navigator.canShare({ files: [file] })) {
                 button.hidden = false;
                 button.addEventListener('click', function () {
                     navigator.share({ files: [file], title: card.title })['catch'](function () { /* closed the sheet */ });
@@ -276,7 +370,44 @@
         }, 'image/png');
     }
 
+    // The note controls (only on the page with ?notes=1): pick one, trim it, rating on or off
+    var pick = document.getElementById('share-note-pick'), text = document.getElementById('share-note-text');
+    var ratingRow = document.getElementById('share-note-rating-row'), ratingBox = document.getElementById('share-note-rating');
+    var notes = card.notes || [];
+    function chosen() {
+        var n = notes[pick ? +pick.value : 0];
+        return n || null;
+    }
+    function readNote() {
+        var n = chosen();
+        if (!n || !text || !text.value.trim()) { note = null; return; }
+        note = { text: text.value, when: n.when.replace(/, \d\d:\d\d/, ''), rating: ratingBox && ratingBox.checked ? n.rating : null };
+    }
+    function choose() {
+        var n = chosen();
+        if (!n) return;
+        text.value = n.text;
+        ratingRow.hidden = !n.rating;
+        ratingBox.checked = false;
+    }
+
+    var photoImg = null, redraw = null;
     function start(photo) {
+        photoImg = photo;
+        if (pick && notes.length) {
+            notes.forEach(function (n, i) {
+                var o = document.createElement('option');
+                o.value = i;
+                o.textContent = n.when + ' — “' + (n.text.length > 60 ? n.text.slice(0, 57) + '…' : n.text) + '”';
+                pick.appendChild(o);
+            });
+            choose();
+            function again() { clearTimeout(redraw); redraw = setTimeout(function () { readNote(); draw(photoImg); finish(); }, 250); }
+            pick.addEventListener('change', function () { choose(); again(); });
+            text.addEventListener('input', again);
+            ratingBox.addEventListener('change', again);
+        }
+        readNote();
         draw(photo);
         finish();
     }

@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -450,6 +451,27 @@ def latest_curve_for_recipe(session: Session, recipe_id: int) -> Optional[dict]:
         .order_by(models.Brew.brewed_at.desc(), models.Brew.id.desc())  # type: ignore[union-attr]
     ).first()
     return json.loads(row.samples) if row else None
+
+
+_BREWED_LINE = re.compile(r"^\s*Brewed \d+:\d\d\b.*$", re.MULTILINE)
+
+
+def tasting_note(notes: Optional[str]) -> str:
+    """A brew's notes as something to share: without brew mode's "Brewed 3:54 · 500 g"
+    line, with Windows line ends and runs of blank lines tidied."""
+    text = _BREWED_LINE.sub("", (notes or "").replace("\r\n", "\n"))
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def line_brews_with_notes(session: Session, line_id: int, limit: int = 30) -> List[models.Brew]:
+    """Brews of any version of this named recipe that have a note worth sharing, newest first."""
+    brews = session.exec(
+        select(models.Brew)
+        .join(models.Recipe, models.Brew.recipe_id == models.Recipe.id)  # type: ignore[arg-type]
+        .where(models.Recipe.line_id == line_id)
+        .order_by(models.Brew.brewed_at.desc(), models.Brew.id.desc())  # type: ignore[union-attr]
+    ).all()
+    return [b for b in brews if tasting_note(b.notes)][:limit]
 
 
 def _delete_brew(session: Session, brew: models.Brew) -> None:

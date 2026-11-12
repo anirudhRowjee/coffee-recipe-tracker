@@ -914,10 +914,14 @@ def export_line(line_id: int, request: Request, download: bool = False):
 
 
 @app.get("/lines/{line_id}/share-image", response_class=HTMLResponse)
-def share_image(line_id: int, request: Request, curve: Optional[int] = None):
+def share_image(line_id: int, request: Request, curve: Optional[int] = None, notes: Optional[int] = None,
+                format: Optional[str] = None):
     """The named recipe as an Instagram-sized image, drawn in the browser from
     export.card_data (the server has no imaging library). `curve=1` adds the weight
-    curve of the newest brew of this version that has one; it's off unless asked for."""
+    curve of the newest brew of this version that has one; `notes=1` offers this
+    recipe's tasting notes to put one on the card (picked and trimmed in the browser,
+    so the text never goes into a URL); both are off unless asked for.
+    `format=story` draws it 9:16 instead of 4:5."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
         line = _owned(session, user, models.RecipeLine, line_id)
@@ -925,22 +929,36 @@ def share_image(line_id: int, request: Request, curve: Optional[int] = None):
         if not latest or not latest.bean:
             raise HTTPException(status_code=404, detail="Recipe not found")
         last_curve = crud.latest_curve_for_recipe(session, latest.id)  # type: ignore[arg-type]
+        noted = crud.line_brews_with_notes(session, line_id)
+        offered = [{
+            "when": _brew_label(b, session.get(models.Recipe, b.recipe_id), latest),
+            "text": crud.tasting_note(b.notes),
+            "rating": b.rating,
+        } for b in noted] if notes else []
+        story = format == "story"
+        state = {"curve": bool(curve and last_curve), "notes": bool(offered), "story": story}
+
+        def link(**change) -> str:  # this page with one thing switched
+            on = {**state, **change}
+            query = "&".join(p for p, v in (("curve=1", on["curve"]), ("notes=1", on["notes"]), ("format=story", on["story"])) if v)
+            return f"/lines/{line_id}/share-image" + (f"?{query}" if query else "")
+
         return templates.TemplateResponse("share_image.html", {
             "request": request,
             "current_user": user,
             "line": line,
             "title": export.title(line, latest.bean),
             "has_curve": last_curve is not None,
-            "with_curve": bool(curve and last_curve),
-            "card": json.dumps(export.card_data(line, latest, last_curve if curve else None)),
+            "has_notes": bool(noted),
+            "state": state,
+            "link": link,
+            "card": json.dumps(export.card_data(line, latest, last_curve if state["curve"] else None, offered, story)),
         })
 
 
 def _curve_page_data(curve: dict, recipe: models.Recipe) -> dict:
     """A curve plus the step targets of the version it was brewed with."""
-    targets = [[step.times[0], step.target] for step in brew.parse_steps(recipe.recipe_text)
-               if step.times and step.target is not None]
-    return {**curve, "targets": targets}
+    return {**curve, "targets": export.targets(recipe)}
 
 
 @app.get("/brews/{brew_id}/graph", response_class=HTMLResponse)

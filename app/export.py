@@ -43,11 +43,15 @@ def image_filename(line: models.RecipeLine, bean: models.Bean) -> str:
     return filename(line, bean).removesuffix(".md") + ".png"
 
 
-def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[dict] = None) -> dict:
+def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[dict] = None,
+              notes: Optional[List[dict]] = None, story: bool = False) -> dict:
     """What the share image shows, from the same whitelist as the Markdown: the bean,
     the gear, every parameter of the current version, and its method. A brew's weight
     curve is personal brew data, so it's only added when the person asks (`curve`), and
-    only the weight over time: no flow, no date, nothing else about that brew."""
+    only the weight over time (against this version's step targets): no flow, no date,
+    nothing else about that brew. Tasting notes likewise (`notes`, from the share page,
+    which offers them only when asked): the person picks one and can trim it in the
+    browser before it's drawn. `story` is the 9:16 version."""
     bean, brewer, grinder = latest.bean, latest.brewer, latest.grinder
     assert bean and brewer and grinder
     standard = brew.is_standard(latest.recipe_text)
@@ -76,8 +80,16 @@ def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[di
         "colors": theme.card_colors(bean),
         "date": f"{made.day} {made:%b %Y}",
         "filename": image_filename(line, bean),
-        **({"curve": {"t": curve["t"], "g": curve["g"]}} if curve else {}),
+        "story": story,
+        **({"curve": {"t": curve["t"], "g": curve["g"], "targets": targets(latest)}} if curve else {}),
+        **({"notes": notes} if notes else {}),
     }
+
+
+def targets(recipe: models.Recipe) -> List[list]:
+    """[seconds, grams] for every step with a weight to pour to: the plan a curve is drawn against."""
+    return [[step.times[0], step.target] for step in brew.parse_steps(recipe.recipe_text)
+            if step.times and step.target is not None]
 
 
 def to_markdown(
