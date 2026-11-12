@@ -12,13 +12,11 @@
         <div class="card-header">
             <h2>{{ bean.name }}</h2>
             {% if active_bags and brewers and grinders %}
-            <button type="button" class="btn-action" onclick="toggleForm('schedule-form-{{ bean.id }}')">📅 Schedule next brew</button>
+            <button type="button" class="btn-action" onclick="toggleForm('schedule-form-{{ bean.id }}')">📅 Make Up next</button>
             {% endif %}
         </div>
         <p class="bean-meta">
-            <span class="muted">ID {{ bean.id }}</span>
-            {% if bean.origin %} · {{ bean.origin }}{% endif %}
-            {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+            {{ [bean.origin, bean.roast_level]|select|join(' · ') }}
         </p>
         {% if bean.flavor_notes %}
         <p class="bean-flavor">{{ bean.flavor_notes }}</p>
@@ -84,7 +82,7 @@
                     {% include 'partials/plan_suggestion_fields.html' %}
                     <p class="muted plan-suggest-has-rec" hidden>This recipe already has a recommendation for next time.</p>
                 </div>
-                <button type="submit" style="margin-top:8px">📅 Schedule this brew</button>
+                <button type="submit" style="margin-top:8px">📅 Make this Up next</button>
             </form>
         </div>
         {% endif %}
@@ -110,17 +108,17 @@
         {% endif %}
 
         {% if recipe %}
-        <h4>Latest recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
+        <h4>Current recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
         <div class="recipe-card">
-            <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
-               <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
-               <strong>Temp:</strong> {{ recipe.temp_c }} °C &nbsp;·&nbsp;
+            <p><strong>Coffee:</strong> {{ recipe.dose_g|num }} g &nbsp;·&nbsp;
+               <strong>Water:</strong> {{ recipe.water_ml|num }} ml &nbsp;·&nbsp;
+               <strong>Temp:</strong> {{ recipe.temp_c|num }} °C &nbsp;·&nbsp;
                <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
                <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
             {% if recipe.recipe_text %}
             <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
             {% endif %}
-            <p class="muted" style="margin-top:6px">Last brewed {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
+            <p class="muted" style="margin-top:6px">{% if brews %}Last brewed {{ brews[0].brewed_at.strftime('%b %d, %Y') }}{% else %}Not brewed yet{% endif %}</p>
         </div>
         {% else %}
         <p class="muted">No recipes yet.</p>
@@ -145,7 +143,7 @@
                         {{ brew.brewed_at.strftime('%b %d, %Y') }}
                         {% if brew.recipe.line %}· {{ brew.recipe.line.name }}{% endif %}
                         · {{ brew.recipe.grinder.name }}
-                        · {{ brew.recipe.dose_g }}g dose · grind {{ brew.recipe.grind_size }}
+                        · {{ brew.recipe.dose_g|num }} g · grind {{ brew.recipe.grind_size }}
                     </span>
                     {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
                     {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
@@ -159,13 +157,12 @@
             <h4 style="margin-top:12px">Change history</h4>
             <table class="delta-table">
                 <thead>
-                    <tr><th>Param</th><th>Change</th><th>Rationale</th><th>Date</th></tr>
+                    <tr><th>Change</th><th>Why</th><th>Date</th></tr>
                 </thead>
                 <tbody>
                     {% for delta in deltas %}
                     <tr>
-                        <td>{{ delta.changed_param }}</td>
-                        <td>{{ delta.delta_amount }}</td>
+                        <td>{{ delta.change_label }}</td>
                         <td>{{ delta.rationale or '-' }}</td>
                         <td>{{ delta.created_at.strftime('%b %d') }}</td>
                     </tr>
@@ -191,9 +188,7 @@
             <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border,#eee)">
                 <h3 class="muted" style="margin:0 0 4px">{{ bean.name }}</h3>
                 <p class="bean-meta">
-                    <span class="muted">ID {{ bean.id }}</span>
-                    {% if bean.origin %} · {{ bean.origin }}{% endif %}
-                    {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+                    {{ [bean.origin, bean.roast_level]|select|join(' · ') }}
                 </p>
                 {% if bags_with_remaining %}
                 <table class="delta-table" style="margin:8px 0">
@@ -212,17 +207,17 @@
                 </table>
                 {% endif %}
                 {% if recipe %}
-                <h4>Latest recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
+                <h4>Current recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
                 <div class="recipe-card">
-                    <p><strong>Dose:</strong> {{ recipe.dose_g }} g &nbsp;·&nbsp;
-                       <strong>Water:</strong> {{ recipe.water_ml }} ml &nbsp;·&nbsp;
-                       <strong>Temp:</strong> {{ recipe.temp_c }} °C &nbsp;·&nbsp;
+                    <p><strong>Coffee:</strong> {{ recipe.dose_g|num }} g &nbsp;·&nbsp;
+                       <strong>Water:</strong> {{ recipe.water_ml|num }} ml &nbsp;·&nbsp;
+                       <strong>Temp:</strong> {{ recipe.temp_c|num }} °C &nbsp;·&nbsp;
                        <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
                        <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
                     {% if recipe.recipe_text %}
                     <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
                     {% endif %}
-                    <p class="muted" style="margin-top:6px">Last brewed {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
+                    <p class="muted" style="margin-top:6px">Version saved {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
                 </div>
                 {% endif %}
             </div>

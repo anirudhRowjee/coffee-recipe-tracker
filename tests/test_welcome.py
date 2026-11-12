@@ -13,7 +13,7 @@ def test_someone_with_no_recipes_is_welcomed(app):
     assert POPUP in html
     assert 'class="bag-modal-overlay hidden" data-user="1"' in html  # only the script opens it
     steps = html[html.index('class="welcome-steps"'):html.index('id="welcome-done"')]
-    assert steps.index("Add a bean and a bag") < steps.index("Add a brewer and a grinder") < steps.index("Add a baseline recipe")
+    assert steps.index("Add your coffee and its bag") < steps.index("Add a brewer and a grinder") < steps.index("Add a first recipe")
     assert "No Grinder" in steps  # the pre-ground option
     assert 'href="/manage"' in steps
 

@@ -11,14 +11,14 @@
     <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
     <label style="margin-top:8px">Rating</label>
     {% with star_name='rating' %}{% include 'partials/star_input.html' %}{% endwith %}
-    <label style="margin-top:8px">Recommend next change</label>
+    <label style="margin-top:8px">Next time</label>
     <select name="recommended_param" onchange="toggleRecDelta(this)">
-        <option value="">— no recommendation —</option>
-        <option value="dose_g">Dose</option>
+        <option value="">— same again —</option>
+        <option value="dose_g">Coffee</option>
         <option value="water_ml">Water</option>
         <option value="temp_c">Temp</option>
-        <option value="grind_size">Grind size</option>
-        <option value="recipe_text">Recipe text</option>
+        <option value="grind_size">Grind</option>
+        <option value="recipe_text">Method</option>
     </select>
     <div id="rec-delta-row" style="display:none">
         <label style="margin-top:6px">By how much

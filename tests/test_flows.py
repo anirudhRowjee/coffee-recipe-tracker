@@ -70,8 +70,8 @@ def test_incomplete_selection_prompts(app):
 
 def test_combination_without_recipe_offers_baseline(app):
     html = latest(app)
-    assert "No recipe yet for this combination" in html
-    assert "Save baseline recipe" in html
+    assert "No recipe yet for this coffee" in html
+    assert "Save first version" in html
 
 
 # --- baseline, brews, variations ------------------------------------------
@@ -79,7 +79,7 @@ def test_combination_without_recipe_offers_baseline(app):
 def test_baseline_recipe_is_shown_for_its_combination(app):
     post(app, "/recipes", BASELINE)
     html = latest(app)
-    assert "<strong>Dose:</strong> 15.0 g" in html
+    assert "<strong>Coffee:</strong> 15 g" in html
     assert "<strong>Grind:</strong> 13" in html
     assert "Close the switch" in html
     assert app.rows("select previous_recipe_id from recipe") == [{"previous_recipe_id": None}]
@@ -107,9 +107,9 @@ def test_log_brew_stores_signed_recommendation_and_uses_dose(app):
     assert brew == [{"notes": "sour", "recommended_param": "grind_size", "recommended_delta": -1.0}]
 
     html = latest(app)
-    assert "Recommended next" in html
+    assert 'data-rec="brew"' in html
     assert 'data-delta="-1.0"' in html  # feeds applyRecommendation()
-    assert "Apply: grind size -1" in html
+    assert "Apply: Grind −1" in html
 
     with app.session() as s:
         assert crud.get_remaining_quantity(s, s.get(models.BeanBag, 1)) == 235.0
@@ -156,12 +156,12 @@ def test_recipe_text_variation_stores_zero_delta(app):
 
 def test_plan_shows_scheduled_brew_on_home_page(app):
     post(app, "/recipes", BASELINE)
-    assert "Scheduled brew" not in app.client.get("/").text
+    assert 'data-planned="1"' not in app.client.get("/").text
     post(app, "/plan", {**COMBO, "notes": "want it stronger"})
     html = app.client.get("/").text
-    assert "Scheduled brew" in html
+    assert 'data-planned="1"' in html
     assert "<strong>Grind:</strong> 13" in html
-    assert "Planned for next time" in html and "want it stronger" in html
+    assert "Planned as Up next" in html and "want it stronger" in html
 
 
 def test_new_plan_replaces_old_and_cancel_removes(app):
@@ -172,16 +172,16 @@ def test_new_plan_replaces_old_and_cancel_removes(app):
     plan_id = app.scalar("select id from plannedbrew")
     post(app, f"/plan/{plan_id}/cancel", {})
     assert app.scalar("select count(*) from plannedbrew") == 0
-    assert "Scheduled brew" not in app.client.get("/").text
+    assert 'data-planned="1"' not in app.client.get("/").text
 
 
 def test_plan_status_only_shown_for_the_planned_combination(app):
     post(app, "/recipes", BASELINE)
     post(app, "/recipes", {**BASELINE, "grinder_id": 2})
     post(app, "/plan", COMBO)
-    assert "Planned for next time" in latest(app)
+    assert "Planned as Up next" in latest(app)
     other = latest(app, grinder_id=2)
-    assert "Planned for next time" not in other and "Plan for next time" in other
+    assert "Planned as Up next" not in other and "Make this Up next" in other
 
 
 def test_logging_planned_brew_clears_plan(app):
@@ -205,7 +205,7 @@ def test_variation_on_planned_brew_clears_plan(app):
 
 def test_plan_from_browse_page_shows_on_home(app):
     post(app, "/recipes", BASELINE)
-    assert "Schedule next brew" in app.client.get("/browse").text
+    assert "Make Up next" in app.client.get("/browse").text
     post(app, "/plan", {**COMBO, "notes": "from browse"})
     assert "from browse" in app.client.get("/").text
 

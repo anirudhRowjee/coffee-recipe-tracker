@@ -43,8 +43,8 @@
     </section>
 {% endset %}
 {% set brew_section %}
-    <section class="card {% if not pending_plan %}hidden{% endif %}" id="latest-wing">
-        <h2>{% if pending_plan %}Scheduled brew{% else %}Latest recipe{% endif %}</h2>
+    <section class="card {% if not pending_plan %}hidden{% endif %}" id="latest-wing"{% if pending_plan %} data-planned="1"{% endif %}>
+        <h2>{% if pending_plan %}Up next{% else %}Recipe{% endif %}</h2>
         {% if pending_plan %}
         {% include 'partials/latest_recipe.html' %}
         {% endif %}

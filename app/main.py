@@ -12,7 +12,7 @@ from sqlmodel import Session
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from . import auth, brew, crud, db, export, models, theme
+from . import auth, brew, crud, db, export, models, theme, words
 
 app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -34,6 +34,10 @@ def static_url(path: str) -> str:
 templates.env.globals["static"] = static_url
 templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["needs_tidy"] = brew.needs_tidy
+templates.env.filters["num"] = words.num
+templates.env.filters["param_label"] = words.label
+templates.env.globals["change_label"] = words.change
+templates.env.globals["change_amount"] = words.amount
 templates.env.filters["step_editor_data"] = brew.step_editor_data
 # What a cup costs at a café: every cup brewed at home is that much saved
 CAFE_CUP_PRICE_INR = 300
@@ -517,6 +521,8 @@ def browse(request: Request):
     with Session(db.engine) as session:
         user = _require_user(request, session)
         all_bean_recipes = crud.get_latest_recipe_per_bean(session, user.id)  # type: ignore[arg-type]
+        # the coffee you brewed most recently first; never-brewed ones after, by name
+        all_bean_recipes.sort(key=lambda e: max((b.brewed_at for b in e[3]), default=datetime.min), reverse=True)
         bean_recipes = [
             entry for entry in all_bean_recipes
             if not entry[2] or any(not bag.is_completed for bag, _ in entry[2])

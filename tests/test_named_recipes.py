@@ -83,8 +83,8 @@ def test_one_parameter_rule_applies_within_a_named_recipe(app):
 def test_recommendations_are_per_named_recipe(app):
     default, two_cup = two_lines(app)
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "recommended_param": "grind_size", "recommended_delta": "-1"})
-    assert "Recommended next" in latest(app, line_id=default)
-    assert "Recommended next" not in latest(app, line_id=two_cup)
+    assert 'data-rec="brew"' in latest(app, line_id=default)
+    assert 'data-rec="brew"' not in latest(app, line_id=two_cup)
 
 
 def test_bag_quantity_counts_brews_from_every_named_recipe(app):
@@ -136,19 +136,19 @@ def test_plan_remembers_the_named_recipe(app):
     assert app.scalar("select line_id from plannedbrew") == two_cup
 
     home = app.client.get("/").text
-    assert "Scheduled brew" in home and "<strong>Grind:</strong> 14" in home
-    assert "Planned for next time" in home
+    assert 'data-planned="1"' in home and "<strong>Grind:</strong> 14" in home
+    assert "Planned as Up next" in home
 
-    assert "Planned for next time" not in latest(app, line_id=default)
-    assert "Planned for next time" in latest(app, line_id=two_cup)
+    assert "Planned as Up next" not in latest(app, line_id=default)
+    assert "Planned as Up next" in latest(app, line_id=two_cup)
 
 
 def test_plan_without_line_uses_the_default_recipe(app):
     default, two_cup = two_lines(app)
     post(app, "/plan", COMBO)  # like the browse page's form
     home = app.client.get("/").text
-    assert "<strong>Grind:</strong> 14" in home and "Planned for next time" in home
-    assert "Planned for next time" not in latest(app, line_id=default)
+    assert "<strong>Grind:</strong> 14" in home and "Planned as Up next" in home
+    assert "Planned as Up next" not in latest(app, line_id=default)
 
 
 def test_plan_ignores_a_line_from_another_combination(app):
@@ -210,7 +210,7 @@ def test_browse_history_shows_recipe_and_grinder(app):
     two_lines(app)
     post(app, "/brews", {"recipe_id": 2, "bag_id": 1, "notes": "two cups"})
     entry = re.search(r'<span class="brew-date">(.*?)</span>', app.client.get("/browse").text, re.S).group(1)
-    assert "2 cup" in entry and "Timemore C2" in entry and "30.0g dose" in entry and "grind 14" in entry
+    assert "2 cup" in entry and "Timemore C2" in entry and "30 g · grind" in entry and "grind 14" in entry
 
 
 # --- rename / delete ------------------------------------------------------------
@@ -252,6 +252,6 @@ def test_deleting_grinder_or_bean_removes_their_named_recipes(app):
 
 def test_browse_names_the_latest_recipe_when_not_default(app):
     post(app, "/recipes", BASELINE)
-    assert "Latest recipe</h4>" in app.client.get("/browse").text
+    assert "Current recipe</h4>" in app.client.get("/browse").text
     post(app, "/recipes", TWO_CUP)
-    assert "Latest recipe · 2 cup</h4>" in app.client.get("/browse").text
+    assert "Current recipe · 2 cup</h4>" in app.client.get("/browse").text

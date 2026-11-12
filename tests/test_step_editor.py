@@ -191,7 +191,7 @@ def test_tidied_version_keeps_showing_brews_and_recommendation(app):
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "notes": "sour one", "recommended_param": "grind_size", "recommended_delta": "-1"})
     post(app, "/lines/1/tidy", {"recipe_text": STANDARD})
     html = latest(app)
-    assert "Recommended next" in html and "sour one" in html
+    assert 'data-rec="brew"' in html and "sour one" in html
     assert "Tidied into steps" in html  # in the change history
     assert 'name="recipe_id" value="2"' in html  # new brews log against the new version
 

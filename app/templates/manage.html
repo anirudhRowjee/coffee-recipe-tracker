@@ -66,10 +66,7 @@
             <summary class="bean-summary">
                 <span class="bean-title">{{ bean.name }}</span>
                 <span class="bean-meta">
-                    ID {{ bean.id }}
-                    {% if bean.origin %} · {{ bean.origin }}{% endif %}
-                    {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
-                    · {{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
+                    {{ [bean.origin, bean.roast_level]|select|join(' · ') }}{% if bean.origin or bean.roast_level %} · {% endif %}{{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
                 </span>
                 <span class="summary-actions">
                     <button type="button" class="btn-action" onclick="event.stopPropagation(); toggleForm('edit-bean-{{ bean.id }}')">Edit</button>
@@ -195,9 +192,7 @@
                 <summary class="bean-summary">
                     <span class="bean-title muted">{{ bean.name }}</span>
                     <span class="bean-meta">
-                        ID {{ bean.id }}
-                        {% if bean.origin %} · {{ bean.origin }}{% endif %}
-                        {% if bean.roast_level %} · {{ bean.roast_level }}{% endif %}
+                        {{ [bean.origin, bean.roast_level]|select|join(' · ') }}
                         · {{ bags|length }} bag{{ 's' if bags|length != 1 else '' }}
                     </span>
                     <span class="summary-actions">

@@ -184,3 +184,12 @@ class Delta(SQLModel, table=True):
     delta_amount: float
     rationale: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # read-only links to the two versions, so a page can show "Temp 91 → 93 °C"
+    from_recipe: Optional["Recipe"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Delta.from_recipe_id]", "viewonly": True})
+    to_recipe: Optional["Recipe"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Delta.to_recipe_id]", "viewonly": True})
+
+    @property
+    def change_label(self) -> str:
+        from . import words
+        return words.before_after(self.changed_param, self.from_recipe, self.to_recipe)

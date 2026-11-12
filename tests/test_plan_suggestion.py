@@ -1,6 +1,6 @@
 """
 A change to try on a scheduled brew: offered when scheduling a recipe that has no
-recommendation yet, shown like one ("Planned change") on the planned combination,
+recommendation yet, shown like one ('data-rec="plan"') on the planned combination,
 and gone once the plan is used. A brew's own recommendation always wins.
 """
 import csv
@@ -22,7 +22,7 @@ def test_offered_on_the_panel_when_there_is_no_recommendation(app):
     assert 'name="suggested_param"' in latest(app)
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "recommended_param": "dose_g", "recommended_delta": "1"})
     panel = latest(app)
-    assert "Recommended next" in panel and 'name="suggested_param"' not in panel
+    assert 'data-rec="brew"' in panel and 'name="suggested_param"' not in panel
 
 
 def test_scheduling_with_a_suggestion_shows_it_as_the_next_change(app):
@@ -31,7 +31,7 @@ def test_scheduling_with_a_suggestion_shows_it_as_the_next_change(app):
     assert plan_row(app) == [{"suggested_param": "grind_size", "suggested_delta": -1.0,
                               "suggested_rationale": "a bit sour, try finer"}]
     home = app.client.get("/").text
-    assert "Planned change" in home and "a bit sour, try finer" in home
+    assert 'data-rec="plan"' in home and "a bit sour, try finer" in home
     # it fills the variation form like a recommendation does
     assert 'id="rec-data"' in home and 'data-param="grind_size"' in home and 'data-delta="-1.0"' in home
 
@@ -40,8 +40,8 @@ def test_only_on_the_planned_combination(app):
     post(app, "/recipes", BASELINE)
     post(app, "/recipes", {**BASELINE, "grinder_id": 2})
     post(app, "/plan", {**COMBO, **SUGGEST})
-    assert "Planned change" in latest(app)
-    assert "Planned change" not in latest(app, grinder_id=2)
+    assert 'data-rec="plan"' in latest(app)
+    assert 'data-rec="plan"' not in latest(app, grinder_id=2)
 
 
 def test_ignored_when_the_recipe_already_has_a_recommendation(app):
@@ -50,7 +50,7 @@ def test_ignored_when_the_recipe_already_has_a_recommendation(app):
     post(app, "/plan", {**COMBO, "line_id": 1, **SUGGEST})
     assert plan_row(app) == [{"suggested_param": None, "suggested_delta": None, "suggested_rationale": None}]
     home = app.client.get("/").text
-    assert "Recommended next" in home and "Planned change" not in home
+    assert 'data-rec="brew"' in home and 'data-rec="plan"' not in home
 
 
 def test_a_newer_brew_recommendation_wins(app):
@@ -59,14 +59,14 @@ def test_a_newer_brew_recommendation_wins(app):
     # a brew logged without using the plan (so the plan stays) brings its own
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "recommended_param": "temp_c", "recommended_delta": "2"})
     panel = latest(app)
-    assert "Recommended next" in panel and "Planned change" not in panel
+    assert 'data-rec="brew"' in panel and 'data-rec="plan"' not in panel
 
 
 def test_nothing_chosen_means_no_suggestion(app):
     post(app, "/recipes", BASELINE)
     post(app, "/plan", {**COMBO, "suggested_param": "", "suggested_delta": "-1", "suggested_rationale": "x"})
     assert plan_row(app) == [{"suggested_param": None, "suggested_delta": None, "suggested_rationale": None}]
-    assert "Planned change" not in app.client.get("/").text
+    assert 'data-rec="plan"' not in app.client.get("/").text
 
 
 def test_recipe_text_has_no_amount_and_a_minus_sign_is_read(app):
@@ -89,7 +89,7 @@ def test_using_the_plan_clears_it(app):
     post(app, "/plan", {**COMBO, **SUGGEST})
     plan_id = app.scalar("select id from plannedbrew")
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "planned_brew_id": plan_id})
-    assert "Planned change" not in latest(app)
+    assert 'data-rec="plan"' not in latest(app)
 
 
 def test_browse_marks_recipes_that_already_have_a_recommendation(app):
