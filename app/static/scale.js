@@ -179,18 +179,23 @@
     connectBtn.addEventListener('click', function () {
         connectBtn.disabled = true;
         connectBtn.textContent = 'Connecting…';
+        var stage = 'choosing the scale';  // named in the error, since some browsers give no message
         navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'BOOKOO' }, { namePrefix: 'Bookoo' }, { services: [SERVICE] }],
             optionalServices: [SERVICE]
         }).then(function (d) {
             device = d;
+            stage = 'connecting';
             device.addEventListener('gattserverdisconnected', function () { connected(false); });
             return device.gatt.connect();
         }).then(function (server) {
+            stage = 'finding the scale’s service';
             return server.getPrimaryService(SERVICE);
         }).then(function (service) {
+            stage = 'finding the weight and command channels';
             return Promise.all([service.getCharacteristic(WEIGHT), service.getCharacteristic(COMMAND)]);
         }).then(function (chars) {
+            stage = 'starting the weight readings';
             command = chars[1];
             // the notes don't say which characteristic carries events, so listen on both
             chars[0].addEventListener('characteristicvaluechanged', function (e) {
@@ -212,9 +217,17 @@
             say('');
             connected(true);
         })['catch'](function (err) {
-            if (device && device.gatt.connected) device.gatt.disconnect();
+            try { if (device && device.gatt.connected) device.gatt.disconnect(); } catch (e) { /* already gone */ }
             connected(false);
-            if (err && err.name !== 'NotFoundError') window.alert('Could not connect to the scale: ' + err.message);
+            // Chrome rejects with an Error; Bluefy may reject with a bare string or object
+            var name = err && err.name, text = err && (err.message || (typeof err === 'string' ? err : ''));
+            if (!text && err) { try { text = JSON.stringify(err); } catch (e) { text = String(err); } }
+            var cancelled = name === 'NotFoundError' || /cancel/i.test(text || '');
+            if (!cancelled) {
+                window.alert('Could not connect to the scale while ' + stage + ': ' +
+                    (name && name !== 'Error' ? name + ': ' : '') + (text || String(err)) +
+                    '\n\nIf it isn’t listed: close the Bookoo app (on every phone or tablet nearby) and wake the scale.');
+            }
         }).then(function () {
             connectBtn.disabled = false;
             connectBtn.textContent = 'Scale';
