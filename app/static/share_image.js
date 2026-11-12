@@ -244,7 +244,7 @@
         drawNote(X, CW, y, h);
         return y + h + 34;
     }
-    var STORY_CURVE_H = 150;
+    var STORY_CURVE_H = 190;
     function drawCurveBlock(X, CW, y, h) {
         if (!card.curve) return y;
         drawCurve(X, CW, y, h);
@@ -252,11 +252,33 @@
     }
 
     // The weight through one brew, against this version's step targets (dashed)
-    var CURVE_H = 110;  // a strip: there's no axis to read, it shows the shape of the brew
+    var CURVE_H = 144;  // label + a strip: there's no axis to read, it shows the shape of the brew
+    // Weight and flow side by side, each with its name and nothing else to read off: the shape
+    // of the brew. Two charts, never one with two scales.
+    var CHART_LABEL = 34;
     function drawCurve(X, CW, top, height) {
-        // No caption, axis or numbers: there's nothing to read off it, it's the shape of the brew
-        // (the bag's colour) over the plan's steps (faint, dashed)
-        var t = card.curve.t, g = card.curve.g, plan = card.curve.targets || [];
+        var gap = 36, half = (CW - gap) / 2;
+        drawChart(X, half, top, height, 'Weight', card.curve.g, card.curve.targets || []);
+        if (card.curve.f) drawChart(X + half + gap, half, top, height, 'Flow rate', smooth(card.curve.f, 1.5), []);
+    }
+    // the average of the readings within `secs` either side: at this size raw flow is all
+    // spikes, and a sparse curve (few readings) is left as it is
+    function smooth(values, secs) {
+        var t = card.curve.t;
+        return values.map(function (v, i) {
+            var sum = 0, n = 0;
+            for (var j = i; j >= 0 && t[i] - t[j] <= secs; j--) { sum += values[j]; n++; }
+            for (var k = i + 1; k < values.length && t[k] - t[i] <= secs; k++) { sum += values[k]; n++; }
+            return sum / n;
+        });
+    }
+    function drawChart(X, CW, top, height, name, g, plan) {
+        font('normal', 24, SANS);
+        ctx.fillStyle = LABEL;
+        ctx.fillText(name + (plan.length ? '  (dashed: the plan)' : ''), X, top + 22);
+        top += CHART_LABEL;
+        height -= CHART_LABEL;
+        var t = card.curve.t;
         var end = Math.max(t[t.length - 1] || 1, plan.length ? plan[plan.length - 1][0] + 15 : 0);
         var max = Math.max.apply(null, g.concat(plan.map(function (p) { return p[1]; })).concat([1]));
         var plotTop = top + 6, plotH = height - 12, plotW = CW;

@@ -159,7 +159,7 @@ def test_share_image_curve_is_opt_in(app):
     assert "curve" not in card                                  # off unless asked for
     assert 'href="/lines/1/share-image?curve=1">Add the weight curve' in page
     card, page = share_card(app, curve=1)
-    assert card["curve"] == {"t": curve()["t"], "g": curve()["g"], "targets": [[0, 50.0], [40, 250.0]]}   # weight only: no flow, no date
+    assert card["curve"] == {**curve(), "targets": [[0, 50.0], [40, 250.0]]}   # weight and flow, but no date
     assert "Remove the weight curve" in page
 
 

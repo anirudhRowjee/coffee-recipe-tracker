@@ -48,7 +48,7 @@ def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[di
     """What the share image shows, from the same whitelist as the Markdown: the bean,
     the gear, every parameter of the current version, and its method. A brew's weight
     curve is personal brew data, so it's only added when the person asks (`curve`), and
-    only the weight over time (against this version's step targets): no flow, no date,
+    only the weight (against this version's step targets) and flow over time: no date,
     nothing else about that brew. Tasting notes likewise (`notes`, from the share page,
     which offers them only when asked): the person picks one and can trim it in the
     browser before it's drawn. `story` is the 9:16 version."""
@@ -81,7 +81,7 @@ def card_data(line: models.RecipeLine, latest: models.Recipe, curve: Optional[di
         "date": f"{made.day} {made:%b %Y}",
         "filename": image_filename(line, bean),
         "story": story,
-        **({"curve": {"t": curve["t"], "g": curve["g"], "targets": targets(latest)}} if curve else {}),
+        **({"curve": {"t": curve["t"], "g": curve["g"], "f": curve["f"], "targets": targets(latest)}} if curve else {}),
         **({"notes": notes} if notes else {}),
     }
 
