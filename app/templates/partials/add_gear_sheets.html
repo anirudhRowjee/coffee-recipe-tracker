@@ -1,0 +1,49 @@
+{% from 'partials/tip.html' import tip %}
+{# Add a brewer or grinder by tapping a type: the name fills itself in (and can be changed);
+   a brewer's type also tells brew mode which brewer to draw. Expects gear_next (optional). #}
+<dialog class="sheet" id="add-brewer-sheet" aria-label="Add a brewer">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Add a brewer</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/brewers" class="stacked-form gear-form">
+        {% if gear_next is defined and gear_next %}<input type="hidden" name="next" value="{{ gear_next }}" />{% endif %}
+        <p class="muted">Pick the closest {{ tip('brewer_type') }}</p>
+        <div class="chips type-chips">
+            {% for name, method in [('Hario V60', 'V60'), ('Hario Switch', 'Switch'), ('AeroPress', 'AeroPress'), ('Kalita Wave', 'Kalita Wave'),
+                                    ('Chemex', 'Pour over'), ('French press', 'Immersion'), ('Moka pot', 'Moka'), ('Espresso', 'Espresso')] %}
+            <button type="button" class="chip" data-name="{{ name }}" data-method="{{ method }}" aria-pressed="false">{{ name }}</button>
+            {% endfor %}
+        </div>
+        <label>Name <input name="name" required placeholder="e.g. Office AeroPress" autocomplete="off" /></label>
+        <input type="hidden" name="method" />
+        <button type="submit">Add brewer</button>
+    </form>
+</dialog>
+
+<dialog class="sheet" id="add-grinder-sheet" aria-label="Add a grinder">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Add a grinder</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/grinders" class="stacked-form gear-form">
+        {% if gear_next is defined and gear_next %}<input type="hidden" name="next" value="{{ gear_next }}" />{% endif %}
+        <div class="chips type-chips">
+            {% for name in ['Timemore C2', 'Comandante C40', '1Zpresso', 'Baratza Encore', 'Pre-ground'] %}
+            <button type="button" class="chip" data-name="{{ name }}" aria-pressed="false">{{ name }}</button>
+            {% endfor %}
+        </div>
+        <label>Name <input name="name" required placeholder="e.g. Timemore C2" autocomplete="off" /></label>
+        <button type="submit">Add grinder</button>
+    </form>
+</dialog>
+<script>
+    // A type chip fills the name (unless you've typed your own) and the brewer's type
+    document.addEventListener('click', function (e) {
+        var chip = e.target.closest('.type-chips .chip');
+        if (!chip) return;
+        var form = chip.closest('form');
+        var name = form.querySelector('[name="name"]');
+        var method = form.querySelector('[name="method"]');
+        var previous = form.querySelector('.type-chips .chip[aria-pressed="true"]');
+        if (!name.value || (previous && name.value === previous.getAttribute('data-name'))) name.value = chip.getAttribute('data-name');
+        if (method) method.value = chip.getAttribute('data-method') || '';
+        form.querySelectorAll('.type-chips .chip').forEach(function (c) { c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'); });
+    });
+</script>

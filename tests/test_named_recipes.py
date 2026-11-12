@@ -253,6 +253,6 @@ def test_deleting_grinder_or_bean_removes_their_named_recipes(app):
 
 def test_browse_names_the_latest_recipe_when_not_default(app):
     post(app, "/recipes", BASELINE)
-    assert "Current recipe</h4>" in app.client.get("/browse").text
+    assert "<b>Default</b>" in app.client.get("/browse").text
     post(app, "/recipes", TWO_CUP)
-    assert "Current recipe · 2 cup</h4>" in app.client.get("/browse").text
+    assert "<b>2 cup</b>" in app.client.get("/browse").text

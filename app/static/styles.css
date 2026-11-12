@@ -1717,3 +1717,63 @@ a.chip, span.chip { display: inline-flex; align-items: center; gap: 4px; text-de
 .form-warning .check-row { margin-top: 6px; font-weight: 600; }
 .form-note { background: #f0e4d4; border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; margin: 4px 0; }
 .error-page .error-message { font-size: 1.1rem; font-weight: 600; color: #a3332a; }
+
+/* ==== Coffees and Settings ==== */
+.coffees-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.coffees-layout.picked .coffees-list { display: none; }
+.back-to-list { margin: 0 0 6px; }
+@media (min-width: 1024px) {
+    .coffees-layout { grid-template-columns: 320px minmax(0, 1fr); align-items: start; }
+    .coffees-layout.picked .coffees-list { display: block; }
+    .coffees-list { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto; }
+    .back-to-list { display: none; }
+}
+@media (max-width: 1023px) { .coffees-layout:not(.picked) .coffee-detail { display: none; } }
+.coffees-head, .gear-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.coffees-head h2, .gear-head h3 { margin: 0; }
+.gear-head { margin: 14px 0 8px; }
+.coffee-rows a.sel { background: #f6ecdf; box-shadow: inset 3px 0 0 #6b3d2e; }
+.row-art { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px; object-fit: cover; background: var(--mesh-strong, linear-gradient(135deg, #e8c9a0, #b06a43 55%, #4b2a1b)); }
+.row-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.row-text .muted { font-size: 0.82rem; font-weight: 400; }
+.finished-coffees { margin-top: 10px; }
+.finished-coffees summary { cursor: pointer; min-height: 36px; }
+.coffee-detail h3 { margin: 16px 0 8px; }
+.chip.low { border-color: #e2b45c; background: #fff4e0; }
+.chip.done { opacity: 0.55; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+.btn-row form { display: inline; }
+.btn-row .btn-brew { margin-top: 0; }
+.seg { display: flex; flex-wrap: wrap; background: #f0e4d4; border-radius: 12px; padding: 3px; gap: 3px; margin: 6px 0; }
+.seg label { flex: 1 1 auto; margin: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; text-align: center; padding: 9px 8px; border-radius: 9px; color: #8a6a55; font-weight: 600; font-size: 0.92rem; min-height: 40px; cursor: pointer; }
+.seg input:checked + span { background: #fffcf7; color: #2c1810; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.seg input:focus-visible + span { outline: 2px solid #6b3d2e; }
+.bag-size .stepper input { font-size: 1.4rem; min-height: 52px; }
+.bag-size .stepper-btn { width: 52px; min-height: 52px; flex-basis: 52px; }
+.more-details summary { cursor: pointer; min-height: 36px; }
+.settings-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) { .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+.stats-card .rtile b { font-size: 1.7rem; }
+.gear-row { border-bottom: 1px solid #efe2d3; }
+.gear-row:last-child { border-bottom: 0; }
+.gear-row > summary { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 8px 14px; cursor: pointer; list-style: none; }
+.gear-row > summary::-webkit-details-marker { display: none; }
+.gear-row > summary .chev { margin-left: auto; color: #8a6a55; font-size: 0.85rem; }
+.gear-row > form { padding: 0 14px 10px; }
+.inline-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.inline-add button { width: auto; }
+
+/* ==== First run ==== */
+.first-run .progress { height: 6px; background: #f0e4d4; border-radius: 3px; overflow: hidden; margin: 8px 0 4px; }
+.first-run .progress span { display: block; height: 100%; background: #6b3d2e; }
+.check { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid #efe2d3; }
+.check:last-child { border-bottom: 0; }
+.check .dot { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; border: 2px solid #e0c9b0; display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; }
+.check.done .dot { background: #6b3d2e; border-color: #6b3d2e; color: #fff; }
+.check.now .dot { border-color: #6b3d2e; color: #6b3d2e; }
+.check .t { font-weight: 700; margin: 2px 0; }
+.check.done .t { color: #8a6a55; text-decoration: line-through; }
+.check .chips form { display: inline; margin: 0; }
+.starter-grind { display: block; width: 100%; margin-top: 6px; font-weight: 500; }

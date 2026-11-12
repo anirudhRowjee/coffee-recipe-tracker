@@ -1,0 +1,57 @@
+{# The first-run checklist on Brew, until the first recipe exists. Each step happens right
+   here: a sheet for the coffee, chips for gear, then a starting recipe. Expects first_run. #}
+{% set done = (first_run.coffee|int) + (first_run.gear|int) %}
+<section class="card first-run">
+    <h2>Let's set up your first cup</h2>
+    <div class="progress" aria-hidden="true"><span style="width: {{ (done * 100 / 3)|int }}%"></span></div>
+    <p class="muted">{{ done }} of 3 done · about two minutes</p>
+
+    <div class="check{% if first_run.coffee %} done{% else %} now{% endif %}">
+        <span class="dot">{% if first_run.coffee %}✓{% else %}1{% endif %}</span>
+        <div>
+            <p class="t">Add your coffee</p>
+            {% if first_run.coffee %}<p class="muted">{{ coffees[0][0].bean.name }} · {{ coffees[0][1]|int }} g</p>
+            {% else %}<p class="muted">The coffee you're drinking, and the size of the bag.</p>
+            <button type="button" class="btn-inline" data-sheet="add-coffee-sheet">Add your coffee</button>{% endif %}
+        </div>
+    </div>
+
+    <div class="check{% if first_run.gear %} done{% elif first_run.coffee %} now{% endif %}">
+        <span class="dot">{% if first_run.gear %}✓{% else %}2{% endif %}</span>
+        <div>
+            <p class="t">What do you brew with?</p>
+            {% if first_run.gear %}<p class="muted">{{ brewers|map(attribute='name')|join(', ') }} · {{ grinders|map(attribute='name')|join(', ') }}</p>
+            {% else %}
+            {% if not brewers %}
+            <p class="muted">Tap your brewer:</p>
+            <div class="chips">
+                {% for name, method in [('Hario V60', 'V60'), ('AeroPress', 'AeroPress'), ('Hario Switch', 'Switch'), ('Kalita Wave', 'Kalita Wave'), ('French press', 'Immersion')] %}
+                <form method="post" action="/brewers"><input type="hidden" name="name" value="{{ name }}" /><input type="hidden" name="method" value="{{ method }}" /><input type="hidden" name="next" value="/" /><button type="submit" class="chip">{{ name }}</button></form>
+                {% endfor %}
+                <button type="button" class="chip ghost" data-sheet="add-brewer-sheet">Other…</button>
+            </div>
+            {% endif %}
+            {% if not grinders %}
+            <p class="muted">And your grinder {{ tip('grind') }}</p>
+            <div class="chips">
+                {% for name in ['Timemore C2', 'Comandante C40', 'Pre-ground'] %}
+                <form method="post" action="/grinders"><input type="hidden" name="name" value="{{ name }}" /><input type="hidden" name="next" value="/" /><button type="submit" class="chip">{{ name }}</button></form>
+                {% endfor %}
+                <button type="button" class="chip ghost" data-sheet="add-grinder-sheet">Other…</button>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="check{% if first_run.coffee and first_run.gear %} now{% endif %}">
+        <span class="dot">3</span>
+        <div>
+            <p class="t">Pick a starting recipe</p>
+            <p class="muted">Start from a common one and adjust it after the first cup.</p>
+            {% if first_run.coffee and first_run.gear %}
+            <a class="btn-brew" href="/?bag_id={{ coffees[0][0].id }}&amp;brewer_id={{ brewers[0].id }}&amp;grinder_id={{ grinders[0].id }}">Choose a recipe</a>
+            {% endif %}
+        </div>
+    </div>
+</section>

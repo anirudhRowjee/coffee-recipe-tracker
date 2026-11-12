@@ -106,14 +106,14 @@ def test_pages_show_photo_and_colours(app):
     browse = app.client.get("/browse").text
     assert url in browse and styled in browse
     assert url in app.client.get("/").text  # bag picker
-    assert url in app.client.get("/manage").text and "Retake photo" in app.client.get("/manage").text
+    assert url in app.client.get("/browse?bean=1").text and "Retake photo" in app.client.get("/browse?bean=1").text
 
 
 def test_without_photo_pages_keep_the_default_palette(app):
     post(app, "/recipes", BASELINE)
     for html in (latest(app), app.client.get("/browse").text, app.client.get("/lines/1/brew", params={"bag_id": 1}).text):
         assert "--accent:" not in html and "/beans/1/image" not in html
-    assert "Add bag photo" in app.client.get("/manage").text
+    assert "Add bag photo" in app.client.get("/browse?bean=1").text
 
 
 # --- colours -------------------------------------------------------------------
@@ -171,7 +171,7 @@ def test_edit_colours_keeps_the_photo(app):
 
 def test_edit_form_shows_current_colours(app):
     upload(app, mesh=MESH)
-    html = app.client.get("/manage").text
+    html = app.client.get("/browse?bean=1").text
     assert 'name="accent" value="#d9541e"' in html
     for i, colour in enumerate(MESH.split(",")):
         assert f'name="mesh{i + 1}" value="{colour}"' in html

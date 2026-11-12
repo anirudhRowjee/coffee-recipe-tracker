@@ -227,7 +227,7 @@ def step_actions(action: str, grams: Optional[float] = None) -> List[str]:
 
 def brewer_shape(name: Optional[str], method: Optional[str] = None) -> Optional[str]:
     """Which drawing suits this brewer; None (espresso, "No Brewer") means no animation."""
-    text = (name or "").lower()
+    text = f"{name or ''} {method or ''}".lower()  # the type picked when adding it counts too
     if "aeropress" in text:
         return "aeropress"
     if "switch" in text:  # before v60: "Hario Switch v60"

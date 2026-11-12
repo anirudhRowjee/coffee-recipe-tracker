@@ -271,7 +271,33 @@
     </div>
 </details>
 {% endif %}
-<details class="history-block" {% if not copy_sources %}open{% endif %}>
+{% if starters %}
+<details class="history-block" open>
+    <summary class="history-summary">A starting recipe{% if brewer %} for the {{ brewer.name }}{% endif %}</summary>
+    <div class="copy-list">
+        {% for st in starters %}
+        <form method="post" action="/recipes" class="starter-form">
+            <input type="hidden" name="bean_id" value="{{ bean_id }}" />
+            <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
+            <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
+            <input type="hidden" name="line_name" value="{{ st.name if lines else '' }}" />
+            <input type="hidden" name="dose_g" value="{{ st.dose_g }}" />
+            <input type="hidden" name="water_ml" value="{{ st.water_ml }}" />
+            <input type="hidden" name="temp_c" value="{{ st.temp_c }}" />
+            <input type="hidden" name="recipe_text" value="{{ st.recipe_text }}" />
+            <div class="copy-row">
+                <b>{{ st.name }}</b>
+                <span class="muted">{{ st.dose_g }} g · {{ st.water_ml }} ml · {{ st.temp_c }} °C{% if st.recipe_text %} · {{ st.recipe_text|steps_summary }}{% endif %}</span>
+                {% if pre_ground %}<input type="hidden" name="grind_size" value="pre-ground" />
+                {% else %}<label class="starter-grind">Grind on your grinder {{ tip('grind') }} <input name="grind_size" required placeholder="a middle setting" data-label="Grind" /></label>{% endif %}
+                <button type="submit" class="btn-inline">Use {{ st.name }}</button>
+            </div>
+        </form>
+        {% endfor %}
+    </div>
+</details>
+{% endif %}
+<details class="history-block" {% if not copy_sources and not starters %}open{% endif %}>
     <summary class="history-summary">My own numbers</summary>
     <form method="post" action="/recipes" class="stacked-form">
         <input type="hidden" name="bean_id" value="{{ bean_id }}" />

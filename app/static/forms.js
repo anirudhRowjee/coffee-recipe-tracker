@@ -84,7 +84,7 @@
     }
 
     function setup(form) {
-        if (form.getAttribute('data-checked') || (form.method || '').toLowerCase() !== 'post') return;
+        if (form.getAttribute('data-checked') || (form.getAttribute('method') || '').toLowerCase() !== 'post') return;
         form.setAttribute('data-checked', '1');
         form.noValidate = true;
         form.addEventListener('focusout', function (e) {
@@ -128,6 +128,38 @@
             }
         });
     }
+
+    // Steppers (− / +) outside Try a change, which runs its own; bag-size picks; word chips
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.stepper-btn');
+        if (btn && !btn.closest('#variation-form')) {
+            var input = btn.parentNode.querySelector('input');
+            var v = parseFloat(input.value) || 0;
+            var next = Math.round((v + parseFloat(btn.getAttribute('data-step'))) * 100) / 100;
+            if (input.min !== '') next = Math.max(parseFloat(input.min), next);
+            if (input.max !== '') next = Math.min(parseFloat(input.max), next);
+            input.value = String(next);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        var chip = e.target.closest('.word-chips .chip');
+        if (chip) {
+            var target = document.getElementById(chip.closest('.word-chips').getAttribute('data-for'));
+            var word = chip.getAttribute('data-word');
+            var parts = target.value.split(/,\s*/).map(function (p) { return p.trim(); }).filter(Boolean);
+            var at = parts.map(function (p) { return p.toLowerCase(); }).indexOf(word.toLowerCase());
+            if (at === -1) parts.push(word); else parts.splice(at, 1);
+            target.value = parts.join(', ');
+            chip.setAttribute('aria-pressed', at === -1 ? 'true' : 'false');
+        }
+    });
+    document.addEventListener('change', function (e) {
+        if (e.target.name !== 'size_pick') return;
+        var box = e.target.closest('.bag-size');
+        var other = box.querySelector('.bag-size-other');
+        other.hidden = e.target.value !== 'other';
+        if (e.target.value !== 'other') other.querySelector('input').value = e.target.value;
+        else other.querySelector('input').focus();
+    });
 
     function init(root) { (root || document).querySelectorAll('form').forEach(setup); }
     document.addEventListener('DOMContentLoaded', function () { init(document); });

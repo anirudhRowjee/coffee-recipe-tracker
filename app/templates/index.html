@@ -23,7 +23,9 @@
     </div>
 </section>
 
-{% if combo and combo[1] and combo[2] %}
+{% if first_run and not combo %}
+{% include 'partials/first_run.html' %}
+{% elif combo and combo[1] and combo[2] %}
 <section class="up-next" id="latest-wing"{% if is_current_plan %} data-planned="1"{% endif %}>
     {% include 'partials/latest_recipe.html' %}
 </section>
@@ -56,7 +58,8 @@
     <p class="muted" style="margin-top:12px"><a href="/browse">+ Add a coffee</a></p>
 </dialog>
 
-{% if show_welcome %}{% include 'partials/welcome.html' %}{% endif %}
+{% with add_next='/' %}{% include 'partials/add_coffee_sheet.html' %}{% endwith %}
+{% with gear_next='/' %}{% include 'partials/add_gear_sheets.html' %}{% endwith %}
 <script>
     // Search the coffee sheet by name or flavour notes
     document.addEventListener('input', function (e) {

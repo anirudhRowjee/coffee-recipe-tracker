@@ -1,234 +1,201 @@
 {% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
 
 {% block content %}
-<div class="grid">
-    {% for bean, recipe, bags_with_remaining, brews, deltas in bean_recipes %}
-    {% set active_bags = active_bags_by_bean.get(bean.id, []) %}
-    {% set recipe_options = recipe_options_by_bean.get(bean.id, []) %}
-    <section class="card" style="{{ bean|bean_theme }}">
-        {% if bean.image_version %}
-        <img class="bag-art" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" loading="lazy" />
-        {% endif %}
-        <div class="card-header">
-            <h2>{{ bean.name }}</h2>
-            {% if active_bags and brewers and grinders %}
-            <button type="button" class="btn-action" onclick="toggleForm('schedule-form-{{ bean.id }}')">📅 Make Up next</button>
-            {% endif %}
-        </div>
-        <p class="bean-meta">
-            {{ [bean.origin, bean.roast_level]|select|join(' · ') }}
-        </p>
-        {% if bean.flavor_notes %}
-        <p class="bean-flavor">{{ bean.flavor_notes }}</p>
-        {% endif %}
-
-        {% if active_bags and brewers and grinders %}
-        <div id="schedule-form-{{ bean.id }}" class="hidden edit-form">
-            <form method="post" action="/plan" class="stacked-form">
-                <label>Bag
-                    <select name="bag_id" required>
-                        {% for bag, remaining in active_bags %}
-                        <option value="{{ bag.id }}">#{{ bag.id }}{% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %} · {{ remaining|int }}g</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                {% if recipe_options %}
-                <label>Recipe
-                    <select name="line_id" required>
-                        {% for line_id, label, has_rec in recipe_options %}
-                        <option value="{{ line_id }}"{% if has_rec %} data-has-rec="1"{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <details class="schedule-gear">
-                    <summary>Use a different brewer or grinder</summary>
-                    <label>Brewer
-                        <select name="brewer_id">
-                            <option value="" selected>Same as the recipe</option>
-                            {% for brewer in brewers %}
-                            <option value="{{ brewer.id }}">{{ brewer.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>Grinder
-                        <select name="grinder_id">
-                            <option value="" selected>Same as the recipe</option>
-                            {% for grinder in grinders %}
-                            <option value="{{ grinder.id }}">{{ grinder.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                </details>
-                {% else %}
-                <label>Brewer
-                    <select name="brewer_id" required>
-                        <option value="" disabled selected>Choose</option>
-                        {% for brewer in brewers %}
-                        <option value="{{ brewer.id }}">{{ brewer.name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>Grinder
-                    <select name="grinder_id" required>
-                        <option value="" disabled selected>Choose</option>
-                        {% for grinder in grinders %}
-                        <option value="{{ grinder.id }}">{{ grinder.name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                {% endif %}
-                <label>Note <input name="notes" placeholder="Optional note (e.g. want it stronger)" /></label>
-                <div class="plan-suggest-wrap">
-                    {% include 'partials/plan_suggestion_fields.html' %}
-                    <p class="muted plan-suggest-has-rec" hidden>This recipe already has a recommendation for next time.</p>
-                </div>
-                <button type="submit" style="margin-top:8px">📅 Make this Up next</button>
-            </form>
-        </div>
-        {% endif %}
-
-        {% if bags_with_remaining %}
-        <table class="delta-table" style="margin:10px 0">
-            <thead>
-                <tr><th>Bag</th><th>Roast date</th><th>Remaining</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-                {% for bag, remaining in bags_with_remaining %}
-                <tr class="{{ 'low-stock' if remaining <= bag.low_threshold_g else '' }}">
-                    <td>#{{ bag.id }}</td>
-                    <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
-                    <td>{{ remaining|int }} g{% if remaining <= bag.low_threshold_g %} ⚠{% endif %}</td>
-                    <td>{% if bag.is_completed %}✓ Done{% elif bag.is_frozen %}❄ Frozen{% else %}Active{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{#
+  Coffees: the list (most recently brewed first, finished ones folded at the end) and
+  one coffee's page: bags, recipes, recent cups, details and photo. Side by side on a
+  landscape iPad; on a phone the list, then the coffee on its own (?bean=).
+#}
+<div class="coffees-layout{% if picked %} picked{% endif %}">
+<section class="card coffees-list">
+    <div class="coffees-head">
+        <h2>Coffees</h2>
+        <button type="button" class="chip ghost" data-sheet="add-coffee-sheet">+ Add a coffee</button>
+    </div>
+    {% if active|length > 6 %}<input type="search" class="coffee-filter" placeholder="Search" aria-label="Search coffees" />{% endif %}
+    <nav class="action-list coffee-rows">
+        {% for e in active %}
+        <a href="/browse?bean={{ e.bean.id }}" class="{{ 'sel' if selected and selected.bean.id == e.bean.id }}" style="{{ e.bean|bean_theme }}"
+            data-search="{{ (e.bean.name ~ ' ' ~ (e.bean.flavor_notes or ''))|lower }}">
+            {% if e.bean.image_version %}<img class="row-art" src="/beans/{{ e.bean.id }}/image?v={{ e.bean.image_version }}" alt="" loading="lazy" />{% else %}<span class="row-art"></span>{% endif %}
+            <span class="row-text"><b>{{ e.bean.name }}</b>
+                <span class="muted">{% if e.bags %}{{ e.left|int }} g left{% else %}no bag yet{% endif %}{% if e.last %} · {{ e.last|ist('%b %d') }}{% endif %}</span></span>
+            <span class="chev">›</span>
+        </a>
         {% else %}
-        <p class="muted">No bags added yet.</p>
-        {% endif %}
-
-        {% if recipe %}
-        <h4>Current recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
-        <div class="recipe-card">
-            <p><strong>Coffee:</strong> {{ recipe.dose_g|num }} g &nbsp;·&nbsp;
-               <strong>Water:</strong> {{ recipe.water_ml|num }} ml &nbsp;·&nbsp;
-               <strong>Temp:</strong> {{ recipe.temp_c|num }} °C &nbsp;·&nbsp;
-               <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
-               <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
-            {% if recipe.recipe_text %}
-            <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
-            {% endif %}
-            <p class="muted" style="margin-top:6px">{% if brews %}Last brewed {{ brews[0].brewed_at.strftime('%b %d, %Y') }}{% else %}Not brewed yet{% endif %}</p>
-        </div>
-        {% else %}
-        <p class="muted">No recipes yet.</p>
-        {% endif %}
-
-        {% if brews or deltas %}
-        <details class="history-block">
-            <summary class="history-summary">
-                History
-                <span class="muted" style="font-weight:normal">
-                    · {{ brews|length }} brew{{ 's' if brews|length != 1 else '' }},
-                      {{ deltas|length }} change{{ 's' if deltas|length != 1 else '' }}
-                </span>
-            </summary>
-
-            {% if brews %}
-            <h4 style="margin-top:12px">Brew log</h4>
-            <div class="brew-log">
-                {% for brew in brews %}
-                <div class="brew-entry">
-                    <span class="brew-date">
-                        {{ brew.brewed_at.strftime('%b %d, %Y') }}
-                        {% if brew.recipe.line %}· {{ brew.recipe.line.name }}{% endif %}
-                        · {{ brew.recipe.grinder.name }}
-                        · {{ brew.recipe.dose_g|num }} g · grind {{ brew.recipe.grind_size }}
-                    </span>
-                    {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
-                    {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
-                    <a class="brew-edit-link" href="/brews/{{ brew.id }}/edit">Edit</a>
-                    <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            {% if deltas %}
-            <h4 style="margin-top:12px">Change history</h4>
-            <table class="delta-table">
-                <thead>
-                    <tr><th>Change</th><th>Why</th><th>Date</th></tr>
-                </thead>
-                <tbody>
-                    {% for delta in deltas %}
-                    <tr>
-                        <td>{{ delta.change_label }}</td>
-                        <td>{{ delta.rationale or '-' }}</td>
-                        <td>{{ delta.created_at.strftime('%b %d') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% endif %}
-        </details>
-        {% endif %}
-
-    </section>
-    {% else %}
-    <section class="card">
-        <p>No beans added yet. Go to <a href="/manage">Manage</a> to add some.</p>
-    </section>
-    {% endfor %}
-
-    {% if archived_bean_recipes %}
-    <section class="card">
-        <details>
-            <summary class="muted" style="cursor:pointer">Archived ({{ archived_bean_recipes|length }} coffee{{ 's' if archived_bean_recipes|length != 1 else '' }} — all bags done)</summary>
-            {% for bean, recipe, bags_with_remaining, brews, deltas in archived_bean_recipes %}
-            <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border,#eee)">
-                <h3 class="muted" style="margin:0 0 4px">{{ bean.name }}</h3>
-                <p class="bean-meta">
-                    {{ [bean.origin, bean.roast_level]|select|join(' · ') }}
-                </p>
-                {% if bags_with_remaining %}
-                <table class="delta-table" style="margin:8px 0">
-                    <thead>
-                        <tr><th>Bag</th><th>Roast date</th><th>Status</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for bag, remaining in bags_with_remaining %}
-                        <tr>
-                            <td>#{{ bag.id }}</td>
-                            <td>{{ bag.roast_date.strftime('%b %d, %Y') if bag.roast_date else '-' }}</td>
-                            <td>✓ Done</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% endif %}
-                {% if recipe %}
-                <h4>Current recipe{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %}</h4>
-                <div class="recipe-card">
-                    <p><strong>Coffee:</strong> {{ recipe.dose_g|num }} g &nbsp;·&nbsp;
-                       <strong>Water:</strong> {{ recipe.water_ml|num }} ml &nbsp;·&nbsp;
-                       <strong>Temp:</strong> {{ recipe.temp_c|num }} °C &nbsp;·&nbsp;
-                       <strong>Grind:</strong> {{ recipe.grind_size }} &nbsp;·&nbsp;
-                       <strong>Grinder:</strong> {{ recipe.grinder.name }}</p>
-                    {% if recipe.recipe_text %}
-                    <pre class="recipe-text" style="margin-top:8px">{{ recipe.recipe_text }}</pre>
-                    {% endif %}
-                    <p class="muted" style="margin-top:6px">Version saved {{ recipe.created_at.strftime('%b %d, %Y') }}</p>
-                </div>
-                {% endif %}
-            </div>
+        <p class="muted" style="padding:12px">No coffees yet. Add the one you're drinking.</p>
+        {% endfor %}
+    </nav>
+    {% if finished %}
+    <details class="finished-coffees">
+        <summary class="muted">Finished ({{ finished|length }})</summary>
+        <nav class="action-list coffee-rows">
+            {% for e in finished %}
+            <a href="/browse?bean={{ e.bean.id }}" class="{{ 'sel' if selected and selected.bean.id == e.bean.id }}"><span class="row-text"><b class="muted">{{ e.bean.name }}</b><span class="muted">all bags done{% if e.last %} · {{ e.last|ist('%b %d') }}{% endif %}</span></span><span class="chev">›</span></a>
             {% endfor %}
-        </details>
-    </section>
+        </nav>
+    </details>
     {% endif %}
+</section>
+
+{% if selected %}
+{% set bean = selected.bean %}
+<section class="card coffee-detail" style="{{ bean|bean_theme }}">
+    <p class="muted back-to-list"><a href="/browse">‹ Coffees</a></p>
+    <div class="recipe-head">
+        {% if bean.image_version %}<img class="bag-art-thumb" src="/beans/{{ bean.id }}/image?v={{ bean.image_version }}" alt="{{ bean.name }} bag" />{% endif %}
+        <div class="recipe-head-text">
+            <h2 class="recipe-bean-name">{{ bean.name }}</h2>
+            <p class="muted">{{ [bean.origin, bean.roast_level]|select|join(' · ') }}</p>
+            {% if bean.flavor_notes %}<p class="bean-flavor">{{ bean.flavor_notes }}</p>{% endif %}
+        </div>
+        <button type="button" class="chip" data-sheet="edit-coffee-sheet">Edit</button>
+    </div>
+
+    <h3>Bags</h3>
+    <div class="chips">
+        {% for bag, remaining in selected.bags %}
+        <button type="button" class="chip{% if bag.is_completed %} done{% elif remaining <= bag.low_threshold_g %} low{% endif %}" data-sheet="bag-sheet-{{ bag.id }}">
+            {% if bag.is_completed %}✓ {% elif bag.is_frozen %}❄ {% endif %}{{ remaining|int if not bag.is_completed else bag.initial_quantity_g|int }} g{% if not bag.is_completed %} of {{ bag.initial_quantity_g|int }}{% endif %}{% if bag.roast_date %} · roasted {{ bag.roast_date.strftime('%b %d') }}{% endif %}
+        </button>
+        {% endfor %}
+        <button type="button" class="chip ghost" data-sheet="new-bag-sheet">+ New bag</button>
+    </div>
+
+    <h3>Recipes {{ tip('recipes') }}</h3>
+    {% if lines %}
+    <nav class="action-list">
+        {% for row in lines %}
+        <a href="/lines/{{ row.line.id }}/versions{% if bag_to_use %}?bag_id={{ bag_to_use.id }}{% endif %}">
+            <span class="row-text"><b>{{ row.line.name }}</b>
+                <span class="muted">version {{ row.versions }} · {{ row.cups }} cup{{ 's' if row.cups != 1 }}{% if row.rating %} · ★ {{ row.rating }}{% endif %} · {{ row.brewer.name }} + {{ row.grinder.name }}</span>
+                {% if row.latest %}<span class="muted recipe-numbers">{{ row.latest.dose_g|num }} g · {{ row.latest.water_ml|num }} ml · {{ row.latest.temp_c|num }} °C · grind {{ row.latest.grind_size }}</span>{% endif %}</span>
+            <span class="chev">›</span>
+        </a>
+        {% endfor %}
+    </nav>
+    <div class="btn-row">
+        {% if bag_to_use %}<a class="btn-brew" href="/?bag_id={{ bag_to_use.id }}">▶ Brew this coffee</a>{% endif %}
+        {% if bag_to_use and brewers and grinders %}<button type="button" class="btn-secondary btn-inline" data-sheet="plan-sheet">📅 Make Up next</button>{% endif %}
+    </div>
+    {% else %}
+    <p class="muted">No recipe yet.{% if bag_to_use %} <a href="/?bag_id={{ bag_to_use.id }}">Start one on Brew</a>.{% endif %}</p>
+    {% endif %}
+
+    {% if brews %}
+    <h3>Recent cups</h3>
+    <div class="brew-log">
+        {% for brew in brews[:8] %}
+        <div class="brew-entry">
+            <span class="brew-date">
+                {{ brew.brewed_at.strftime('%b %d, %Y') }}
+                {% if brew.recipe.line %}· {{ brew.recipe.line.name }}{% endif %}
+                · {{ brew.recipe.grinder.name }}
+                · {{ brew.recipe.dose_g|num }} g · grind {{ brew.recipe.grind_size }}
+            </span>
+            {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
+            {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
+            <a class="brew-edit-link" href="/brews/{{ brew.id }}/edit">Edit</a>
+            <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+
+{# ---- sheets for this coffee ---- #}
+<dialog class="sheet" id="edit-coffee-sheet" aria-label="Edit coffee">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>{{ bean.name }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/beans/{{ bean.id }}/edit" class="stacked-form">
+        <label>Name <input name="name" value="{{ bean.name }}" required /></label>
+        <label>Tasting notes on the bag {{ tip('flavour') }} <input name="flavor_notes" value="{{ bean.flavor_notes or '' }}" /></label>
+        <label>Origin <input name="origin" value="{{ bean.origin or '' }}" /></label>
+        <label>Roast level <input name="roast_level" value="{{ bean.roast_level or '' }}" placeholder="e.g. Light, Medium" /></label>
+        <label>Notes <input name="notes" value="{{ bean.notes or '' }}" /></label>
+        <button type="submit">Save</button>
+    </form>
+    <h4>Bag photo and colours</h4>
+    {% include 'partials/bean_art_form.html' %}
+    <form method="post" action="/beans/{{ bean.id }}/delete" style="margin-top:16px"
+        onsubmit="return confirm('Delete {{ bean.name }} with all its bags, recipes and cups?')">
+        <button type="submit" class="btn-danger">Delete this coffee</button>
+    </form>
+</dialog>
+
+<dialog class="sheet" id="new-bag-sheet" aria-label="New bag">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>New bag of {{ bean.name }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/bags" class="stacked-form">
+        <input type="hidden" name="bean_id" value="{{ bean.id }}" />
+        {% with size_name='initial_quantity_g' %}{% include 'partials/bag_size_field.html' %}{% endwith %}
+        <label>Roast date <span class="muted">(optional)</span> {{ tip('roast_date') }} <input name="roast_date" type="date" /></label>
+        <button type="submit">Add bag</button>
+    </form>
+</dialog>
+
+{% for bag, remaining in selected.bags %}
+<dialog class="sheet" id="bag-sheet-{{ bag.id }}" aria-label="Bag">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Bag · {{ remaining|int }} g left</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/bags/{{ bag.id }}/edit" class="stacked-form">
+        <label>Bag size (g) <input name="initial_quantity_g" type="number" inputmode="decimal" step="any" min="1" value="{{ bag.initial_quantity_g|int }}" data-label="Bag size" required /></label>
+        <label>Roast date <input name="roast_date" type="date" value="{{ bag.roast_date.isoformat() if bag.roast_date else '' }}" /></label>
+        <label>Purchase date <input name="purchase_date" type="date" value="{{ bag.purchase_date.isoformat() if bag.purchase_date else '' }}" /></label>
+        <label>Low-stock alert (g) {{ tip('low_stock') }} <input name="low_threshold_g" type="number" inputmode="decimal" step="any" min="0" value="{{ bag.low_threshold_g|int }}" /></label>
+        <label class="check-row"><input name="is_frozen" type="checkbox" value="true" {{ 'checked' if bag.is_frozen }} /> Frozen {{ tip('frozen') }}</label>
+        <label>Frozen date <input name="frozen_date" type="date" value="{{ bag.frozen_date.isoformat() if bag.frozen_date else '' }}" /></label>
+        <label>Notes <input name="notes" value="{{ bag.notes or '' }}" /></label>
+        <button type="submit">Save</button>
+    </form>
+    <div class="btn-row" style="margin-top:12px">
+        {% if not bag.is_completed %}
+        <form method="post" action="/bags/{{ bag.id }}/complete"><button type="submit" class="btn-secondary">Mark finished</button></form>
+        {% endif %}
+        <form method="post" action="/bags/{{ bag.id }}/delete" onsubmit="return confirm('Delete this bag and the cups logged from it?')">
+            <button type="submit" class="btn-danger">Delete bag</button>
+        </form>
+    </div>
+</dialog>
+{% endfor %}
+
+{% if lines and bag_to_use and brewers and grinders %}
+<dialog class="sheet" id="plan-sheet" aria-label="Make Up next">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Make Up next</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <p class="muted">{{ TIPS.plan }}</p>
+    <form method="post" action="/plan" class="stacked-form">
+        <label>Bag
+            <select name="bag_id" required>
+                {% for bag, remaining in selected.bags if not bag.is_completed %}
+                <option value="{{ bag.id }}" {% if bag.id == bag_to_use.id %}selected{% endif %}>{{ bag.roast_date.strftime('Roasted %b %d') if bag.roast_date else 'Bag #' ~ bag.id }} · {{ remaining|int }} g</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Recipe
+            <select name="line_id" required>
+                {% for row in lines %}
+                <option value="{{ row.line.id }}"{% if row.has_rec %} data-has-rec="1"{% endif %}>{{ row.line.name }} · {{ row.brewer.name }} · {{ row.grinder.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Note <span class="muted">(optional)</span> <input name="notes" placeholder="e.g. want it stronger" /></label>
+        <div class="plan-suggest-wrap">
+            {% include 'partials/plan_suggestion_fields.html' %}
+            <p class="muted plan-suggest-has-rec" hidden>This recipe already has a Next time note.</p>
+        </div>
+        <button type="submit">📅 Make this Up next</button>
+    </form>
+</dialog>
+{% endif %}
+{% endif %}
 </div>
+
+{% include 'partials/add_coffee_sheet.html' %}
+
 <script>
-// Offer a change to try only for a recipe with no recommendation of its own yet
+// Offer a change to try only for a recipe with no Next time note of its own yet
 // (the server ignores one otherwise, so without JavaScript nothing goes wrong)
 document.querySelectorAll('.plan-suggest-wrap').forEach(function (wrap) {
     var picker = wrap.closest('form').querySelector('select[name="line_id"]');
@@ -243,5 +210,13 @@ document.querySelectorAll('.plan-suggest-wrap').forEach(function (wrap) {
     picker.addEventListener('change', update);
     update();
 });
+document.addEventListener('input', function (e) {
+    if (!e.target.classList.contains('coffee-filter')) return;
+    var q = e.target.value.toLowerCase();
+    document.querySelectorAll('.coffees-list .coffee-rows a').forEach(function (a) {
+        a.hidden = q && (a.getAttribute('data-search') || '').indexOf(q) === -1;
+    });
+});
 </script>
+<script src="{{ static('bean_art.js') }}"></script>
 {% endblock %}

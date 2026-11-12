@@ -1,0 +1,27 @@
+{% from 'partials/tip.html' import tip %}
+{# Add a coffee and the bag you bought, in one sheet. Taps first: bag sizes, tasting-note
+   chips; origin and roast are optional, behind "More details". Expects add_next (where to go after). #}
+<dialog class="sheet" id="add-coffee-sheet" aria-label="Add a coffee">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Add your coffee</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/beans" class="stacked-form">
+        {% if add_next is defined and add_next %}<input type="hidden" name="next" value="{{ add_next }}" />{% endif %}
+        <label>Name <input name="name" required placeholder="e.g. Blue Tokai Attikan" autocomplete="off" /></label>
+        {% with size_name='initial_quantity_g' %}{% include 'partials/bag_size_field.html' %}{% endwith %}
+        <label for="add-flavour">Tasting notes on the bag <span class="muted">(optional)</span> {{ tip('flavour') }}</label>
+        <div class="chips word-chips" data-for="add-flavour">
+            {% for w in ['Chocolate', 'Caramel', 'Nutty', 'Citrus', 'Berry', 'Stone fruit', 'Floral', 'Spice'] %}
+            <button type="button" class="chip" data-word="{{ w }}" aria-pressed="false">{{ w }}</button>
+            {% endfor %}
+        </div>
+        <input id="add-flavour" name="flavor_notes" placeholder="Tap above, or type your own" />
+        <label>Roast date <span class="muted">(optional)</span> {{ tip('roast_date') }} <input name="roast_date" type="date" /></label>
+        <details class="more-details">
+            <summary class="muted">More details: origin, roast</summary>
+            <label>Origin <input name="origin" placeholder="e.g. Kenya" /></label>
+            <label>Roast level <input name="roast_level" placeholder="e.g. Light, Medium" /></label>
+        </details>
+        <button type="submit">Add coffee</button>
+        <p class="muted" style="margin-top:6px">You can add a photo of the bag from the coffee's page afterwards.</p>
+    </form>
+</dialog>

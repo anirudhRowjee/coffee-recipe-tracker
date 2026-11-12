@@ -217,8 +217,8 @@ def test_browse_shows_latest_version_per_bean(app):
     post(app, "/recipes", BASELINE)
     post(app, "/recipes", variation(app, 1, grind_size="12", changed_param="grind_size", delta_amount="-1"))
     html = app.client.get("/browse").text
-    assert "<strong>Grind:</strong> 12" in html
-    assert "<strong>Grind:</strong> 13" not in html
+    assert "°C · grind 12</span>" in html
+    assert "°C · grind 13</span>" not in html
 
 
 def test_completed_bag_is_hidden_from_picker(app):

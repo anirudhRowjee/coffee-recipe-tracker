@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from . import auth, brew, crud, db, export, models, theme, tips, words
+from . import auth, brew, crud, db, export, models, starters, theme, tips, words
 
 app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -393,6 +393,15 @@ class _Rec(NamedTuple):
     from_plan: bool
 
 
+def _starters_for(brewer: Optional[models.Brewer]) -> list:
+    return starters.for_brewer(brew.brewer_shape(brewer.name, brewer.method) if brewer else None)
+
+
+def _is_pre_ground(grinder: Optional[models.Grinder]) -> bool:
+    name = (grinder.name if grinder else "").lower()
+    return "pre-ground" in name or "preground" in name or name in ("no grinder", "none")
+
+
 def _copy_sources(session: Session, user_id: Optional[int]) -> list:
     """Every named recipe of yours, newest first, as something to copy onto a coffee and gear that has none."""
     if not user_id:
@@ -470,6 +479,8 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         "all_grinders": crud.get_grinders(session, user_id) if user_id else [],
         "bean_bags": [(b, crud.get_remaining_quantity(session, b)) for b in crud.get_bags_for_bean(session, bean_id) if not b.is_completed],
         "copy_sources": [] if latest else _copy_sources(session, user_id),
+        "starters": [] if latest else _starters_for(session.get(models.Brewer, brewer_id_int)),
+        "pre_ground": _is_pre_ground(session.get(models.Grinder, grinder_id_int)),
         "bag_left": crud.get_remaining_quantity(session, bag),
         "cooling_brew": cooling_brew,
         "cooling_minutes": cooling_minutes,
@@ -510,11 +521,12 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
             "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
             "current_user": user,
             "pending_plan": pending_plan,
-            "show_welcome": not crud.user_has_recipes(session, user.id),  # type: ignore[arg-type]
             "pixel_art_svg": _generate_pixel_art_svg(cell=4),
             "morning_quote": random.choice(QUOTES),
             "picking": bool(pick),
         }
+        if not crud.user_has_recipes(session, user.id):  # type: ignore[arg-type]
+            context["first_run"] = {"coffee": bool(coffees), "gear": bool(context["brewers"]) and bool(context["grinders"])}
         combo = None
         if ints["bag"]:
             bag = _owned(session, user, models.BeanBag, ints["bag"])
@@ -625,55 +637,69 @@ def help_page(request: Request):
 
 
 @app.get("/browse", response_class=HTMLResponse)
-def browse(request: Request):
+def browse(request: Request, bean: Optional[int] = None):
+    """Coffees: a list (most recently brewed first) and one coffee's page: its bags,
+    recipes, cups, photo and details. Side by side on a landscape iPad."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        all_bean_recipes = crud.get_latest_recipe_per_bean(session, user.id)  # type: ignore[arg-type]
-        # the coffee you brewed most recently first; never-brewed ones after, by name
-        all_bean_recipes.sort(key=lambda e: max((b.brewed_at for b in e[3]), default=datetime.min), reverse=True)
-        bean_recipes = [
-            entry for entry in all_bean_recipes
-            if not entry[2] or any(not bag.is_completed for bag, _ in entry[2])
-        ]
-        archived_bean_recipes = [
-            entry for entry in all_bean_recipes
-            if entry[2] and all(bag.is_completed for bag, _ in entry[2])
-        ]
-        brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
-        grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
-        active_bags_by_bean = {
-            bean.id: [(bag, rem) for bag, rem in bags_with_remaining if not bag.is_completed]
-            for bean, _, bags_with_remaining, _, _ in bean_recipes
-        }
-        recipe_options_by_bean = {
-            bean.id: [
-                (line.id, f"{line.name} · {session.get(models.Brewer, line.brewer_id).name} · {session.get(models.Grinder, line.grinder_id).name}",  # type: ignore[union-attr]
-                 crud.line_recommendation(session, line.id) is not None)  # type: ignore[arg-type]
-                for line in crud.get_lines_for_bean(session, bean.id)  # type: ignore[arg-type]
-            ]
-            for bean, _, _, _, _ in bean_recipes
-        }
+        entries = []
+        for b in crud.get_beans(session, user.id):  # type: ignore[arg-type]
+            bags = [(bag, crud.get_remaining_quantity(session, bag)) for bag in crud.get_bags_for_bean(session, b.id)]  # type: ignore[arg-type]
+            open_bags = [(bag, rem) for bag, rem in bags if not bag.is_completed]
+            entries.append({"bean": b, "bags": bags, "left": sum(rem for _, rem in open_bags),
+                            "finished": bool(bags) and not open_bags, "last": crud.last_brewed_at(session, b.id)})  # type: ignore[arg-type]
+        entries.sort(key=lambda e: (e["last"] is None, -(e["last"].timestamp() if e["last"] else 0), e["bean"].name.lower()))
+        active = [e for e in entries if not e["finished"]]
+        finished = [e for e in entries if e["finished"]]
+        selected = next((e for e in entries if e["bean"].id == bean), None) if bean else None
+        if bean and not selected:
+            raise HTTPException(status_code=404, detail="Not found")
+        if not selected and active:
+            selected = active[0]
+        detail = {}
+        if selected:
+            sb = selected["bean"]
+            lines = crud.get_lines_for_bean(session, sb.id)  # type: ignore[arg-type]
+            line_rows = []
+            for line in lines:
+                versions = crud.get_versions(session, line.id)  # type: ignore[arg-type]
+                cups = [c for v in versions for c in crud.brews_of(session, [v.id])[v.id]]  # type: ignore[list-item,index]
+                rated = [c.rating for c in cups if c.rating]
+                line_rows.append({"line": line, "latest": versions[-1] if versions else None, "versions": len(versions), "cups": len(cups),
+                                  "rating": round(sum(rated) / len(rated), 1) if rated else None,
+                                  "brewer": session.get(models.Brewer, line.brewer_id), "grinder": session.get(models.Grinder, line.grinder_id),
+                                  "has_rec": crud.line_recommendation(session, line.id) is not None})  # type: ignore[arg-type]
+            brews = crud.get_brews_for_bean(session, sb.id)[:20]  # type: ignore[arg-type]
+            detail = {"lines": line_rows, "brews": brews, "bag_to_use": crud.pick_bag(session, sb.id),  # type: ignore[arg-type]
+                      "curve_ids": crud.brews_with_curves(session, [b.id for b in brews])}  # type: ignore[misc]
         return templates.TemplateResponse("browse.html", {
-            "request": request,
-            "bean_recipes": bean_recipes,
-            "archived_bean_recipes": archived_bean_recipes,
-            "brewers": brewers,
-            "grinders": grinders,
-            "active_bags_by_bean": active_bags_by_bean,
-            "recipe_options_by_bean": recipe_options_by_bean,
-            "curve_ids": crud.brews_with_curves(session, [  # brews with a scale graph
-                b.id for entry in all_bean_recipes for b in entry[3]  # type: ignore[misc]
-            ]),
-            "current_user": user,
+            "request": request, "current_user": user, "active": active, "finished": finished, "selected": selected,
+            "picked": bool(bean), "brewers": crud.get_brewers(session, user.id), "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
+            **detail,
         })
 
 
+def _back_to(next_url: Optional[str], default: str) -> str:
+    """Where a form sends you after saving: its own `next` if it's a page of ours."""
+    return next_url if next_url and next_url.startswith("/") and not next_url.startswith("//") else default
+
+
 @app.post("/beans")
-def create_bean(request: Request, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None), notes: str = Form(None)):
+def create_bean(request: Request, name: str = Form(...), origin: str = Form(None), roast_level: str = Form(None), flavor_notes: str = Form(None),
+                notes: str = Form(None), initial_quantity_g: str = Form(None), roast_date: str = Form(None), next: str = Form(None)):
+    """A coffee, and (with a bag size) the bag you bought, in one go."""
+    grams = _parse_amount(initial_quantity_g)
+    if grams is not None and not 0 < grams <= 10000:
+        raise HTTPException(status_code=400, detail="The bag size should be between 1 g and 10 kg")
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        crud.create_bean(session, user_id=user.id, name=name, origin=origin, roast_level=roast_level, flavor_notes=flavor_notes, notes=notes)  # type: ignore[arg-type]
-    return RedirectResponse(url="/manage", status_code=303)
+        new_bean = crud.create_bean(session, user_id=user.id, name=name.strip(), origin=origin, roast_level=roast_level,  # type: ignore[arg-type]
+                                    flavor_notes=(flavor_notes or "").strip(" ,") or None, notes=notes)
+        if grams:
+            crud.create_bag(session, bean_id=new_bean.id, initial_quantity_g=grams,  # type: ignore[arg-type]
+                            roast_date=date_type.fromisoformat(roast_date) if roast_date else None)
+        bean_id = new_bean.id
+    return RedirectResponse(url=_back_to(next, f"/browse?bean={bean_id}"), status_code=303)
 
 
 @app.post("/beans/{bean_id}/image")
@@ -689,7 +715,7 @@ def upload_bean_image(request: Request, bean_id: int, image: UploadFile = File(.
         _owned(session, user, models.Bean, bean_id)
         if not crud.set_bean_image(session, bean_id, data, "image/jpeg", theme.clean_accent(accent), theme.clean_mesh(mesh)):
             raise HTTPException(status_code=404, detail="Bean not found")
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bean_id}", status_code=303)
 
 
 @app.post("/beans/{bean_id}/colors")
@@ -713,7 +739,7 @@ def edit_bean_colors(
         _owned(session, user, models.Bean, bean_id)
         if not crud.set_bean_colors(session, bean_id, accent_color, mesh_colors):
             raise HTTPException(status_code=404, detail="Bean not found")
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bean_id}", status_code=303)
 
 
 @app.post("/beans/{bean_id}/image/delete")
@@ -722,7 +748,7 @@ def delete_bean_image(request: Request, bean_id: int):
         user = _require_user(request, session)
         _owned(session, user, models.Bean, bean_id)
         crud.delete_bean_image(session, bean_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bean_id}", status_code=303)
 
 
 @app.get("/beans/{bean_id}/image")
@@ -763,7 +789,7 @@ def create_bag(
             frozen_date=date_type.fromisoformat(frozen_date) if frozen_date else None,
             notes=notes,
         )
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bean_id}", status_code=303)
 
 
 @app.post("/beans/{bean_id}/edit")
@@ -772,7 +798,7 @@ def edit_bean(request: Request, bean_id: int, name: str = Form(...), origin: str
         user = _require_user(request, session)
         _owned(session, user, models.Bean, bean_id)
         crud.update_bean(session, bean_id, name=name, origin=origin or None, roast_level=roast_level or None, flavor_notes=flavor_notes or None, notes=notes or None)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bean_id}", status_code=303)
 
 
 @app.post("/beans/{bean_id}/delete")
@@ -781,7 +807,7 @@ def delete_bean(request: Request, bean_id: int):
         user = _require_user(request, session)
         _owned(session, user, models.Bean, bean_id)
         crud.delete_bean(session, bean_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/browse", status_code=303)
 
 
 @app.post("/bags/{bag_id}/edit")
@@ -798,7 +824,7 @@ def edit_bag(
 ):
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        _owned(session, user, models.BeanBag, bag_id)
+        bag_bean = _owned(session, user, models.BeanBag, bag_id).bean_id
         crud.update_bag(
             session, bag_id,
             initial_quantity_g=initial_quantity_g,
@@ -809,25 +835,25 @@ def edit_bag(
             frozen_date=date_type.fromisoformat(frozen_date) if frozen_date else None,
             notes=notes or None,
         )
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bag_bean}", status_code=303)
 
 
 @app.post("/bags/{bag_id}/complete")
 def complete_bag(request: Request, bag_id: int):
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        _owned(session, user, models.BeanBag, bag_id)
+        bag_bean = _owned(session, user, models.BeanBag, bag_id).bean_id
         crud.complete_bag(session, bag_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bag_bean}", status_code=303)
 
 
 @app.post("/bags/{bag_id}/delete")
 def delete_bag(request: Request, bag_id: int):
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        _owned(session, user, models.BeanBag, bag_id)
+        bag_bean = _owned(session, user, models.BeanBag, bag_id).bean_id
         crud.delete_bag(session, bag_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=f"/browse?bean={bag_bean}", status_code=303)
 
 
 @app.post("/brewers/{brewer_id}/edit")
@@ -836,7 +862,7 @@ def edit_brewer(request: Request, brewer_id: int, name: str = Form(...), method:
         user = _require_user(request, session)
         _owned(session, user, models.Brewer, brewer_id)
         crud.update_brewer(session, brewer_id, name=name, method=method or None, notes=notes or None)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/manage#gear", status_code=303)
 
 
 @app.post("/brewers/{brewer_id}/delete")
@@ -845,7 +871,7 @@ def delete_brewer(request: Request, brewer_id: int):
         user = _require_user(request, session)
         _owned(session, user, models.Brewer, brewer_id)
         crud.delete_brewer(session, brewer_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/manage#gear", status_code=303)
 
 
 @app.post("/grinders/{grinder_id}/edit")
@@ -854,7 +880,7 @@ def edit_grinder(request: Request, grinder_id: int, name: str = Form(...), notes
         user = _require_user(request, session)
         _owned(session, user, models.Grinder, grinder_id)
         crud.update_grinder(session, grinder_id, name=name, notes=notes or None)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/manage#gear", status_code=303)
 
 
 @app.post("/grinders/{grinder_id}/delete")
@@ -863,23 +889,23 @@ def delete_grinder(request: Request, grinder_id: int):
         user = _require_user(request, session)
         _owned(session, user, models.Grinder, grinder_id)
         crud.delete_grinder(session, grinder_id)
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url="/manage#gear", status_code=303)
 
 
 @app.post("/brewers")
-def create_brewer(request: Request, name: str = Form(...), method: str = Form(None), notes: str = Form(None)):
+def create_brewer(request: Request, name: str = Form(...), method: str = Form(None), notes: str = Form(None), next: str = Form(None)):
     with Session(db.engine) as session:
         user = _require_user(request, session)
         crud.create_brewer(session, user_id=user.id, name=name, method=method, notes=notes)  # type: ignore[arg-type]
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=_back_to(next, "/manage#gear"), status_code=303)
 
 
 @app.post("/grinders")
-def create_grinder(request: Request, name: str = Form(...), notes: str = Form(None)):
+def create_grinder(request: Request, name: str = Form(...), notes: str = Form(None), next: str = Form(None)):
     with Session(db.engine) as session:
         user = _require_user(request, session)
         crud.create_grinder(session, user_id=user.id, name=name, notes=notes)  # type: ignore[arg-type]
-    return RedirectResponse(url="/manage", status_code=303)
+    return RedirectResponse(url=_back_to(next, "/manage#gear"), status_code=303)
 
 
 @app.post("/plan")
