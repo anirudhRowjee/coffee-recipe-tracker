@@ -140,6 +140,32 @@ def steps_summary(text: Optional[str]) -> str:
     return f"{len(steps)} step{'s' if len(steps) != 1 else ''}" + (f" · about {mmss(last)}" if last else "")
 
 
+def actual_timings(text: Optional[str], samples: dict, close: float = 2.0) -> List[dict]:
+    """For each step of a standard method (prep lines aside), what a recorded brew did:
+    {"start": seconds the pour began, "reached": seconds it reached the target, "grams": weight then}.
+    A step's pour begins when the weight climbs past the previous target; None when unknown."""
+    steps = [s for s in parse_steps(text) if not s.is_prep] if is_standard(text) else []
+    t, g = samples.get("t") or [], samples.get("g") or []
+    out: List[dict] = []
+    prev_target: Optional[float] = None
+    prev_reached: float = 0.0
+    for i, step in enumerate(steps):
+        start: Optional[float] = 0.0 if i == 0 else None
+        if i and prev_target is not None:
+            start = next((tt for tt, gg in zip(t, g) if tt >= prev_reached and gg > prev_target + close), None)
+        reached = grams = None
+        if step.target is not None:
+            hit = next(((tt, gg) for tt, gg in zip(t, g) if tt >= (start or 0) and gg >= step.target - close), None)
+            if hit:
+                reached, grams = hit
+        out.append({"start": None if start is None else round(start), "reached": None if reached is None else round(reached),
+                    "grams": None if grams is None else round(grams)})
+        if step.target is not None:
+            prev_target = step.target
+            prev_reached = reached if reached is not None else prev_reached
+    return out
+
+
 def step_editor_data(text: Optional[str]) -> str:
     """What the step editor needs, as JSON. Free text isn't editable as rows until it's tidied."""
     parts = _standard_parts(text)

@@ -1,38 +1,67 @@
 {% from 'partials/tip.html' import tip %}
 {# Log a brew. Expects log_recipe_id, log_bag_id and optionally log_plan_id
    (the scheduled brew this consumes). Used by the recipe panel and brew mode;
-   one per page (ids below). #}
-<form method="post" action="/brews" class="stacked-form" id="log-brew-form">
+   one per page (ids below). Taps over typing: taste chips add words to the notes,
+   Next time chips set the setting and a default amount (static/log_form.js); the
+   plain fields underneath are what's sent, so old brews and no-JS still work. #}
+<form method="post" action="/brews" class="stacked-form log-form" id="log-brew-form">
     <input type="hidden" name="recipe_id" value="{{ log_recipe_id }}" />
     <input type="hidden" name="bag_id" value="{{ log_bag_id }}" />
     {% if log_plan_id %}<input type="hidden" name="planned_brew_id" value="{{ log_plan_id }}" />{% endif %}
     {# brew mode's scale readings (static/scale.js fills it when the timer stops) #}
     <input type="hidden" name="curve" id="log-curve" value="" />
-    <label>Tasting notes</label>
-    <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
-    <label style="margin-top:8px">Rating {{ tip('rating') }}</label>
-    {% with star_name='rating' %}{% include 'partials/star_input.html' %}{% endwith %}
-    <label style="margin-top:8px">Next time {{ tip('log_next_time') }}</label>
-    <select name="recommended_param" onchange="toggleRecDelta(this)">
-        <option value="">— same again —</option>
-        <option value="dose_g">Coffee</option>
-        <option value="water_ml">Water</option>
-        <option value="temp_c">Temp</option>
-        <option value="grind_size">Grind</option>
-        <option value="recipe_text">Method</option>
-    </select>
-    <div id="rec-delta-row" style="display:none">
-        <label style="margin-top:6px">By how much
-            <span class="signed-input">
-                <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
-                <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
-            </span>
-        </label>
+    <input type="hidden" name="then" id="log-then" value="" />
+
+    <label style="margin-top:4px">Rating {{ tip('rating') }}</label>
+    <div class="star-input-big">{% with star_name='rating' %}{% include 'partials/star_input.html' %}{% endwith %}</div>
+
+    <label for="log-notes">How did it taste? <span class="muted">tap any, or write</span></label>
+    <div class="chips taste-chips" data-for="log-notes">
+        {% for word in ['Sour', 'Bitter', 'Sweet', 'Juicy', 'Balanced', 'Weak', 'Strong', 'Flat'] %}
+        <button type="button" class="chip" data-word="{{ word|lower }}" aria-pressed="false">{{ word }}</button>
+        {% endfor %}
     </div>
-    <label>Why
+    <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
+
+    <label style="margin-top:10px">Next time {{ tip('log_next_time') }}</label>
+    <div class="chips next-chips" hidden>
+        {% for label, param, amount in [('Finer', 'grind_size', -1), ('Coarser', 'grind_size', 1), ('Hotter', 'temp_c', 2), ('Cooler', 'temp_c', -2),
+                                        ('More coffee', 'dose_g', 0.5), ('Less coffee', 'dose_g', -0.5), ('More water', 'water_ml', 10), ('Less water', 'water_ml', -10),
+                                        ('Change steps', 'recipe_text', ''), ('Same again', '', '')] %}
+        <button type="button" class="chip" data-param="{{ param }}" data-amount="{{ amount }}" aria-pressed="{{ 'true' if not param else 'false' }}">{{ label }}</button>
+        {% endfor %}
+    </div>
+    <div class="next-amount" hidden>
+        <span class="next-amount-label"></span>
+        <span class="mini-stepper"><button type="button" data-nudge="-1" aria-label="Less">−</button><b class="next-amount-value"></b><button type="button" data-nudge="1" aria-label="More">+</button></span>
+    </div>
+    <div class="next-fields">
+        <select name="recommended_param" id="log-rec-param" onchange="toggleRecDelta(this)">
+            <option value="">— same again —</option>
+            <option value="dose_g">Coffee</option>
+            <option value="water_ml">Water</option>
+            <option value="temp_c">Temp</option>
+            <option value="grind_size">Grind</option>
+            <option value="recipe_text">Method</option>
+        </select>
+        <div id="rec-delta-row" style="display:none">
+            <label style="margin-top:6px">By how much
+                <span class="signed-input">
+                    <input name="recommended_delta" id="log-rec-delta" type="text" inputmode="decimal" placeholder="e.g. -0.5" />
+                    <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+                </span>
+            </label>
+        </div>
+    </div>
+    <label>Why <span class="muted">(optional)</span>
         <input name="recommended_rationale" placeholder="e.g. slightly bitter, try less" />
     </label>
-    <button type="submit" style="margin-top:8px">Log brew</button>
+
+    <div class="log-steps-choice" hidden>
+        <button type="submit" data-then="change">Save and edit the steps now</button>
+        <button type="submit" class="btn-secondary" data-then="">Save, note it for next time</button>
+    </div>
+    <button type="submit" class="log-save" style="margin-top:8px">Log brew</button>
     <p class="muted plan-help">{{ tip('log') }} Takes this cup's coffee out of the bag.</p>
 </form>
 <script>
@@ -41,3 +70,4 @@
             (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
     }
 </script>
+<script src="{{ static('log_form.js') }}"></script>

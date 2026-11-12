@@ -17,7 +17,8 @@
 <form id="variation-form" method="post" action="/recipes" class="change-form" style="{{ latest.bean|bean_theme }}"
     data-rec-param="{{ rec.recommended_param if rec else '' }}"
     data-rec-delta="{{ rec.recommended_delta if rec and rec.recommended_delta is not none else '' }}"
-    data-rec-why="{{ rec.recommended_rationale or '' if rec else '' }}">
+    data-rec-why="{{ rec.recommended_rationale or '' if rec else '' }}"
+    data-start-method="{{ '1' if start_with_method else '' }}" data-actuals="{{ actuals }}">
     <input type="hidden" name="bean_id" value="{{ line.bean_id }}" />
     <input type="hidden" name="brewer_id" value="{{ line.brewer_id }}" />
     <input type="hidden" name="grinder_id" value="{{ line.grinder_id }}" />
@@ -26,7 +27,8 @@
     <div class="change-layout">
         <section class="card change-main">
             <p class="muted"><a href="/">‹ Back</a></p>
-            <h2>Try a change</h2>
+            {% if just_logged %}<p class="saved-banner" role="status"><span>✓ Cup saved to version {{ version }}.</span></p>{% endif %}
+            <h2>{% if start_with_method %}Change the steps{% else %}Try a change{% endif %}</h2>
             <p class="muted">{{ latest.bean.name }}{% if line.name != 'Default' %} · {{ line.name }}{% endif %} · from version {{ version }}</p>
             <p class="change-hint">Tap the one thing to change {{ tip('one_change', 'Why only one?') }}</p>
 
@@ -66,6 +68,10 @@
             {% endfor %}
             <div class="change-editor" data-for="recipe_text">
                 <label class="eyebrow">Method</label>
+                <div class="actuals-bar" hidden>
+                    <span class="muted">● beside each step: what you did, from the scale.</span>
+                    <button type="button" class="chip" id="use-actuals">● Use what I did</button>
+                </div>
                 <div id="method-editor">{% with field_value=latest.recipe_text %}{% include 'partials/recipe_text_field.html' %}{% endwith %}</div>
                 <template id="method-original">{% with field_value=latest.recipe_text %}{% include 'partials/recipe_text_field.html' %}{% endwith %}</template>
                 {% if latest.recipe_text|needs_tidy %}

@@ -23,6 +23,7 @@
         if (!methodTouched) return;
         methodBox.innerHTML = methodOriginal.innerHTML;
         if (window.initStepEditors) window.initStepEditors(methodBox);
+        annotate();
         methodTouched = false;
     }
 
@@ -109,8 +110,46 @@
         if (save.disabled) e.preventDefault();
     });
 
-    // Start from the Next time note, if there is one
-    var recParam = form.getAttribute('data-rec-param');
+    // After "Save and edit the steps now": each row shows what the scale saw, and
+    // "Use what I did" copies the real start times into the rows
+    var actuals = [];
+    try { actuals = JSON.parse(form.getAttribute('data-actuals') || '[]'); } catch (err) { actuals = []; }
+    function mmss(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+    function annotate() {
+        if (!actuals.length) return;
+        var rows = methodBox.querySelectorAll('.step-row');
+        var any = false;
+        rows.forEach(function (row, i) {
+            var a = actuals[i];
+            var old = row.querySelector('.step-actual');
+            if (old) old.remove();
+            if (!a || (a.start === null && a.reached === null)) return;
+            any = true;
+            var tag = document.createElement('span');
+            tag.className = 'step-actual';
+            var bits = [];
+            if (a.start !== null && i) bits.push('started ' + mmss(a.start));
+            if (a.reached !== null) bits.push(a.grams + ' g at ' + mmss(a.reached));
+            tag.textContent = '● ' + bits.join(' · ');
+            row.appendChild(tag);
+        });
+        form.querySelector('.actuals-bar').hidden = !any;
+    }
+    document.addEventListener('DOMContentLoaded', annotate);
+    var useActuals = document.getElementById('use-actuals');
+    if (useActuals) useActuals.addEventListener('click', function () {
+        methodBox.querySelectorAll('.step-row').forEach(function (row, i) {
+            var a = actuals[i];
+            var time = row.querySelector('.step-time');
+            if (a && a.start !== null && time) time.value = mmss(Math.round(a.start / 5) * 5);
+        });
+        var t = methodBox.querySelector('.step-time');
+        if (t) t.dispatchEvent(new Event('input', { bubbles: true }));
+        useActuals.classList.add('on');
+    });
+
+    // Start from the Next time note, if there is one (or from the method, after Stop)
+    var recParam = form.getAttribute('data-start-method') ? 'recipe_text' : form.getAttribute('data-rec-param');
     if (recParam) {
         var radio = form.querySelector('[name="changed_param"][value="' + recParam + '"]');
         if (radio) {

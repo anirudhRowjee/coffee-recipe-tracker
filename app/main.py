@@ -940,7 +940,8 @@ def _grind_step(value: str) -> Optional[float]:
 
 
 @app.get("/lines/{line_id}/change", response_class=HTMLResponse)
-def change_recipe_page(request: Request, line_id: int, bag_id: Optional[int] = None, plan_id: Optional[int] = None):
+def change_recipe_page(request: Request, line_id: int, bag_id: Optional[int] = None, plan_id: Optional[int] = None,
+                       method: int = 0, actual: Optional[int] = None):
     """Try a change: tap the one setting to change, set its new value, say why."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
@@ -967,7 +968,23 @@ def change_recipe_page(request: Request, line_id: int, bag_id: Optional[int] = N
             "rec": rec, "version": crud.version_number(session, latest),
             "deltas": crud.get_recent_deltas(session, line_id, limit=5),
             "limits": CHANGE_LIMITS, "grind_step": _grind_step(latest.grind_size),
+            "start_with_method": bool(method), "actuals": _actual_timings(session, user, actual, latest),
+            "just_logged": actual,
         })
+
+
+def _actual_timings(session: Session, user: models.User, brew_id: Optional[int], recipe: models.Recipe) -> str:
+    """What happened in a brew, step by step, from its scale curve (JSON for the step editor):
+    when each step's pour really started and when it reached its target. "" without a curve."""
+    if not brew_id:
+        return ""
+    found = session.get(models.Brew, brew_id)
+    if not found or _owner_id(session, found) != user.id:
+        return ""
+    curve = session.get(models.BrewCurve, brew_id)
+    if not curve:
+        return ""
+    return json.dumps(brew.actual_timings(recipe.recipe_text, json.loads(curve.samples)))
 
 
 @app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)
@@ -1189,6 +1206,7 @@ def create_brew(
     recommended_rationale: str = Form(None),
     planned_brew_id: int = Form(None),
     curve: str = Form(None),
+    then: str = Form(None),
 ):
     rec_delta: Optional[float] = None
     if recommended_delta and recommended_delta.strip():
@@ -1217,6 +1235,9 @@ def create_brew(
             crud.save_curve(session, new_brew.id, samples)  # type: ignore[arg-type]
         if planned_brew_id:
             crud.delete_plan(session, planned_brew_id)
+        if then == "change":  # "Save and edit the steps now", with this brew's real timings beside them
+            line_id = session.get(models.Recipe, recipe_id).line_id  # type: ignore[union-attr]
+            return RedirectResponse(url=f"/lines/{line_id}/change?bag_id={bag_id}&method=1&actual={new_brew.id}", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 
