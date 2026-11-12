@@ -51,6 +51,10 @@ class App:
         with self.engine.connect() as conn:
             return conn.execute(text(sql), params).scalar()
 
+    def execute(self, sql: str, **params) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(text(sql), params)
+
     def session(self) -> Session:
         return Session(self.engine)
 

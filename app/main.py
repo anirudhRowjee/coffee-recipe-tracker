@@ -2,7 +2,9 @@ import functools
 import hashlib
 import json
 import random
-from datetime import date as date_type, datetime
+import secrets
+import time
+from datetime import date as date_type, datetime, timezone
 
 from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
@@ -369,6 +371,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
             "brewer_id": brewer_id_int,
             "grinder_id": grinder_id_int,
             "rec": None,
+            "cooling_brew": None,
             "message": "Select a bag, brewer, and grinder to show recipes.",
             "pending_plan": pending_plan,
             "is_current_plan": False,
@@ -400,7 +403,16 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         rec = _Rec(recent_brews[0].recommended_param, recent_brews[0].recommended_delta, recent_brews[0].recommended_rationale, False)
     elif is_current_plan and pending_plan.suggested_param:  # type: ignore[union-attr]
         rec = _Rec(pending_plan.suggested_param, pending_plan.suggested_delta, pending_plan.suggested_rationale, True)  # type: ignore[union-attr,arg-type]
+    # For an hour after a cup is logged, offer to add how it tastes once cooled
+    cooling_brew, cooling_minutes = None, 0
+    if recent_brews:
+        brewed = recent_brews[0].brewed_at
+        minutes = int((datetime.now(timezone.utc) - (brewed if brewed.tzinfo else brewed.replace(tzinfo=timezone.utc))).total_seconds() // 60)
+        if 0 <= minutes < 60:
+            cooling_brew, cooling_minutes = recent_brews[0], max(minutes, 1)
     return {
+        "cooling_brew": cooling_brew,
+        "cooling_minutes": cooling_minutes,
         "rec": rec,
         "latest": latest,
         "recent_brews": recent_brews,
@@ -1144,6 +1156,99 @@ def create_brew(
             crud.save_curve(session, new_brew.id, samples)  # type: ignore[arg-type]
         if planned_brew_id:
             crud.delete_plan(session, planned_brew_id)
+    return RedirectResponse(url="/", status_code=303)
+
+
+# A deleted cup can be put back for a couple of minutes ("Undo" on the next page).
+# Kept in memory: prod runs one process, and losing it on a restart only loses the Undo.
+_UNDO: dict = {}
+UNDO_SECONDS = 120
+
+
+def _parse_amount(value: Optional[str]) -> Optional[float]:
+    """A typed amount ("-1", "−0.5", "+2"); None for blank, 400 for anything else."""
+    if not value or not value.strip():
+        return None
+    try:
+        return float(value.strip().replace("\u2212", "-"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="The amount must be a number, like -1 or 0.5")
+
+
+@app.get("/brews/{brew_id}/edit", response_class=HTMLResponse)
+def edit_brew_page(request: Request, brew_id: int, cooled: int = 0):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        brew = _owned(session, user, models.Brew, brew_id)
+        recipe = brew.recipe
+        bags = [bag for bag in crud.get_bags_for_bean(session, recipe.bean_id)  # type: ignore[union-attr]
+                if not bag.is_completed or bag.id == brew.bag_id]
+        return templates.TemplateResponse("brew_edit.html", {
+            "request": request, "current_user": user, "brew": brew, "recipe": recipe,
+            "version": crud.version_number(session, recipe),  # type: ignore[arg-type]
+            "bags": bags, "cooled": bool(cooled),
+            "has_curve": bool(crud.brews_with_curves(session, [brew.id])),  # type: ignore[list-item]
+        })
+
+
+@app.post("/brews/{brew_id}/edit")
+def edit_brew(
+    request: Request,
+    brew_id: int,
+    notes: str = Form(None),
+    rating: str = Form(None),
+    recommended_param: str = Form(None),
+    recommended_delta: str = Form(None),
+    recommended_rationale: str = Form(None),
+    bag_id: int = Form(None),
+):
+    param = (recommended_param or "").strip() or None
+    if param and param not in SUGGESTABLE_PARAMS:
+        raise HTTPException(status_code=400, detail="Unknown setting to change")
+    amount = _parse_amount(recommended_delta) if param and param != "recipe_text" else None
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        brew = _owned(session, user, models.Brew, brew_id)
+        fields = {
+            "notes": (notes or "").strip() or None,
+            "rating": _parse_rating(rating),
+            "recommended_param": param,
+            "recommended_delta": amount,
+            "recommended_rationale": (recommended_rationale or "").strip() or None if param else None,
+        }
+        if bag_id and bag_id != brew.bag_id:
+            bag = _owned(session, user, models.BeanBag, bag_id)
+            if bag.bean_id != brew.recipe.bean_id:  # type: ignore[union-attr]
+                raise HTTPException(status_code=400, detail="That bag is a different coffee")
+            fields["bag_id"] = bag_id
+        crud.update_brew(session, brew, **fields)
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/brews/{brew_id}/delete")
+def delete_brew(request: Request, brew_id: int):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        brew = _owned(session, user, models.Brew, brew_id)
+        snapshot = crud.delete_brew(session, brew)
+        now = time.time()
+        for token in [t for t, (_, _, expires) in _UNDO.items() if expires < now]:
+            del _UNDO[token]
+        token = secrets.token_urlsafe(12)
+        _UNDO[token] = (user.id, snapshot, now + UNDO_SECONDS)
+    return RedirectResponse(url=f"/?undo={token}", status_code=303)
+
+
+@app.post("/brews/undo")
+def undo_delete_brew(request: Request, token: str = Form(...)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        entry = _UNDO.get(token)
+        if not entry or entry[0] != user.id or entry[2] < time.time():
+            raise HTTPException(status_code=400, detail="That cup can't be brought back any more")
+        if not crud.restore_brew(session, entry[1]):
+            raise HTTPException(status_code=400, detail="That cup's recipe or bag has been deleted since")
+        del _UNDO[token]
     return RedirectResponse(url="/", status_code=303)
 
 

@@ -1,9 +1,9 @@
-{# 1-5 star picker, no JavaScript. Expects star_name (the form field). The
+{# 1-5 star picker, no JavaScript. Expects star_name (the form field), and star_value to preselect one. The
    inputs run 5→1 and the row is reversed in CSS, so `input:checked ~ label`
    can colour a star and every star to its left. #}
 <div class="star-input" role="radiogroup" aria-label="Rating">
     {% for n in [5, 4, 3, 2, 1] %}
-    <input type="radio" id="{{ star_name }}-{{ n }}" name="{{ star_name }}" value="{{ n }}" />
+    <input type="radio" id="{{ star_name }}-{{ n }}" name="{{ star_name }}" value="{{ n }}"{% if star_value is defined and star_value == n %} checked{% endif %} />
     <label for="{{ star_name }}-{{ n }}" title="{{ n }} star{{ 's' if n != 1 else '' }}">★</label>
     {% endfor %}
 </div>

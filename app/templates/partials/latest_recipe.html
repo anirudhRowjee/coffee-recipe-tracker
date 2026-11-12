@@ -66,6 +66,13 @@
 </form>
 {% endif %}
 
+{% if cooling_brew %}
+<div class="cooling-nudge">
+    <span><strong>Your last cup, {{ cooling_minutes }} min ago</strong>{% if cooling_brew.notes %}: "{{ cooling_brew.notes|truncate(60) }}"{% endif %}</span>
+    <a class="btn-action" href="/brews/{{ cooling_brew.id }}/edit?cooled=1">How is it now it's cooled?</a>
+</div>
+{% endif %}
+
 {% if rec %}
 <div class="recommendation-banner" data-rec="{{ 'plan' if rec.from_plan else 'brew' }}">
     <span class="rec-label">{% if rec.from_plan %}Planned change{% else %}Next time{% endif %}</span>
@@ -90,6 +97,7 @@
                 <span class="brew-date">{{ brew.brewed_at.strftime('%b %d, %Y') }}</span>
                 {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
                 {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
+                <a class="brew-edit-link" href="/brews/{{ brew.id }}/edit">Edit</a>
                 <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
                 {% if brew.recommended_param %}
                 <p class="brew-rec">→ Next time: {{ change_label(brew.recommended_param, brew.recommended_delta) }}

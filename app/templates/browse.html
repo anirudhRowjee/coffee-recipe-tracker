@@ -147,6 +147,7 @@
                     </span>
                     {% if brew.rating %}<span class="brew-stars" aria-label="{{ brew.rating }} of 5 stars">{{ brew.rating|stars }}</span>{% endif %}
                     {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
+                    <a class="brew-edit-link" href="/brews/{{ brew.id }}/edit">Edit</a>
                     <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
                 </div>
                 {% endfor %}

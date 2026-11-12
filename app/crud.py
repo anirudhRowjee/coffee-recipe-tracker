@@ -482,6 +482,52 @@ def line_brews_with_notes(session: Session, line_id: int, limit: int = 30) -> Li
     return [b for b in brews if tasting_note(b.notes)][:limit]
 
 
+def version_number(session: Session, recipe: models.Recipe) -> int:
+    """1 for a named recipe's first version, 2 for the next, ..."""
+    return len(session.exec(
+        select(models.Recipe.id).where(models.Recipe.line_id == recipe.line_id, models.Recipe.created_at <= recipe.created_at)
+    ).all()) or 1
+
+
+def update_brew(session: Session, brew: models.Brew, **fields) -> models.Brew:
+    """Correct a logged cup: notes, rating, Next time, or the bag it came out of."""
+    for name, value in fields.items():
+        setattr(brew, name, value)
+    session.add(brew)
+    session.commit()
+    session.refresh(brew)
+    return brew
+
+
+def delete_brew(session: Session, brew: models.Brew) -> dict:
+    """Delete a cup (and its curve); returns everything needed to put it back."""
+    curve = session.get(models.BrewCurve, brew.id)
+    snapshot = {
+        "recipe_id": brew.recipe_id, "bag_id": brew.bag_id, "notes": brew.notes, "rating": brew.rating,
+        "recommended_param": brew.recommended_param, "recommended_delta": brew.recommended_delta,
+        "recommended_rationale": brew.recommended_rationale, "brewed_at": brew.brewed_at,
+        "curve": curve.samples if curve else None,
+    }
+    _delete_brew(session, brew)
+    session.commit()
+    return snapshot
+
+
+def restore_brew(session: Session, snapshot: dict) -> Optional[models.Brew]:
+    """Undo delete_brew, if the version and bag it belonged to still exist."""
+    if not session.get(models.Recipe, snapshot["recipe_id"]) or not session.get(models.BeanBag, snapshot["bag_id"]):
+        return None
+    data = {k: v for k, v in snapshot.items() if k != "curve"}
+    brew = models.Brew(**data)
+    session.add(brew)
+    session.commit()
+    session.refresh(brew)
+    if snapshot.get("curve"):
+        session.add(models.BrewCurve(brew_id=brew.id, samples=snapshot["curve"]))  # type: ignore[arg-type]
+        session.commit()
+    return brew
+
+
 def _delete_brew(session: Session, brew: models.Brew) -> None:
     """A brew and its curve. No commit."""
     curve = session.get(models.BrewCurve, brew.id)

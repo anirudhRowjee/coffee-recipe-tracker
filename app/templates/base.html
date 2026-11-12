@@ -45,6 +45,17 @@
         <main>
             {% block content %}{% endblock %}
         </main>
+        {% if request and request.query_params.get('undo') %}
+        <form class="undo-toast" id="undo-toast" method="post" action="/brews/undo" role="status">
+            <input type="hidden" name="token" value="{{ request.query_params.get('undo') }}" />
+            <span>Cup deleted. Its coffee is back in the bag.</span>
+            <button type="submit">Undo</button>
+        </form>
+        <script>
+            setTimeout(function () { var t = document.getElementById('undo-toast'); if (t) t.hidden = true; }, 10000);
+            history.replaceState(null, '', location.pathname);  // a reload doesn't bring the toast back
+        </script>
+        {% endif %}
     </div>
 </body>
 

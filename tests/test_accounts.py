@@ -285,6 +285,7 @@ GET_ATTACKS = [
     ("/beans/1/image", {}),
     ("/brews/1/graph", {}),
     ("/brews/1/curve.csv", {}),
+    ("/brews/1/edit", {}),
 ]
 
 RECIPE = {"dose_g": 15, "water_ml": 250, "temp_c": 93, "grind_size": "13"}
@@ -310,6 +311,8 @@ POST_ATTACKS = [
     ("/plan", {"bag_id": 2, "brewer_id": 2, "grinder_id": 1}),
     ("/brews", {"recipe_id": 1, "bag_id": 2}),
     ("/brews", {"recipe_id": 1, "bag_id": 1}),
+    ("/brews/1/edit", {"notes": "Hacked"}),
+    ("/brews/1/delete", {}),
     ("/recipes", {**RECIPE, "bean_id": 1, "brewer_id": 2, "grinder_id": 3}),
     ("/recipes", {**RECIPE, "bean_id": 2, "brewer_id": 1, "grinder_id": 3}),
     ("/recipes", {**RECIPE, "bean_id": 2, "brewer_id": 2, "grinder_id": 1}),
