@@ -1875,3 +1875,4 @@ dialog.sheet .sheet-close { margin-left: auto; }
 .choice-row > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 10px 6px 10px 14px; color: #2c1810; text-decoration: none; }
 .choice-row > form { flex: 0 0 auto; padding-right: 10px; }
 .plan-chip { white-space: nowrap; }
+.choice-row > .plan-chip { margin-right: 10px; flex: 0 0 auto; }

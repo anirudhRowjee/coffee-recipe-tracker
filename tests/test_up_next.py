@@ -110,3 +110,14 @@ def test_plan_another_coffee_from_the_recipe_step(app):
     assert app.rows("select bag_id, brewer_id, grinder_id, line_id from plannedbrew") == [
         {"bag_id": 1, "brewer_id": 1, "grinder_id": 2, "line_id": 2}]  # the gear came from the recipe
     assert 'data-planned="1"' in home(app)
+
+
+def test_change_gear_lists_the_recipes_to_switch_to_or_plan(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/recipes", {**BASELINE, "grinder_id": 2})
+    post(app, "/brews", {"recipe_id": 2, "bag_id": 1})  # grinder 2's recipe is up next
+    page = home(app)
+    sheet = page[page.index('id="gear-sheet"'):]
+    assert "/?bag_id=1&amp;line_id=1" in sheet and 'name="line_id" value="1"' in sheet and "showing now" in sheet
+    # switching by recipe brings that recipe's gear
+    assert "/lines/1/brew?bag_id=1" in home(app, bag_id=1, line_id=1).split('id="coffee-sheet"')[0]

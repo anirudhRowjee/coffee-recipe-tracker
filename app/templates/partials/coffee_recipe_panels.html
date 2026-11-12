@@ -1,3 +1,4 @@
+{% from 'partials/recipe_choice.html' import recipe_choice %}
 {# Step two of "Another coffee", inside the coffee sheet: the coffee's recipes, each on its own
    brewer and grinder (picking one picks the gear), or other gear to start something new. #}
 {% for bag, remaining, last in coffees %}
@@ -8,20 +9,7 @@
     <h3>{{ bag.bean.name }}</h3>
     <p class="muted">Tap a recipe to brew it now, or 📅 to make it Up next.</p>
     <nav class="action-list">
-        {% for c in choices %}
-        <div class="choice-row">
-            <a href="/lines/{{ c.line_id }}/brew?bag_id={{ bag.id }}" aria-label="Brew now: {{ c.brewer }} and {{ c.grinder }}">
-                <span class="row-text"><b>{{ c.brewer }} · {{ c.grinder }}</b>
-                    <span class="muted">{% if c.name %}{{ c.name }} · {% endif %}{{ c.summary }} · version {{ c.version }}</span></span>
-                <span class="chev">▶</span>
-            </a>
-            {# plan it instead: /plan takes the brewer and grinder from the recipe #}
-            <form method="post" action="/plan">
-                <input type="hidden" name="bag_id" value="{{ bag.id }}" />
-                <input type="hidden" name="line_id" value="{{ c.line_id }}" />
-                <button type="submit" class="chip small plan-chip" aria-label="Make this Up next">📅 Up next</button>
-            </form>
-        </div>
+        {% for c in choices %}{{ recipe_choice(c, bag, '/lines/' ~ c.line_id ~ '/brew?bag_id=' ~ bag.id) }}
         {% endfor %}
         <a href="/?bag_id={{ bag.id }}&amp;gear=pick"><span class="row-text"><b>Another brewer or grinder</b><span class="muted">start a recipe for other gear</span></span><span class="chev">›</span></a>
     </nav>

@@ -1,0 +1,21 @@
+{# One of a coffee's recipes as a choice: the row goes to `href` (brew it now, or show it on
+   Brew), and 📅 makes it Up next (/plan takes the brewer and grinder from the recipe).
+   Expects c (main._recipe_choices), the bag, href, and optionally current. #}
+{% macro recipe_choice(c, bag, href, current=false, planned=false) -%}
+<div class="choice-row{% if current %} current{% endif %}">
+    <a href="{{ href }}">
+        <span class="row-text"><b>{{ c.brewer }} · {{ c.grinder }}</b>
+            <span class="muted">{% if current %}showing now · {% endif %}{% if c.name %}{{ c.name }} · {% endif %}{{ c.summary }} · version {{ c.version }}</span></span>
+        <span class="chev">{% if '/brew' in href %}▶{% else %}›{% endif %}</span>
+    </a>
+    {% if planned %}
+    <span class="chip small plan-chip on">📅 Planned</span>
+    {% else %}
+    <form method="post" action="/plan">
+        <input type="hidden" name="bag_id" value="{{ bag.id }}" />
+        <input type="hidden" name="line_id" value="{{ c.line_id }}" />
+        <button type="submit" class="chip small plan-chip" aria-label="Make this Up next">📅 Up next</button>
+    </form>
+    {% endif %}
+</div>
+{%- endmacro %}

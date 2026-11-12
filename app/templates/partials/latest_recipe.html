@@ -1,4 +1,5 @@
 {% from 'partials/tip.html' import tip %}
+{% from 'partials/recipe_choice.html' import recipe_choice %}
 {#
   The Up next card: the recipe as brew mode's tiles, the Next time note, Start
   brewing pinned at the bottom, and everything else as a short list of rows that
@@ -253,6 +254,15 @@
 <dialog class="sheet" id="gear-sheet" aria-label="Brewing it with">
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>Brewing it with</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    {% set gear_choices = coffee_recipes.get(bean_id, []) if coffee_recipes is defined else [] %}
+    {% if gear_choices %}
+    <p class="muted">{{ bag.bean.name }}'s recipes: tap one to switch to it, or 📅 to make it Up next.</p>
+    <nav class="action-list" style="margin-bottom:14px">
+        {% for c in gear_choices %}{{ recipe_choice(c, bag, '/?bag_id=' ~ bag_id ~ '&line_id=' ~ c.line_id, current=(c.line_id == line.id), planned=(is_current_plan and c.line_id == line.id)) }}
+        {% endfor %}
+    </nav>
+    <p class="eyebrow">Or other gear</p>
+    {% endif %}
     {% if bean_bags|length > 1 %}
     <p class="eyebrow">Bag</p>
     <div class="chips">

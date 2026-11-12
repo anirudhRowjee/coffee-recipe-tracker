@@ -548,6 +548,10 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
         if ints["bag"]:
             bag = _owned(session, user, models.BeanBag, ints["bag"])
             line = None if gear == "pick" else crud.gear_for_bean(session, bag.bean_id)  # gear=pick: choose it afresh
+            if ints["line"]:  # a recipe picked by name brings its own gear
+                picked = _owned(session, user, models.RecipeLine, ints["line"])
+                if picked.bean_id == bag.bean_id:
+                    line = picked
             brewer = ints["brewer"] or (line.brewer_id if line else None)
             grinder = ints["grinder"] or (line.grinder_id if line else None)
             if brewer:
