@@ -108,8 +108,9 @@ def test_log_brew_stores_signed_recommendation_and_uses_dose(app):
 
     html = latest(app)
     assert 'data-rec="brew"' in html
-    assert 'data-delta="-1.0"' in html  # feeds applyRecommendation()
-    assert "Apply: Grind −1" in html
+    assert "Try a change · Grind −1" in html
+    change = app.client.get("/lines/1/change", params={"bag_id": 1}).text
+    assert 'data-rec-param="grind_size"' in change and 'data-rec-delta="-1.0"' in change  # starts Try a change from it
 
     with app.session() as s:
         assert crud.get_remaining_quantity(s, s.get(models.BeanBag, 1)) == 235.0
@@ -143,7 +144,7 @@ def test_variation_creates_version_delta_and_brew(app):
     html = latest(app)
     assert "<strong>Grind:</strong> 12" in html
     assert "Change history" in html and "extract more" in html
-    assert 'name="previous_recipe_id" value="2"' in html
+    assert 'name="previous_recipe_id" value="2"' in app.client.get("/lines/1/change", params={"bag_id": 1}).text
 
 
 def test_recipe_text_variation_stores_zero_delta(app):

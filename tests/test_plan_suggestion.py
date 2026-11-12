@@ -32,8 +32,10 @@ def test_scheduling_with_a_suggestion_shows_it_as_the_next_change(app):
                               "suggested_rationale": "a bit sour, try finer"}]
     home = app.client.get("/").text
     assert 'data-rec="plan"' in home and "a bit sour, try finer" in home
-    # it fills the variation form like a recommendation does
-    assert 'id="rec-data"' in home and 'data-param="grind_size"' in home and 'data-delta="-1.0"' in home
+    # Try a change starts from it, like a recommendation
+    plan_id = app.scalar("select id from plannedbrew")
+    change = app.client.get("/lines/1/change", params={"bag_id": 1, "plan_id": plan_id}).text
+    assert 'data-rec-param="grind_size"' in change and 'data-rec-delta="-1.0"' in change and 'data-rec="plan"' in change
 
 
 def test_only_on_the_planned_combination(app):

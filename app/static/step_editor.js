@@ -101,10 +101,49 @@
             serialise();
             // In the variation form, changing the steps is the one change being made
             var changed = form.querySelector('[name="changed_param"]');
-            if (changed) {
+            if (changed && changed.tagName === 'SELECT') {
                 changed.value = 'recipe_text';
                 if (window.toggleDeltaAmount) window.toggleDeltaAmount(changed);
+            } else if (changed) {  // Try a change: the Method tile
+                var method = form.querySelector('[name="changed_param"][value="recipe_text"]');
+                if (method && !method.checked) { method.checked = true; method.dispatchEvent(new Event('change', { bubbles: true })); }
             }
+        }
+
+        // − and + beside a time (15 s) or grams (5 g), so a step can be nudged without the keyboard
+        function nudger(input, kind, label) {
+            var wrap = document.createElement('span');
+            wrap.className = 'step-nudge';
+            [-1, 1].forEach(function (sign) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = sign < 0 ? '−' : '+';
+                b.setAttribute('aria-label', (sign < 0 ? 'Less ' : 'More ') + label);
+                b.addEventListener('click', function () {
+                    if (kind === 'time') {
+                        var now = secondsOf(tidyTime(input.value.trim()));
+                        input.value = asTime(Math.max(0, (now === null ? 0 : now) + sign * 15));
+                    } else {
+                        var g = parseFloat(input.value) || 0;
+                        input.value = String(Math.max(0, Math.round((g + sign * 5) * 10) / 10));
+                    }
+                    edited();
+                });
+                if (sign < 0) wrap.appendChild(b); else { wrap.appendChild(input); wrap.appendChild(b); }
+            });
+            return wrap;
+        }
+
+        // the words brew mode recognises (and animates), offered as you type an action
+        if (!document.getElementById('step-action-list')) {
+            var list = document.createElement('datalist');
+            list.id = 'step-action-list';
+            ['Bloom', 'Pour', 'Swirl', 'Stir', 'Wait', 'Close valve', 'Open valve', 'Press', 'Flip', 'Drawdown', 'Done'].forEach(function (w) {
+                var o = document.createElement('option');
+                o.value = w;
+                list.appendChild(o);
+            });
+            document.body.appendChild(list);
         }
 
         function addRow(step, needsCheck) {
@@ -112,6 +151,7 @@
             row.className = 'step-row';
             var time = field('step-time', 'Time', step.time, 'numeric');
             var action = field('step-action', 'What to do', step.action);
+            action.setAttribute('list', 'step-action-list');
             var remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'step-remove';
@@ -121,7 +161,7 @@
             pour.className = 'step-pour';
             pour.appendChild(document.createTextNode('Pour to '));
             var grams = field('step-grams', 'Pour to grams', step.grams, 'decimal');
-            pour.appendChild(grams);
+            pour.appendChild(nudger(grams, 'grams', 'water'));
             pour.appendChild(document.createTextNode(' g'));
             if (needsCheck) {
                 var tag = document.createElement('span');
@@ -139,7 +179,7 @@
                 if (tidied !== time.value) { time.value = tidied; edited(); }
             });
             remove.addEventListener('click', function () { rows.removeChild(row); edited(); });
-            row.appendChild(time);
+            row.appendChild(nudger(time, 'time', 'time'));
             row.appendChild(action);
             row.appendChild(remove);
             row.appendChild(pour);
@@ -164,7 +204,7 @@
         });
 
         form.addEventListener('submit', function (event) {
-            if (freeText || !touched) return;
+            if (freeText || !touched || !editor.isConnected) return;  // a replaced editor no longer counts
             serialise();
             var last = -1, problem = '';
             rowData().forEach(function (r, i) {
@@ -193,6 +233,8 @@
         editor.hidden = false;
         textarea.hidden = true;
     }
+
+    window.initStepEditors = function (root) { init(root); };
 
     function init(root) {
         var editors = root.querySelectorAll('[data-step-editor]');

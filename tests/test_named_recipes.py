@@ -60,7 +60,8 @@ def test_each_named_recipe_has_its_own_versions_and_deltas(app):
     html = latest(app, line_id=default)
     assert "<strong>Grind:</strong> 13" in html
     assert "Change history" not in html and "2 cup finer" not in html
-    assert 'name="previous_recipe_id" value="1"' in html
+    assert f'/lines/{default}/change' in html
+    assert 'name="previous_recipe_id" value="1"' in app.client.get(f"/lines/{default}/change", params={"bag_id": 1}).text
 
 
 def test_variation_stays_in_parent_line(app):

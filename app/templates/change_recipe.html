@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
+
+{% block content %}
+{#
+  Try a change: the four settings and the method as tiles. Tapping one picks it as
+  the version's single change and opens its stepper; the other tiles go back to
+  their values and lock, so two changes can't be made by mistake. The server works
+  out what changed and by how much from the values (main.create_recipe).
+#}
+{% set params = [
+    ('dose_g', 'Coffee', latest.dose_g, ' g'),
+    ('grind_size', 'Grind', latest.grind_size, ''),
+    ('water_ml', 'Water', latest.water_ml, ' ml'),
+    ('temp_c', 'Temp', latest.temp_c, ' °C'),
+] %}
+<form id="variation-form" method="post" action="/recipes" class="change-form" style="{{ latest.bean|bean_theme }}"
+    data-rec-param="{{ rec.recommended_param if rec else '' }}"
+    data-rec-delta="{{ rec.recommended_delta if rec and rec.recommended_delta is not none else '' }}"
+    data-rec-why="{{ rec.recommended_rationale or '' if rec else '' }}">
+    <input type="hidden" name="bean_id" value="{{ line.bean_id }}" />
+    <input type="hidden" name="brewer_id" value="{{ line.brewer_id }}" />
+    <input type="hidden" name="grinder_id" value="{{ line.grinder_id }}" />
+    <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
+
+    <div class="change-layout">
+        <section class="card change-main">
+            <p class="muted"><a href="/">‹ Back</a></p>
+            <h2>Try a change</h2>
+            <p class="muted">{{ latest.bean.name }}{% if line.name != 'Default' %} · {{ line.name }}{% endif %} · from version {{ version }}</p>
+            <p class="change-hint">Tap the one thing to change {{ tip('one_change', 'Why only one?') }}</p>
+
+            <div class="change-tiles" role="radiogroup" aria-label="What to change">
+                {% for key, label, value, unit in params %}
+                <label class="change-tile" data-param="{{ key }}">
+                    <input type="radio" name="changed_param" value="{{ key }}" />
+                    <span class="eyebrow">{{ label }}</span>
+                    <b><span data-show="{{ key }}">{{ value|num }}</span><small>{{ unit }}</small></b>
+                    <i data-was="{{ key }}" hidden>was {{ value|num }}{{ unit }}</i>
+                </label>
+                {% endfor %}
+                <label class="change-tile change-tile-wide" data-param="recipe_text">
+                    <input type="radio" name="changed_param" value="recipe_text" />
+                    <span class="eyebrow">Method</span>
+                    <b class="change-method-sum">{{ latest.recipe_text|steps_summary }}</b>
+                </label>
+            </div>
+
+            {% for key, label, value, unit in params %}
+            <div class="change-editor" data-for="{{ key }}">
+                <label class="eyebrow" for="change-{{ key }}">{{ label }}{% if key == 'grind_size' %} {{ tip('grind') }}{% endif %}</label>
+                <div class="stepper">
+                    {% set step = limits[key][0] if key in limits else grind_step %}
+                    {% if step %}<button type="button" class="stepper-btn" data-step="-{{ step }}" aria-label="Less">−</button>{% endif %}
+                    {% if key == 'grind_size' %}
+                    <input id="change-{{ key }}" name="grind_size" value="{{ value }}" data-original="{{ value }}" required
+                        {% if step %}inputmode="decimal"{% endif %} />
+                    {% else %}
+                    <input id="change-{{ key }}" name="{{ key }}" type="number" inputmode="decimal" value="{{ value|num }}"
+                        data-original="{{ value|num }}" step="any" min="{{ limits[key][1] }}" max="{{ limits[key][2] }}" required />
+                    {% endif %}
+                    {% if step %}<button type="button" class="stepper-btn" data-step="{{ step }}" aria-label="More">+</button>{% endif %}
+                </div>
+                <p class="muted change-diff" data-diff="{{ key }}"></p>
+            </div>
+            {% endfor %}
+            <div class="change-editor" data-for="recipe_text">
+                <label class="eyebrow">Method</label>
+                <div id="method-editor">{% with field_value=latest.recipe_text %}{% include 'partials/recipe_text_field.html' %}{% endwith %}</div>
+                <template id="method-original">{% with field_value=latest.recipe_text %}{% include 'partials/recipe_text_field.html' %}{% endwith %}</template>
+                {% if latest.recipe_text|needs_tidy %}
+                <p class="muted">Written as free text. <a href="/lines/{{ line.id }}/tidy{% if bag %}?bag_id={{ bag.id }}{% endif %}">Turn it into steps</a> {{ tip('tidy') }}</p>
+                {% endif %}
+            </div>
+
+            <label for="change-why" class="change-why-label">Why <span class="muted">(optional)</span></label>
+            {% if rec and rec.recommended_rationale %}
+            <div class="chips"><button type="button" class="chip" data-why="{{ rec.recommended_rationale }}">{{ rec.recommended_rationale }}</button></div>
+            {% endif %}
+            <input id="change-why" name="rationale" placeholder="e.g. a bit sour, try finer" />
+
+            {% if bag %}
+            <details class="change-brewed">
+                <summary>I already brewed it: log that cup too</summary>
+                <label class="check-row"><input type="checkbox" name="bag_id" value="{{ bag.id }}" /> Log a cup of the new version from the {{ bag.roast_date.strftime('%b %d') if bag.roast_date else '' }} bag</label>
+                {% if plan %}<input type="hidden" name="planned_brew_id" value="{{ plan.id }}" />{% endif %}
+                <label for="change-notes">Tasting notes</label>
+                <textarea id="change-notes" name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
+                <label>Rating {{ tip('rating') }}</label>
+                {% with star_name='brew_rating' %}{% include 'partials/star_input.html' %}{% endwith %}
+                <label for="change-next">Next time {{ tip('log_next_time') }}</label>
+                <select id="change-next" name="brew_recommended_param">
+                    <option value="">— same again —</option>
+                    <option value="dose_g">Coffee</option><option value="water_ml">Water</option><option value="temp_c">Temp</option>
+                    <option value="grind_size">Grind</option><option value="recipe_text">Method</option>
+                </select>
+                <label>By how much
+                    <span class="signed-input">
+                        <input name="brew_recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1" />
+                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+                    </span>
+                </label>
+                <label>Why <input name="brew_recommended_rationale" placeholder="e.g. still a bit sour" /></label>
+            </details>
+            {% endif %}
+
+            <div class="dock">
+                <button type="submit" id="change-save">Save as version {{ version + 1 }}</button>
+            </div>
+        </section>
+
+        <aside class="card change-side">
+            {% if rec %}
+            <div class="recommendation-banner" data-rec="{{ 'plan' if rec.from_plan else 'brew' }}">
+                <span class="rec-label">{% if rec.from_plan %}Planned change{% else %}Next time{% endif %}</span>
+                <span class="rec-body"><strong>{{ change_label(rec.recommended_param, rec.recommended_delta) }}</strong>{% if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{% endif %}</span>
+            </div>
+            {% endif %}
+            <h3>What changes</h3>
+            <p class="change-summary" id="change-summary">Nothing yet. Tap a setting.</p>
+            {% if deltas %}
+            <h3>Earlier changes</h3>
+            <ul class="change-history">
+                {% for d in deltas %}<li><strong>{{ d.change_label }}</strong>{% if d.rationale %} · <i>{{ d.rationale }}</i>{% endif %}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </aside>
+    </div>
+</form>
+<script src="{{ static('change_recipe.js') }}"></script>
+{% endblock %}

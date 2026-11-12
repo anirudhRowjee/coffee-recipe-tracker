@@ -1,6 +1,14 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% if saved %}
+<div class="saved-banner" role="status">
+    <span><strong>Version {{ saved.version }} saved.</strong> {{ saved.change }}{% if saved.why %}, {{ saved.why }}{% endif %}.</span>
+    {% if bags_with_remaining %}{% set sb = (bags_with_remaining|selectattr('0.bean_id', 'equalto', saved.recipe.bean_id)|first) %}{% if sb %}
+    <a class="btn-brew" href="/lines/{{ saved.recipe.line_id }}/brew?bag_id={{ sb[0].id }}">▶ Brew version {{ saved.version }} now</a>
+    {% endif %}{% endif %}
+</div>
+{% endif %}
 <section class="morning-strip">
     <div class="pixel-art">{{ pixel_art_svg | safe }}</div>
     <div>

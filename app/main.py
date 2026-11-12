@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session
+from sqlmodel import Session, select
 from pathlib import Path
 from typing import NamedTuple, Optional
 
@@ -37,6 +37,7 @@ templates.env.globals["static"] = static_url
 templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["needs_tidy"] = brew.needs_tidy
 templates.env.filters["num"] = words.num
+templates.env.filters["steps_summary"] = brew.steps_summary
 templates.env.filters["param_label"] = words.label
 templates.env.globals["change_label"] = words.change
 templates.env.globals["TIPS"] = tips.TIPS
@@ -460,6 +461,14 @@ def index(request: Request):
             context.update(_latest_recipe_context(session, pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, user.id, pending_plan.line_id))  # type: ignore[arg-type]
             if context.get("bag"):
                 context["planned_bag_remaining"] = crud.get_remaining_quantity(session, context["bag"])
+        # Just saved a new version on Try a change: say what changed, offer to brew it
+        saved_id = request.query_params.get("saved", "")
+        if saved_id.isdigit():
+            recipe = session.get(models.Recipe, int(saved_id))
+            if recipe and _owner_id(session, recipe) == user.id:
+                delta = session.exec(select(models.Delta).where(models.Delta.to_recipe_id == recipe.id)).first()
+                context["saved"] = {"recipe": recipe, "version": crud.version_number(session, recipe),
+                                    "change": delta.change_label if delta else "", "why": delta.rationale if delta else ""}
         return templates.TemplateResponse("index.html", context)
 
 
@@ -917,6 +926,50 @@ def _last_curve(session: Session, line: models.RecipeLine, latest: models.Recipe
     return json.dumps({**curve, "label": "Last brew, " + label}, separators=(",", ":"))  # type: ignore[dict-item]
 
 
+# Steps and limits for each setting on Try a change: (step, min, max)
+CHANGE_LIMITS = {"dose_g": (0.5, 5, 60), "water_ml": (10, 50, 1000), "temp_c": (1, 70, 100)}
+
+
+def _grind_step(value: str) -> Optional[float]:
+    """How far − and + move a grind setting: 1 for "22", 0.5 for "2.5"; None if it isn't a number."""
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return None
+    return 1 if "." not in value else 0.5 if value.split(".")[1] in ("0", "5") else 0.1
+
+
+@app.get("/lines/{line_id}/change", response_class=HTMLResponse)
+def change_recipe_page(request: Request, line_id: int, bag_id: Optional[int] = None, plan_id: Optional[int] = None):
+    """Try a change: tap the one setting to change, set its new value, say why."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        latest = crud.get_latest_recipe(session, line_id)
+        if not latest:
+            raise HTTPException(status_code=404, detail="Not found")
+        bag = session.get(models.BeanBag, bag_id) if bag_id else None
+        if bag and (_owner_id(session, bag) != user.id or bag.bean_id != line.bean_id):
+            bag = None
+        if not bag:
+            bags = [b for b in crud.get_bags_for_bean(session, line.bean_id) if not b.is_completed]
+            bag = bags[0] if bags else None
+        plan = crud.get_pending_plan(session, user.id)  # type: ignore[arg-type]
+        plan = plan if plan and plan_id == plan.id and plan.bag_id == (bag.id if bag else None) else None
+        rec = None
+        rec_brew = crud.line_recommendation(session, line_id)
+        if rec_brew:
+            rec = _Rec(rec_brew.recommended_param, rec_brew.recommended_delta, rec_brew.recommended_rationale, False)  # type: ignore[arg-type]
+        elif plan and plan.suggested_param:
+            rec = _Rec(plan.suggested_param, plan.suggested_delta, plan.suggested_rationale, True)
+        return templates.TemplateResponse("change_recipe.html", {
+            "request": request, "current_user": user, "line": line, "latest": latest, "bag": bag, "plan": plan,
+            "rec": rec, "version": crud.version_number(session, latest),
+            "deltas": crud.get_recent_deltas(session, line_id, limit=5),
+            "limits": CHANGE_LIMITS, "grind_step": _grind_step(latest.grind_size),
+        })
+
+
 @app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)
 def tidy_line(line_id: int, request: Request, bag_id: Optional[int] = None):
     """Suggest steps for a free-text method, for the person to correct and save."""
@@ -1319,7 +1372,15 @@ def create_recipe(
                 "recipe_text": recipe_text,
             })
             if not valid:
-                raise HTTPException(status_code=400, detail=f"Must change exactly one parameter. Changed: {changed}")
+                names = " and ".join(words.label(c) for c in changed) or "nothing"
+                raise HTTPException(status_code=400, detail=f"A new version changes exactly one thing. This changes {names}.")
+            # What changed, and by how much, come from the values themselves, so they can't disagree
+            changed_param = changed[0]
+            new_value = {"dose_g": dose_g, "water_ml": water_ml, "temp_c": temp_c, "grind_size": grind_size}.get(changed_param)
+            try:
+                delta_amount_f = round(float(new_value) - float(getattr(prev, changed_param)), 3)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                delta_amount_f = 0.0 if changed_param == "recipe_text" else delta_amount_f
             # A variation always stays in its parent's named recipe
             line_id = prev.line_id
         else:
@@ -1370,7 +1431,10 @@ def create_recipe(
                 recommended_rationale=brew_recommended_rationale or None,
             )
 
-        if planned_brew_id:
+        if planned_brew_id and bag_id:
             crud.delete_plan(session, planned_brew_id)
+        saved_id = recipe.id
 
+    if previous_recipe_id and not bag_id:
+        return RedirectResponse(url=f"/?saved={saved_id}", status_code=303)
     return RedirectResponse(url="/", status_code=303)

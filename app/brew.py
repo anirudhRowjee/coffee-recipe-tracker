@@ -128,6 +128,18 @@ def parse_steps(recipe_text: Optional[str]) -> List[Step]:
     return steps
 
 
+def steps_summary(text: Optional[str]) -> str:
+    """A method in a few words, for a tile: "4 steps · about 2:45", or "Written as text"."""
+    if not (text or "").strip():
+        return "No steps yet"
+    if not is_standard(text):
+        return "Written as text"
+    steps = parse_steps(text)
+    timed = [s for s in steps if s.times]
+    last = max((t for s in timed for t in s.times), default=None)
+    return f"{len(steps)} step{'s' if len(steps) != 1 else ''}" + (f" · about {mmss(last)}" if last else "")
+
+
 def step_editor_data(text: Optional[str]) -> str:
     """What the step editor needs, as JSON. Free text isn't editable as rows until it's tidied."""
     parts = _standard_parts(text)

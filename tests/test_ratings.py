@@ -40,7 +40,8 @@ def test_each_form_has_its_own_star_field(app):
     post(app, "/recipes", BASELINE)
     html = latest(app)
     assert len(re.findall(r'type="radio" id="rating-\d" name="rating"', html)) == 5
-    assert len(re.findall(r'type="radio" id="brew_rating-\d" name="brew_rating"', html)) == 5
+    change = app.client.get("/lines/1/change", params={"bag_id": 1}).text
+    assert len(re.findall(r'type="radio" id="brew_rating-\d" name="brew_rating"', change)) == 5
     assert 'name="rating"' in app.client.get("/lines/1/brew", params={"bag_id": 1}).text
 
 

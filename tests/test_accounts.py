@@ -286,6 +286,7 @@ GET_ATTACKS = [
     ("/brews/1/graph", {}),
     ("/brews/1/curve.csv", {}),
     ("/brews/1/edit", {}),
+    ("/lines/1/change", {}),
 ]
 
 RECIPE = {"dose_g": 15, "water_ml": 250, "temp_c": 93, "grind_size": "13"}

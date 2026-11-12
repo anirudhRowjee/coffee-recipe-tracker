@@ -113,162 +113,18 @@
     </div>
 </details>
 
+<a class="btn-secondary btn-block" href="/lines/{{ line.id }}/change?bag_id={{ bag_id }}{% if is_current_plan %}&amp;plan_id={{ pending_plan.id }}{% endif %}">Try a change {% if rec %}· {{ change_label(rec.recommended_param, rec.recommended_delta) }}{% endif %}</a>
+
+{% if recent_deltas %}
 <details class="history-block" style="margin-top:8px">
-    <summary class="history-summary">Try a change {{ tip('one_change', 'Why one change?') }}</summary>
-    <div style="margin-top:10px">
-        {% if rec %}
-        <div id="rec-data" hidden
-            data-param="{{ rec.recommended_param }}"
-            data-delta="{{ rec.recommended_delta if rec.recommended_delta is not none else '' }}"
-            data-rationale="{{ rec.recommended_rationale or '' }}">
-        </div>
-        <button type="button" class="btn-apply-rec" onclick="applyRecommendation()">
-            Apply: {{ change_label(rec.recommended_param, rec.recommended_delta) }}
-            {%- if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{%- endif %}
-        </button>
-        {% endif %}
-        <form id="variation-form" method="post" action="/recipes" class="stacked-form" style="margin-top:10px">
-            <input type="hidden" name="bean_id" value="{{ bean_id }}" />
-            <input type="hidden" name="bag_id" value="{{ bag_id }}" />
-            <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
-            <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
-            <input type="hidden" name="previous_recipe_id" value="{{ latest.id }}" />
-            {% if is_current_plan %}<input type="hidden" name="planned_brew_id" value="{{ pending_plan.id }}" />{% endif %}
-            <label>Coffee (g)
-                <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required />
-            </label>
-            <label>Water (ml)
-                <input name="water_ml" type="number" step="0.1" value="{{ latest.water_ml }}" required />
-            </label>
-            <label>Temp (°C)
-                <input name="temp_c" type="number" step="0.1" value="{{ latest.temp_c }}" required />
-            </label>
-            <label>Grind
-                <input name="grind_size" value="{{ latest.grind_size }}" required />
-            </label>
-            <label>Method</label>
-            {% with field_value=latest.recipe_text %}{% include 'partials/recipe_text_field.html' %}{% endwith %}
-            <label>What changed
-                <select name="changed_param" required onchange="toggleDeltaAmount(this)">
-                    <option value="dose_g">Coffee</option>
-                    <option value="water_ml">Water</option>
-                    <option value="temp_c">Temp</option>
-                    <option value="grind_size">Grind</option>
-                    <option value="recipe_text">Method</option>
-                </select>
-            </label>
-            <div id="delta-amount-row">
-                <label>By how much
-                    <span class="signed-input">
-                        <input name="delta_amount" type="text" inputmode="decimal" placeholder="e.g. -1 or 0.5" />
-                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
-                    </span>
-                </label>
-            </div>
-            <label>Why
-                <input name="rationale" placeholder="e.g. too bitter → reduce dose" />
-            </label>
-            <label>Tasting notes for this brew</label>
-            <textarea name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
-            <label style="margin-top:8px">Rating</label>
-            {% with star_name='brew_rating' %}{% include 'partials/star_input.html' %}{% endwith %}
-            {% if rec %}
-            <div class="muted" style="font-size:0.85em;margin-top:10px;padding:6px 8px;border-left:3px solid var(--border,#ccc)">
-                Your Next time note:
-                <strong>{{ change_label(rec.recommended_param, rec.recommended_delta) }}</strong>
-                {%- if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{%- endif %}
-            </div>
-            {% endif %}
-            <label style="margin-top:10px">Next time</label>
-            <select name="brew_recommended_param" onchange="toggleVarRecDelta(this)">
-                <option value="">— same again —</option>
-                <option value="dose_g">Coffee</option>
-                <option value="water_ml">Water</option>
-                <option value="temp_c">Temp</option>
-                <option value="grind_size">Grind</option>
-                <option value="recipe_text">Method</option>
-            </select>
-            <div id="var-rec-delta-row" style="display:none">
-                <label style="margin-top:6px">By how much
-                    <span class="signed-input">
-                        <input name="brew_recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1" />
-                        <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
-                    </span>
-                </label>
-            </div>
-            <label>Why
-                <input name="brew_recommended_rationale" placeholder="e.g. still underextracted, try less" />
-            </label>
-            <button type="submit" style="margin-top:8px">Save variation</button>
-        </form>
-        <script>
-            function toggleDeltaAmount(sel) {
-                document.getElementById('delta-amount-row').style.display =
-                    sel.value === 'recipe_text' ? 'none' : '';
-            }
-
-            function toggleVarRecDelta(sel) {
-                document.getElementById('var-rec-delta-row').style.display =
-                    (sel.value && sel.value !== 'recipe_text') ? '' : 'none';
-            }
-
-            function applyRecommendation() {
-                const recEl = document.getElementById('rec-data');
-                if (!recEl) return;
-                const param = recEl.dataset.param;
-                const delta = recEl.dataset.delta !== '' ? parseFloat(recEl.dataset.delta) : null;
-                const rationale = recEl.dataset.rationale || null;
-
-                const form = document.getElementById('variation-form');
-                const paramSel = form.querySelector('[name="changed_param"]');
-                const deltaInput = form.querySelector('[name="delta_amount"]');
-                const rationaleInput = form.querySelector('[name="rationale"]');
-
-                paramSel.value = param;
-                toggleDeltaAmount(paramSel);
-
-                const numericFields = { dose_g: true, water_ml: true, temp_c: true };
-                if (delta !== null && param in numericFields) {
-                    const fieldInput = form.querySelector('[name="' + param + '"]');
-                    fieldInput.value = (parseFloat(fieldInput.value) + delta).toFixed(1);
-                    deltaInput.value = delta;
-                } else if (param === 'grind_size' && delta !== null && delta % 1 === 0) {
-                    const fieldInput = form.querySelector('[name="grind_size"]');
-                    const currentVal = fieldInput.value.trim();
-                    if (/^\d+$/.test(currentVal)) {
-                        fieldInput.value = String(parseInt(currentVal, 10) + delta);
-                        deltaInput.value = delta;
-                    } else {
-                        fieldInput.focus();
-                    }
-                } else {
-                    const target = form.querySelector('[name="' + param + '"]');
-                    if (target) target.focus();
-                }
-
-                if (rationale) rationaleInput.value = rationale;
-            }
-        </script>
-
-        {% if recent_deltas %}
-        <h4 style="margin-top:14px">Change history</h4>
-        <table class="delta-table">
-            <thead>
-                <tr><th>Change</th><th>Why</th><th>Date</th></tr>
-            </thead>
-            <tbody>
-                {% for delta in recent_deltas %}
-                <tr>
-                    <td>{{ delta.change_label }}</td>
-                    <td>{{ delta.rationale or '-' }}</td>
-                    <td>{{ delta.created_at.strftime('%b %d') }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-    </div>
+    <summary class="history-summary">Change history</summary>
+    <ul class="change-history">
+        {% for delta in recent_deltas %}
+        <li><strong>{{ delta.change_label }}</strong>{% if delta.rationale %} · <i>{{ delta.rationale }}</i>{% endif %} <span class="muted">{{ delta.created_at.strftime('%b %d') }}</span></li>
+        {% endfor %}
+    </ul>
 </details>
+{% endif %}
 
 <details class="history-block" style="margin-top:8px">
     <summary class="history-summary">New recipe</summary>

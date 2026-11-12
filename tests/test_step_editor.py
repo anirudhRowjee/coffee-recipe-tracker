@@ -100,8 +100,10 @@ def test_guesses_are_marked():
 def test_forms_keep_a_plain_text_box_for_no_javascript(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": STANDARD})
     html = latest(app)
-    assert html.count('<textarea name="recipe_text"') == 2  # variation and new named recipe
-    assert html.count("data-step-editor=") == 2
+    assert html.count('<textarea name="recipe_text"') == 1  # new named recipe
+    change = app.client.get("/lines/1/change", params={"bag_id": 1}).text
+    assert change.count('<textarea name="recipe_text"') == 2  # the editor, and its original kept in a <template>
+    assert html.count("data-step-editor=") == 1
     assert "Add the grounds" in html
 
 
