@@ -1876,3 +1876,11 @@ dialog.sheet .sheet-close { margin-left: auto; }
 .choice-row > form { flex: 0 0 auto; padding-right: 10px; }
 .plan-chip { white-space: nowrap; }
 .choice-row > .plan-chip { margin-right: 10px; flex: 0 0 auto; }
+/* recipe rows wherever they sit (Another coffee, Change gear) */
+.choice-row { display: flex; align-items: center; border-bottom: 1px solid #efe2d3; }
+.action-list .choice-row:last-child, .gear-recipe:last-child .choice-row { border-bottom: 0; }
+.choice-row > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 10px 6px 10px 14px; color: #2c1810; text-decoration: none; text-align: left; }
+.choice-row.current > a b::after { content: ""; }
+.gear-sheet .eyebrow { margin: 14px 0 4px; }
+.gear-sheet .sheet-head + .eyebrow { margin-top: 4px; }
+.gear-none { margin-top: 4px; }

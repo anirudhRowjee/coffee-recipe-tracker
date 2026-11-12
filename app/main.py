@@ -413,6 +413,7 @@ def _recipe_choices(session: Session, bean_id: int) -> list:
         if not latest:
             continue
         out.append({"line_id": ln.id, "name": None if ln.name == "Default" else ln.name,
+                    "brewer_id": ln.brewer_id, "grinder_id": ln.grinder_id,
                     "brewer": brewer.name if brewer else "", "grinder": grinder.name if grinder else "",
                     "summary": f"{words.num(latest.dose_g)} g · {words.num(latest.water_ml)} ml · {words.num(latest.temp_c)} °C · grind {latest.grind_size}",
                     "version": crud.version_number(session, latest)})

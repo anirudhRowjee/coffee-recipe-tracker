@@ -251,18 +251,15 @@
 </dialog>
 
 {% if brewer and grinder %}
-<dialog class="sheet" id="gear-sheet" aria-label="Brewing it with">
+{#
+  Change gear, in two steps: pick the brewer and grinder (chips), then this coffee's recipes
+  for that gear appear underneath: switch to one, or 📅 make it Up next. Gear with no recipe
+  offers to start one. The filtering happens on the page (static/gear_sheet.js).
+#}
+{% set gear_choices = coffee_recipes.get(bean_id, []) if coffee_recipes is defined else [] %}
+<dialog class="sheet gear-sheet" id="gear-sheet" aria-label="Change gear" data-bag="{{ bag_id }}">
     <div class="sheet-grab"></div>
-    <div class="sheet-head"><h3>Brewing it with</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
-    {% set gear_choices = coffee_recipes.get(bean_id, []) if coffee_recipes is defined else [] %}
-    {% if gear_choices %}
-    <p class="muted">{{ bag.bean.name }}'s recipes: tap one to switch to it, or 📅 to make it Up next.</p>
-    <nav class="action-list" style="margin-bottom:14px">
-        {% for c in gear_choices %}{{ recipe_choice(c, bag, '/?bag_id=' ~ bag_id ~ '&line_id=' ~ c.line_id, current=(c.line_id == line.id), planned=(is_current_plan and c.line_id == line.id)) }}
-        {% endfor %}
-    </nav>
-    <p class="eyebrow">Or other gear</p>
-    {% endif %}
+    <div class="sheet-head"><h3>Change gear</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
     {% if bean_bags|length > 1 %}
     <p class="eyebrow">Bag</p>
     <div class="chips">
@@ -271,9 +268,30 @@
         {% endfor %}
     </div>
     {% endif %}
-    {% with gear_bag=bag, gear_brewer_id=brewer_id, gear_grinder_id=grinder_id %}{% include 'partials/gear_choice.html' %}{% endwith %}
-    <p style="margin-top:12px"><button type="button" class="link-button" data-sheet="coffee-sheet">Pick another coffee</button></p>
+    <p class="eyebrow">1 · Brewer</p>
+    <div class="chips gear-pick" data-kind="brewer">
+        {% for b in all_brewers %}<button type="button" class="chip" data-id="{{ b.id }}" aria-pressed="{{ 'true' if b.id == brewer_id else 'false' }}">{{ b.name }}</button>{% endfor %}
+    </div>
+    <p class="eyebrow">2 · Grinder {{ tip('grind') }}</p>
+    <div class="chips gear-pick" data-kind="grinder">
+        {% for g in all_grinders %}<button type="button" class="chip" data-id="{{ g.id }}" aria-pressed="{{ 'true' if g.id == grinder_id else 'false' }}">{{ g.name }}</button>{% endfor %}
+    </div>
+
+    <p class="eyebrow">3 · Recipe</p>
+    <nav class="action-list gear-recipes">
+        {% for c in gear_choices %}
+        <div class="gear-recipe" data-brewer="{{ c.brewer_id }}" data-grinder="{{ c.grinder_id }}">
+            {{ recipe_choice(c, bag, '/?bag_id=' ~ bag_id ~ '&line_id=' ~ c.line_id, current=(c.line_id == line.id), planned=(is_current_plan and c.line_id == line.id)) }}
+        </div>
+        {% endfor %}
+    </nav>
+    <div class="gear-none" hidden>
+        <p class="muted">No recipe for {{ bag.bean.name }} on this gear yet.</p>
+        <a class="btn-secondary btn-block gear-start" href="/?bag_id={{ bag_id }}">Start a recipe for this gear</a>
+    </div>
+    <p class="muted" style="margin-top:12px">Missing something? Add a brewer or grinder in <a href="/manage#gear">Settings</a>.</p>
 </dialog>
+<script src="{{ static('gear_sheet.js') }}"></script>
 {% endif %}
 
 {% elif bean_id %}
