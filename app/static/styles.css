@@ -1904,3 +1904,10 @@ dialog.sheet .sheet-close { margin-left: auto; }
 .plan-x::after { content: ""; position: absolute; inset: -11px; } /* 44 px target */
 .plan-x:hover, .plan-x:focus-visible { background: #6b3d2e; color: #fff; }
 .plan-note { margin: 0 0 4px; font-style: italic; color: #5c3520; font-size: 0.9rem; }
+/* lists built on <nav> must not inherit the old top-nav rule (centred items, a bottom gap and rule) */
+nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; border-bottom: 1px solid #e0c9b0; }
+.row-text { align-items: flex-start; text-align: left; flex: 1; }
+.action-list > a, .action-list > button { justify-content: flex-start; }
+.other-coffees > a, .other-coffees > button { min-height: 64px; }
+.side-card { padding-bottom: 16px; }
+.action-list .row-text .muted, .action-list .row-text span { margin-left: 0; }
