@@ -51,7 +51,7 @@ try:
         w.execute("INSERT INTO usersession (token_hash, user_id, created_at) VALUES (?, ?, datetime('now'))", (token_hash, uid))
         w.commit()
         try:
-            for page in ["/", "/browse", "/manage"]:
+            for page in ["/", "/?pick=1", "/browse", "/manage", "/help"]:
                 req = urllib.request.Request(url + page, headers={"Cookie": f"session={token}"})
                 try:
                     status = urllib.request.urlopen(req, timeout=10).status
