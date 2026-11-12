@@ -194,7 +194,7 @@ def test_page_carries_the_plan(app):
     assert re.search(r'<div class="brew-anim" id="brew-anim" hidden>', html)  # only shown with JavaScript
     assert re.search(r'id="brew-anim-toggle"[^>]* hidden>', html)
     assert re.search(r'id="brew-anim-on" type="checkbox" checked', html)  # on by default
-    assert html.index('src="/static/brew_animation.js"') < html.index("window.BrewAnimation(timer)")
+    assert html.index('src="/static/brew_animation.js?v=') < html.index("window.BrewAnimation(timer)")
 
 
 def test_free_text_page_has_no_plan(app):

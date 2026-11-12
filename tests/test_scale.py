@@ -2,6 +2,8 @@
 Brew mode's Bookoo scale (static/scale.js): the page gives the script what it needs.
 The Bluetooth side runs in the browser and is checked by hand with a real scale.
 """
+import re
+
 from test_flows import BASELINE, app, post  # noqa: F401 — app is a fixture
 
 METHOD = "Prep: Rinse the filter\n0:00 — Bloom (to 50g)\n0:45 — Pour (to 152.5g)\n1:30 — Swirl\n3:00 — Done"
@@ -32,7 +34,7 @@ def test_grams_written_in_a_pour_count_as_its_target(app):
 def test_scale_controls_are_hidden_until_the_script_shows_them(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": METHOD})
     page = brew_page(app)
-    assert '<script src="/static/scale.js"></script>' in page
+    assert re.search(r'<script src="/static/scale\.js\?v=[0-9a-f]{10}"></script>', page)
     for marker in ('id="brew-scale" hidden', 'id="brew-scale-connect" class="btn-secondary brew-scale-btn" hidden',
                    'id="brew-scale-tare" class="btn-secondary brew-scale-btn" hidden'):
         assert marker in page
@@ -48,6 +50,19 @@ def test_free_text_still_renders(app):
 def test_script_is_served(app):
     r = app.client.get("/static/scale.js")
     assert r.status_code == 200 and "0x0ffe" in r.text
+
+
+def test_static_urls_change_when_the_file_does(app, tmp_path, monkeypatch):
+    # so Bluefy and other browsers never keep running an old copy
+    from app import main
+    (tmp_path / "x.js").write_text("one")
+    monkeypatch.setattr(main, "STATIC_DIR", tmp_path)
+    main.static_url.cache_clear()
+    first = main.static_url("x.js")
+    (tmp_path / "x.js").write_text("two")
+    main.static_url.cache_clear()
+    assert first.startswith("/static/x.js?v=") and main.static_url("x.js") != first
+    main.static_url.cache_clear()
 
 
 def test_graphs_section_waits_for_a_brew(app):

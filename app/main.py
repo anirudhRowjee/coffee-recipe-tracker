@@ -1,3 +1,5 @@
+import functools
+import hashlib
 import json
 import random
 from datetime import date as date_type, datetime
@@ -7,15 +9,29 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
+from pathlib import Path
 from typing import Optional
 
 from . import auth, brew, crud, db, export, models, theme
 
 app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+STATIC_DIR = Path("app/static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
+
+
+@functools.lru_cache(maxsize=None)
+def static_url(path: str) -> str:
+    """/static/<path>?v=<content hash>: a changed file gets a new URL, so no browser
+    (Bluefy on an iPad, say) keeps running an old script. Read once per process; a
+    deploy restarts the app."""
+    digest = hashlib.sha256((STATIC_DIR / path).read_bytes()).hexdigest()[:10]
+    return f"/static/{path}?v={digest}"
+
+
+templates.env.globals["static"] = static_url
 templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["needs_tidy"] = brew.needs_tidy
 templates.env.filters["step_editor_data"] = brew.step_editor_data

@@ -79,9 +79,9 @@
 </section>
 {% endif %}
 
-<script src="/static/brew_animation.js"></script>
-<script src="/static/brew_graphs.js"></script>
-<script src="/static/scale.js"></script>
+<script src="{{ static('brew_animation.js') }}"></script>
+<script src="{{ static('brew_graphs.js') }}"></script>
+<script src="{{ static('scale.js') }}"></script>
 <script>
     // ES5 on purpose: the Kindle's browser is old. Times come from data-times
     // on each step (seconds, parsed server-side by app/brew.py).
