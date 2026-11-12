@@ -13,7 +13,7 @@
     var SERIF = "Georgia, 'Palatino Linotype', Palatino, serif";
     var SANS = "-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif";
     var INK = '#2c1810', MUTED = '#7a5a44', LABEL = '#8c6a4f', VALUE = '#3b1f0e', PAPER = '#faf6f0';
-    var PLAN = '#a8927c', LINE = '#e3d5c3', NOTE_BG = '#fffdf9';
+    var PLAN = '#cbb9a6', LINE = '#e3d5c3', NOTE_BG = '#f3ebdf';
     // the note on the card: {text, when, rating}, or null; set from the page's controls
     var note = null;
     var accent = card.colors.accent, soft = card.colors.soft;
@@ -127,7 +127,9 @@
         });
         y += 14;
 
-        [[card.gear, MUTED, 'normal'], [card.about, MUTED, 'normal'], [card.flavour, INK, 'italic']].forEach(function (row) {
+        // with a note, the header is just the title and the gear: your words say more than the bag's
+        var rows = note ? [[card.gear, MUTED, 'normal']] : [[card.gear, MUTED, 'normal'], [card.about, MUTED, 'normal'], [card.flavour, INK, 'italic']];
+        rows.forEach(function (row) {
             if (!row[0]) return;
             var fitted = fitLines(row[0], textW, 2, row[2], 28, 24, SANS);
             ctx.fillStyle = row[1];
@@ -147,8 +149,8 @@
         } else {
             y = drawParams(X, CW, top0);
             var curveH = CURVE_H;
-            if (card.curve) { bottom -= curveH + 16; drawCurve(X, CW, bottom + 16, curveH); }
-            if (note) { var nh = noteHeight(CW); bottom -= nh + 28; drawNote(X, CW, bottom + 12, nh); }
+            if (card.curve) { bottom -= curveH + 24; drawCurve(X, CW, bottom + 12, curveH); }
+            if (note) { var nh = noteHeight(CW); bottom -= nh + 32; drawNote(X, CW, bottom + 16, nh); }
             if (card.steps.length) drawSteps(X, CW, drawMethodHeading(X, y), bottom);
         }
 
@@ -183,7 +185,7 @@
             ctx.fillStyle = VALUE;
             ctx.fillText(param[1], tx + 22, ty + (compact ? 82 : 100));
         });
-        return y + Math.ceil(card.params.length / cols) * (tileH + gap) + (compact ? 18 : 26);
+        return y + Math.ceil(card.params.length / cols) * (tileH + gap) + 26;
     }
 
     function drawMethodHeading(X, y) {
@@ -209,9 +211,6 @@
         ctx.fillStyle = NOTE_BG;
         roundRect(X, top, CW, h, 18);
         ctx.fill();
-        ctx.strokeStyle = LINE;
-        ctx.lineWidth = 2;
-        ctx.stroke();
         ctx.save();
         roundRect(X, top, CW, h, 18);
         ctx.clip();
@@ -228,7 +227,7 @@
         y += 16;
         font('normal', 24, SANS);
         ctx.fillStyle = LABEL;
-        var label = 'From my notes' + (note.when ? ' · ' + note.when : '');
+        var label = '— my notes' + (note.when ? ', ' + note.when : '');
         ctx.fillText(label, X + NOTE_PAD + 12, y + 14);
         if (note.rating) {
             var lx = X + NOTE_PAD + 12 + ctx.measureText(label + '   ').width;
@@ -243,60 +242,54 @@
         if (!note) return y;
         var h = noteHeight(CW);
         drawNote(X, CW, y, h);
-        return y + h + 30;
+        return y + h + 34;
     }
-    var STORY_CURVE_H = 170;
+    var STORY_CURVE_H = 150;
     function drawCurveBlock(X, CW, y, h) {
         if (!card.curve) return y;
         drawCurve(X, CW, y, h);
-        return y + h + 26;
+        return y + h + 34;
     }
 
     // The weight through one brew, against this version's step targets (dashed)
-    var CURVE_H = 130;  // a strip: there's no axis to read, it shows the shape of the brew
+    var CURVE_H = 110;  // a strip: there's no axis to read, it shows the shape of the brew
     function drawCurve(X, CW, top, height) {
+        // No caption, axis or numbers: there's nothing to read off it, it's the shape of the brew
+        // (the bag's colour) over the plan's steps (faint, dashed)
         var t = card.curve.t, g = card.curve.g, plan = card.curve.targets || [];
         var end = Math.max(t[t.length - 1] || 1, plan.length ? plan[plan.length - 1][0] + 15 : 0);
         var max = Math.max.apply(null, g.concat(plan.map(function (p) { return p[1]; })).concat([1]));
-        var plotTop = top + 44, plotH = height - 56, plotW = CW - 120;
-        font('normal', 24, SANS);
-        ctx.fillStyle = LABEL;
-        ctx.fillText(plan.length ? 'My brew against the plan (dashed)' : 'Weight through a brew', X, top + 26);
+        var plotTop = top + 6, plotH = height - 12, plotW = CW;
+        function px(s) { return X + s / end * plotW; }
+        function py(v) { return plotTop + plotH - Math.max(0, v) / max * plotH; }
         if (plan.length) {
             ctx.strokeStyle = PLAN;
             ctx.lineWidth = 3;
-            ctx.setLineDash([12, 10]);
+            ctx.setLineDash([10, 10]);
             ctx.beginPath();
             plan.forEach(function (p, i) {
-                var until = i + 1 < plan.length ? plan[i + 1][0] : end, py = plotTop + plotH - p[1] / max * plotH;
-                ctx.moveTo(X + p[0] / end * plotW, py);
-                ctx.lineTo(X + until / end * plotW, py);
+                var until = i + 1 < plan.length ? plan[i + 1][0] : end;
+                ctx.moveTo(px(p[0]), py(p[1]));
+                ctx.lineTo(px(until), py(p[1]));
             });
             ctx.stroke();
             ctx.setLineDash([]);
         }
-        ctx.strokeStyle = '#e3d5c3';
-        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(X, plotTop + plotH);
-        ctx.lineTo(X + plotW, plotTop + plotH);
-        ctx.stroke();
+        t.forEach(function (s, i) { if (i) ctx.lineTo(px(s), py(g[i])); else ctx.moveTo(px(s), py(g[i])); });
+        ctx.lineTo(px(t[t.length - 1]), plotTop + plotH);
+        ctx.lineTo(px(t[0]), plotTop + plotH);
+        ctx.closePath();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = accent;
         ctx.lineWidth = 5;
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        t.forEach(function (s, i) {
-            var px = X + s / end * plotW, py = plotTop + plotH - Math.max(0, g[i]) / max * plotH;
-            if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
-        });
+        t.forEach(function (s, i) { if (i) ctx.lineTo(px(s), py(g[i])); else ctx.moveTo(px(s), py(g[i])); });
         ctx.stroke();
-        var last = g[g.length - 1], secs = Math.round(t[t.length - 1] || 0);
-        font('bold', 36, SANS);
-        ctx.fillStyle = VALUE;
-        ctx.fillText(Math.round(last) + ' g', X + plotW + 20, plotTop + plotH - Math.max(0, last) / max * plotH + 12);
-        font('normal', 24, SANS);
-        ctx.fillStyle = LABEL;
-        ctx.fillText(Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2), X + plotW + 20, plotTop + plotH);
     }
 
     // The method, at the largest size that fits; any steps that still don't are counted
