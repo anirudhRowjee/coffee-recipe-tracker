@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
+
+{% block content %}
+{#
+  A named recipe's versions, newest first. Each says what it changed (real values),
+  why, its cups and their ratings. Any version can be compared with the current one
+  or brewed once; the newest can be fixed (its own change and reason) or, with no
+  cups, deleted; "Undo the last change" makes a new version with the old value back.
+#}
+{% set cur = current.recipe %}
+{% set units = {'dose_g': ' g', 'grind_size': '', 'water_ml': ' ml', 'temp_c': ' °C'} %}
+{% set labels = {'dose_g': 'Coffee', 'grind_size': 'Grind', 'water_ml': 'Water', 'temp_c': 'Temp'} %}
+<div class="versions-layout">
+<section class="card" style="{{ cur.bean|bean_theme }}">
+    <p class="muted"><a href="/">‹ Brew</a></p>
+    <h2>{{ cur.bean.name }}{% if line.name != 'Default' %} · {{ line.name }}{% endif %}</h2>
+    <p class="muted">{{ cur.brewer.name }} · {{ cur.grinder.name }} · {{ rows|length }} version{{ 's' if rows|length != 1 }} {{ tip('version') }}</p>
+
+    {% for row in rows %}
+    {% set v = row.recipe %}
+    <details class="version" id="v{{ row.n }}" {% if loop.first %}open{% endif %}>
+        <summary>
+            <span class="version-n{% if loop.first %} current{% endif %}">{{ row.n }}</span>
+            <span class="version-what">
+                <strong>{% if row.delta %}{{ row.delta.change_label }}{% else %}Started{% endif %}</strong>
+                {% if loop.first %}<span class="badge">current</span>{% endif %}
+                {% if best and best.n == row.n %}<span class="badge badge-best">best rated</span>{% endif %}
+                <span class="muted version-sub">
+                    {% if row.delta and row.delta.rationale %}{{ row.delta.rationale }} · {% endif %}
+                    {{ row.cups|length }} cup{{ 's' if row.cups|length != 1 }}{% if row.rating %} · ★ {{ row.rating }}{% endif %}
+                </span>
+            </span>
+        </summary>
+        <div class="version-body">
+            <div class="rtiles">
+                {% for f in fields %}
+                {% set differs = (v[f]|string) != (cur[f]|string) %}
+                <div class="rtile{% if differs %} differs{% endif %}"><span class="eyebrow">{{ labels[f] }}</span><b>{{ v[f]|num }}<small>{{ units[f] }}</small></b>{% if differs %}<i>now {{ cur[f]|num }}{{ units[f] }}</i>{% endif %}</div>
+                {% endfor %}
+            </div>
+            {% if v.recipe_text %}<details class="method-block"><summary>Method · {{ v.recipe_text|steps_summary }}{% if v.recipe_text != cur.recipe_text %} <span class="badge">differs</span>{% endif %}</summary><pre class="recipe-text">{{ v.recipe_text }}</pre></details>{% endif %}
+
+            {% if row.cups %}
+            <div class="brew-log">
+                {% for brew in row.cups[:5] %}
+                <div class="brew-entry">
+                    <span class="brew-date">{{ brew.brewed_at.strftime('%b %d, %Y') }}</span>
+                    {% if brew.rating %}<span class="brew-stars">{{ brew.rating|stars }}</span>{% endif %}
+                    {% if brew.id in curve_ids %}<a class="brew-graph-link" href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}
+                    <a class="brew-edit-link" href="/brews/{{ brew.id }}/edit">Edit</a>
+                    <p class="brew-notes">{{ brew.notes or '(no notes)' }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="version-actions">
+                {% if not loop.first %}
+                <a class="btn-action" href="?compare={{ v.id }}#compare">Compare with now</a>
+                {% if bag %}<a class="btn-action" href="/lines/{{ line.id }}/brew?bag_id={{ bag.id }}&amp;recipe_id={{ v.id }}">Brew it once</a>{% endif %}
+                {% else %}
+                <button type="button" class="btn-action" data-sheet="fix-sheet">Fix this version</button>
+                {% if row.delta and not row.cups %}
+                <form method="post" action="/recipes/{{ v.id }}/delete" onsubmit="return confirm('Delete version {{ row.n }}? It has no cups.')">
+                    <button type="submit" class="btn-action btn-danger">Delete version {{ row.n }}</button>
+                </form>
+                {% endif %}
+                {% endif %}
+            </div>
+            {% if row.delta and not loop.first %}
+            <details class="reason-edit">
+                <summary>Reword the reason</summary>
+                <form method="post" action="/recipes/{{ v.id }}/reason" class="stacked-form">
+                    <input name="rationale" value="{{ row.delta.rationale or '' }}" aria-label="Reason" />
+                    <button type="submit" class="btn-secondary">Save reason</button>
+                </form>
+            </details>
+            {% endif %}
+        </div>
+    </details>
+    {% endfor %}
+
+    {% if rows|length > 1 %}
+    <form method="post" action="/lines/{{ line.id }}/undo" class="undo-form">
+        <button type="submit" class="btn-secondary">Undo the last change{% if current.delta %} · back to {{ current.delta.change_label.split('→')[0]|trim }}{% endif %}</button>
+        <p class="muted">Makes version {{ rows|length + 1 }} with the old value back. Each move stays one change, so the history keeps every lesson.</p>
+    </form>
+    {% endif %}
+</section>
+
+<aside class="card versions-side" id="compare">
+    {% if other %}
+    <h3>Version {{ other.n }} and version {{ current.n }}</h3>
+    <div class="rtiles">
+        {% for f in fields %}
+        {% set differs = (other.recipe[f]|string) != (cur[f]|string) %}
+        <div class="rtile{% if differs %} differs{% endif %}"><span class="eyebrow">{{ labels[f] }}</span>
+            <b>{% if differs %}{{ other.recipe[f]|num }} → {{ cur[f]|num }}{% else %}{{ cur[f]|num }}{% endif %}<small>{{ units[f] }}</small></b>
+            <i>{% if differs %}changed since{% else %}same{% endif %}</i></div>
+        {% endfor %}
+    </div>
+    {% if other.recipe.recipe_text != cur.recipe_text %}<p class="muted">The method differs too.</p>{% endif %}
+    <p><strong>Version {{ other.n }}:</strong> {{ other.cups|length }} cup{{ 's' if other.cups|length != 1 }}{% if other.rating %}, ★ {{ other.rating }}{% endif %} ·
+       <strong>now:</strong> {{ current.cups|length }} cup{{ 's' if current.cups|length != 1 }}{% if current.rating %}, ★ {{ current.rating }}{% endif %}</p>
+    {% if bag %}<a class="btn-brew" href="/lines/{{ line.id }}/brew?bag_id={{ bag.id }}&amp;recipe_id={{ other.recipe.id }}">▶ Brew version {{ other.n }} once</a>{% endif %}
+    {% else %}
+    <h3>Ratings by version</h3>
+    {% if not (rows|selectattr('rating')|list) %}
+    <p class="muted">No rated cups yet. Rate a cup when you log it, and each version's ratings show here.</p>
+    {% else %}
+    <div class="rating-strip" role="img" aria-label="Each cup's rating, by version">
+        {% for row in rows|reverse %}
+        <div class="rating-col">
+            <div class="rating-dots">{% for b in row.cups if b.rating %}<span class="dot" style="bottom: {{ (b.rating - 1) * 25 }}%"></span>{% endfor %}</div>
+            <span class="rating-label{% if loop.last %} current{% endif %}">v{{ row.n }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <p class="muted">Each dot is a cup, from one star at the bottom to five at the top. Tap "Compare with now" on a version to see what's different.</p>
+    {% endif %}
+    {% endif %}
+</aside>
+</div>
+
+<dialog class="sheet" id="fix-sheet" aria-label="Fix this version">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Fix version {{ current.n }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <form method="post" action="/recipes/{{ cur.id }}/fix" class="stacked-form">
+        {% if current.delta %}
+        {% set p = current.delta.changed_param %}
+        <p class="muted">{{ current.delta.change_label }}. Only this version's own change can be corrected; everything else is the same as version {{ current.n - 1 }}.</p>
+        {% if p != 'recipe_text' %}
+        <label>{{ labels[p] }} <input name="value" value="{{ cur[p]|num }}" {% if p != 'grind_size' %}inputmode="decimal"{% endif %} required /></label>
+        {% else %}
+        <p class="muted">To fix the method, undo this change and make it again with Try a change.</p>
+        {% endif %}
+        <label>Why <input name="rationale" value="{{ current.delta.rationale or '' }}" /></label>
+        {% else %}
+        <p class="muted">The first version: correct any number.</p>
+        <label>Coffee (g) <input name="dose_g" value="{{ cur.dose_g|num }}" inputmode="decimal" required /></label>
+        <label>Water (ml) <input name="water_ml" value="{{ cur.water_ml|num }}" inputmode="decimal" required /></label>
+        <label>Temp (°C) <input name="temp_c" value="{{ cur.temp_c|num }}" inputmode="decimal" required /></label>
+        <label>Grind <input name="grind_size" value="{{ cur.grind_size }}" required /></label>
+        {% endif %}
+        {% if current.cups %}
+        <p class="warnbox">{{ current.cups|length }} cup{{ 's' if current.cups|length != 1 }} {{ 'were' if current.cups|length != 1 else 'was' }} brewed with this version and will show the fixed value. If you really brewed it this way, use Try a change instead.</p>
+        {% endif %}
+        <button type="submit">Save fix</button>
+    </form>
+</dialog>
+{% endblock %}

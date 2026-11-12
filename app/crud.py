@@ -543,6 +543,87 @@ def version_number(session: Session, recipe: models.Recipe) -> int:
     ).all()) or 1
 
 
+def get_versions(session: Session, line_id: int) -> List[models.Recipe]:
+    """A named recipe's versions, oldest first."""
+    return session.exec(
+        select(models.Recipe).where(models.Recipe.line_id == line_id).order_by(models.Recipe.created_at, models.Recipe.id)  # type: ignore[arg-type]
+    ).all()
+
+
+def delta_into(session: Session, recipe_id: int) -> Optional[models.Delta]:
+    return session.exec(select(models.Delta).where(models.Delta.to_recipe_id == recipe_id)).first()
+
+
+def brews_of(session: Session, recipe_ids: List[int]) -> Dict[int, List[models.Brew]]:
+    """Each version's cups, newest first."""
+    out: Dict[int, List[models.Brew]] = {i: [] for i in recipe_ids}
+    if recipe_ids:
+        for b in session.exec(select(models.Brew).where(models.Brew.recipe_id.in_(recipe_ids))  # type: ignore[union-attr]
+                              .order_by(models.Brew.brewed_at.desc())).all():  # type: ignore[union-attr]
+            out[b.recipe_id].append(b)
+    return out
+
+
+VALUE_FIELDS = ("dose_g", "water_ml", "temp_c", "grind_size", "recipe_text")
+
+
+def undo_last_change(session: Session, line_id: int) -> Optional[models.Recipe]:
+    """A new version with the newest version's one change put back: still a single change.
+    None if the newest version is the first."""
+    versions = get_versions(session, line_id)
+    if len(versions) < 2 or not versions[-1].previous_recipe_id:
+        return None
+    latest = versions[-1]
+    parent = session.get(models.Recipe, latest.previous_recipe_id)
+    delta = delta_into(session, latest.id)  # type: ignore[arg-type]
+    if not parent or not delta:
+        return None
+    param = delta.changed_param
+    new = create_recipe(session, bean_id=latest.bean_id, brewer_id=latest.brewer_id, grinder_id=latest.grinder_id,
+                        line_id=latest.line_id, dose_g=latest.dose_g, water_ml=latest.water_ml, temp_c=latest.temp_c,  # type: ignore[arg-type]
+                        grind_size=latest.grind_size, recipe_text=latest.recipe_text, previous_recipe_id=latest.id)
+    setattr(new, param, getattr(parent, param))
+    session.add(new)
+    session.commit()
+    try:
+        amount = round(float(getattr(parent, param)) - float(getattr(latest, param)), 3)
+    except (TypeError, ValueError):
+        amount = 0.0
+    create_delta(session, from_recipe_id=latest.id, to_recipe_id=new.id, changed_param=param,  # type: ignore[arg-type]
+                 delta_amount=amount, rationale=f"Undid version {len(versions)}'s change")
+    session.refresh(new)
+    return new
+
+
+def fix_version(session: Session, recipe: models.Recipe, values: Dict, rationale: Optional[str]) -> None:
+    """Correct the newest version in place: its values (checked by the caller) and reason;
+    the delta into it is rewritten from the real values."""
+    for name, value in values.items():
+        setattr(recipe, name, value)
+    session.add(recipe)
+    delta = delta_into(session, recipe.id)  # type: ignore[arg-type]
+    if delta:
+        parent = session.get(models.Recipe, delta.from_recipe_id)
+        valid, changed = validate_one_parameter_delta(parent, {f: getattr(recipe, f) for f in VALUE_FIELDS}) if parent else (False, [])
+        if valid:
+            delta.changed_param = changed[0]
+            try:
+                delta.delta_amount = round(float(getattr(recipe, changed[0])) - float(getattr(parent, changed[0])), 3)
+            except (TypeError, ValueError):
+                delta.delta_amount = 0.0
+        delta.rationale = rationale
+        session.add(delta)
+    session.commit()
+
+
+def delete_version(session: Session, recipe: models.Recipe) -> None:
+    """Remove a version with no cups (the newest, saved by mistake), and the change into it."""
+    for d in session.exec(select(models.Delta).where((models.Delta.to_recipe_id == recipe.id) | (models.Delta.from_recipe_id == recipe.id))).all():
+        session.delete(d)
+    session.delete(recipe)
+    session.commit()
+
+
 def update_brew(session: Session, brew: models.Brew, **fields) -> models.Brew:
     """Correct a logged cup: notes, rating, Next time, or the bag it came out of."""
     for name, value in fields.items():

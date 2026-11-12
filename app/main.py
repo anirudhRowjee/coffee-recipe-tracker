@@ -937,13 +937,21 @@ def rename_line(request: Request, line_id: int, name: str = Form(...)):
 
 
 @app.get("/lines/{line_id}/brew", response_class=HTMLResponse)
-def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan_id: Optional[int] = None):
+def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan_id: Optional[int] = None,
+              recipe_id: Optional[int] = None):
     """Brew mode: the named recipe's current version in large type, with a
     timer that follows the times written in the method, and the log form."""
     with Session(db.engine) as session:
         user = _require_user(request, session)
         line = _owned(session, user, models.RecipeLine, line_id)
         latest = crud.get_latest_recipe(session, line_id)
+        older_version = None
+        if recipe_id and latest and recipe_id != latest.id:  # "Brew it once": an older version of this recipe
+            older = session.get(models.Recipe, recipe_id)
+            if not older or older.line_id != line_id:
+                raise HTTPException(status_code=404, detail="Recipe not found")
+            older_version = (crud.version_number(session, older), crud.version_number(session, latest))
+            latest = older
         if not latest or not latest.bean or not latest.grinder:
             raise HTTPException(status_code=404, detail="Recipe not found")
         # Logging needs a bag of this bean; a stale or foreign one just hides the form
@@ -970,7 +978,8 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
             "live_graph": user.show_live_graph,
             "last_curve": _last_curve(session, line, latest),
             "bag": bag,
-            "plan_id": plan.id if plan else None,
+            "plan_id": plan.id if plan and not older_version else None,
+            "older_version": older_version,
         })
 
 
@@ -1044,6 +1053,120 @@ def _actual_timings(session: Session, user: models.User, brew_id: Optional[int],
     if not curve:
         return ""
     return json.dumps(brew.actual_timings(recipe.recipe_text, json.loads(curve.samples)))
+
+
+@app.get("/lines/{line_id}/versions", response_class=HTMLResponse)
+def versions_page(request: Request, line_id: int, bag_id: Optional[int] = None, compare: Optional[int] = None):
+    """A named recipe's versions, newest first: what each changed, its cups and ratings;
+    compare one with the current version, brew an old one once, undo or fix the newest."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        versions = crud.get_versions(session, line_id)
+        if not versions:
+            raise HTTPException(status_code=404, detail="Not found")
+        cups = crud.brews_of(session, [v.id for v in versions])  # type: ignore[misc]
+        rows = []
+        for n, v in enumerate(versions, start=1):
+            rated = [b.rating for b in cups[v.id] if b.rating]  # type: ignore[index]
+            rows.append({"n": n, "recipe": v, "delta": crud.delta_into(session, v.id), "cups": cups[v.id],  # type: ignore[arg-type,index]
+                         "rating": round(sum(rated) / len(rated), 1) if rated else None})
+        best = max((r for r in rows if r["rating"]), key=lambda r: (r["rating"], r["n"]), default=None)
+        current = rows[-1]
+        other = next((r for r in rows if r["recipe"].id == compare), None) if compare else None
+        bag = session.get(models.BeanBag, bag_id) if bag_id else None
+        if not bag or _owner_id(session, bag) != user.id or bag.bean_id != line.bean_id:
+            bag = crud.pick_bag(session, line.bean_id)
+        return templates.TemplateResponse("versions.html", {
+            "request": request, "current_user": user, "line": line, "rows": list(reversed(rows)), "current": current,
+            "best": best, "other": other, "bag": bag, "fields": ("dose_g", "grind_size", "water_ml", "temp_c"),
+            "curve_ids": crud.brews_with_curves(session, [b.id for r in rows for b in r["cups"]]),
+        })
+
+
+def _newest_version(session: Session, user: models.User, recipe_id: int) -> models.Recipe:
+    recipe = _owned(session, user, models.Recipe, recipe_id)
+    if crud.get_latest_recipe(session, recipe.line_id).id != recipe.id:  # type: ignore[arg-type,union-attr]
+        raise HTTPException(status_code=400, detail="Only the newest version can be fixed or deleted")
+    return recipe
+
+
+@app.post("/lines/{line_id}/undo")
+def undo_last_change(request: Request, line_id: int, bag_id: int = Form(None)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        _owned(session, user, models.RecipeLine, line_id)
+        new = crud.undo_last_change(session, line_id)
+        if not new:
+            raise HTTPException(status_code=400, detail="The first version has no change to undo")
+        saved_id = new.id
+    return RedirectResponse(url=f"/?saved={saved_id}", status_code=303)
+
+
+@app.post("/recipes/{recipe_id}/fix")
+def fix_version(request: Request, recipe_id: int, value: str = Form(None), rationale: str = Form(None),
+                dose_g: str = Form(None), water_ml: str = Form(None), temp_c: str = Form(None), grind_size: str = Form(None)):
+    """Correct the newest version in place: its own change (or, for a first version, any
+    value) and its reason. It must stay exactly one change from the version before."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        recipe = _newest_version(session, user, recipe_id)
+        delta = crud.delta_into(session, recipe.id)  # type: ignore[arg-type]
+        values: dict = {}
+        if delta and value is not None and delta.changed_param != "recipe_text":
+            raw = {delta.changed_param: value}
+        else:
+            raw = {k: v for k, v in (("dose_g", dose_g), ("water_ml", water_ml), ("temp_c", temp_c), ("grind_size", grind_size)) if v is not None}
+            if delta:
+                raw = {}  # a later version's other values belong to the version before it
+        for name, v in raw.items():
+            v = v.strip()
+            if name == "grind_size":
+                if not v:
+                    raise HTTPException(status_code=400, detail="Grind can't be empty")
+                values[name] = v
+            else:
+                values[name] = _parse_amount(v)
+                if values[name] is None:
+                    raise HTTPException(status_code=400, detail=f"{words.label(name)} can't be empty")
+        if delta:
+            parent = session.get(models.Recipe, delta.from_recipe_id)
+            valid, changed = crud.validate_one_parameter_delta(parent, {**{f: getattr(recipe, f) for f in crud.VALUE_FIELDS}, **values})  # type: ignore[arg-type]
+            if not valid:
+                raise HTTPException(status_code=400, detail="That would make this version the same as the one before. Delete it instead, if it has no cups.")
+        crud.fix_version(session, recipe, values, (rationale or "").strip() or None)
+        line_id = recipe.line_id
+    return RedirectResponse(url=f"/lines/{line_id}/versions", status_code=303)
+
+
+@app.post("/recipes/{recipe_id}/reason")
+def edit_version_reason(request: Request, recipe_id: int, rationale: str = Form(None)):
+    """The reason for any version's change can be reworded; its values can't (later versions build on them)."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        recipe = _owned(session, user, models.Recipe, recipe_id)
+        delta = crud.delta_into(session, recipe.id)  # type: ignore[arg-type]
+        if not delta:
+            raise HTTPException(status_code=400, detail="The first version has no change to explain")
+        delta.rationale = (rationale or "").strip() or None
+        session.add(delta)
+        session.commit()
+        line_id = recipe.line_id
+    return RedirectResponse(url=f"/lines/{line_id}/versions", status_code=303)
+
+
+@app.post("/recipes/{recipe_id}/delete")
+def delete_version(request: Request, recipe_id: int):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        recipe = _newest_version(session, user, recipe_id)
+        if not recipe.previous_recipe_id:
+            raise HTTPException(status_code=400, detail="This is the recipe's only version: delete the recipe instead")
+        if crud.brews_of(session, [recipe.id])[recipe.id]:  # type: ignore[list-item,index]
+            raise HTTPException(status_code=400, detail="Cups were brewed with this version, so it stays. Fix it, or undo its change.")
+        line_id = recipe.line_id
+        crud.delete_version(session, recipe)
+    return RedirectResponse(url=f"/lines/{line_id}/versions", status_code=303)
 
 
 @app.get("/lines/{line_id}/tidy", response_class=HTMLResponse)

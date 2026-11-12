@@ -17,6 +17,7 @@
         <a class="brew-back" href="/" aria-label="Back">←</a>
         <div class="brew-heading">
             <h2 class="brew-title">{{ title }}</h2>
+            {% if older_version %}<p class="brew-older">Version {{ older_version[0] }}, once · the current version is {{ older_version[1] }}</p>{% endif %}
             <p class="muted brew-gear">{{ latest.brewer.name }} · {{ latest.grinder.name }}</p>
         </div>
         {% if latest.bean.image_version %}
