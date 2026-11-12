@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="card error-page" role="alert">
+    <h2>{{ heading }}</h2>
+    <p class="error-message">{{ message }}</p>
+    <p class="muted">Nothing was saved. Go back: what you typed is still there, so you can fix it and try again.</p>
+    <button type="button" onclick="history.back()">‹ Go back and fix it</button>
+    <p style="margin-top:12px"><a href="/">Or go to Brew</a></p>
+</section>
+{% endblock %}

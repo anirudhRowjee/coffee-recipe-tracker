@@ -143,7 +143,7 @@
 <dialog class="sheet" id="log-sheet" aria-label="Log a cup">
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>How was it?</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
-    {% with log_recipe_id=latest.id, log_bag_id=bag_id, log_plan_id=(pending_plan.id if is_current_plan else none) %}
+    {% with log_recipe_id=latest.id, log_bag_id=bag_id, log_plan_id=(pending_plan.id if is_current_plan else none), log_bag_left=bag_left, log_dose=latest.dose_g %}
     {% include 'partials/log_brew_form.html' %}
     {% endwith %}
 </dialog>
@@ -184,7 +184,7 @@
     <details class="history-block">
         <summary class="history-summary">Rename</summary>
         <form method="post" action="/lines/{{ line.id }}/rename" class="stacked-form">
-            <label>Name <input name="name" value="{{ line.name }}" required /></label>
+            <label>Name <input name="name" value="{{ line.name }}" required data-taken="{{ lines|map(attribute='name')|list|tojson|forceescape }}" data-current="{{ line.name }}" /></label>
             <button type="submit">Rename</button>
         </form>
     </details>
@@ -213,7 +213,7 @@
                 <input type="hidden" name="brewer_id" value="{{ brewer_id }}" />
                 <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
                 <label>Name
-                    <input name="line_name" required placeholder="e.g. 2 cup" />
+                    <input name="line_name" required placeholder="e.g. 2 cup" data-taken="{{ lines|map(attribute='name')|list|tojson|forceescape }}" />
                 </label>
                 <label>Coffee (g) <input name="dose_g" type="number" step="0.1" value="{{ latest.dose_g }}" required /></label>
                 <label>Water (ml) <input name="water_ml" type="number" step="0.1" value="{{ latest.water_ml }}" required /></label>
@@ -280,9 +280,9 @@
         <label>Name (optional)
             <input name="line_name" placeholder="Default" />
         </label>
-        <label>Coffee (g) <input name="dose_g" type="number" step="0.1" min="5" max="60" inputmode="decimal" required /></label>
-        <label>Water (ml) <input name="water_ml" type="number" step="1" min="50" max="1000" inputmode="decimal" required /></label>
-        <label>Temp (°C) <input name="temp_c" type="number" step="0.5" min="70" max="100" inputmode="decimal" required /></label>
+        <label>Coffee (g) <input name="dose_g" type="number" step="any" min="5" max="60" inputmode="decimal" data-label="Coffee" data-unit=" g" required /></label>
+        <label>Water (ml) <input name="water_ml" type="number" step="any" min="50" max="1000" inputmode="decimal" data-label="Water" data-unit=" ml" required /></label>
+        <label>Temp (°C) <input name="temp_c" type="number" step="any" min="70" max="100" inputmode="decimal" data-label="Temp" data-unit=" °C" required /></label>
         <label>Grind <input name="grind_size" required /></label>
         <label>Method</label>
         {% with field_value='' %}{% include 'partials/recipe_text_field.html' %}{% endwith %}

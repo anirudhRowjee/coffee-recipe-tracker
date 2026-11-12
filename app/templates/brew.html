@@ -136,7 +136,7 @@
 {% if bag %}
 <section class="card brew-log-card" id="brew-log-card">
     <h3>Log this brew</h3>
-    {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id %}
+    {% with log_recipe_id=latest.id, log_bag_id=bag.id, log_plan_id=plan_id, log_bag_left=bag_left, log_dose=latest.dose_g %}
     {% include 'partials/log_brew_form.html' %}
     {% endwith %}
 </section>

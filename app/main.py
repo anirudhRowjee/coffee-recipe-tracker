@@ -7,6 +7,9 @@ import time
 from datetime import date as date_type, datetime, timezone
 
 from fastapi import FastAPI, File, Form, Request, HTTPException, UploadFile
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -223,6 +226,38 @@ def _redirect_to_select_handler(request: Request, exc: _redirect_to_select):
     return r
 
 
+# A refused form shows a page that says what was wrong and goes back to the form
+# (the browser keeps what was typed), instead of a bare line of text.
+def _wants_page(request: Request) -> bool:
+    return request.method == "POST" and "text/html" in request.headers.get("accept", "text/html")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error_page(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 400 and _wants_page(request):
+        return templates.TemplateResponse("error.html", {"request": request, "heading": "Not saved",
+                                                         "message": exc.detail}, status_code=400)
+    return await http_exception_handler(request, exc)
+
+
+_FIELD_NAMES = {"dose_g": "Coffee", "water_ml": "Water", "temp_c": "Temp", "grind_size": "Grind", "initial_quantity_g": "Bag size",
+                "name": "Name", "recipe_id": "Recipe", "bag_id": "Bag", "bean_id": "Coffee", "brewer_id": "Brewer", "grinder_id": "Grinder"}
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_page(request: Request, exc: RequestValidationError):
+    if not _wants_page(request):
+        return await request_validation_exception_handler(request, exc)
+    problems = []
+    for err in exc.errors():
+        field = str(err.get("loc", ["", ""])[-1])
+        label = _FIELD_NAMES.get(field, field.replace("_", " ").capitalize())
+        problems.append(f"{label} is missing." if err.get("type") == "missing" else f"{label} needs to be a number.")
+    return templates.TemplateResponse("error.html", {"request": request, "heading": "Something's missing",
+                                                     "message": " ".join(dict.fromkeys(problems)) or "Some of the form wasn't filled in."},
+                                      status_code=422)
+
+
 @app.exception_handler(_redirect_to_change_password)
 def _redirect_to_change_password_handler(request: Request, exc: _redirect_to_change_password):
     return RedirectResponse(url="/account", status_code=302)
@@ -435,6 +470,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         "all_grinders": crud.get_grinders(session, user_id) if user_id else [],
         "bean_bags": [(b, crud.get_remaining_quantity(session, b)) for b in crud.get_bags_for_bean(session, bean_id) if not b.is_completed],
         "copy_sources": [] if latest else _copy_sources(session, user_id),
+        "bag_left": crud.get_remaining_quantity(session, bag),
         "cooling_brew": cooling_brew,
         "cooling_minutes": cooling_minutes,
         "rec": rec,
@@ -980,6 +1016,7 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
             "bag": bag,
             "plan_id": plan.id if plan and not older_version else None,
             "older_version": older_version,
+            "bag_left": crud.get_remaining_quantity(session, bag) if bag else None,
         })
 
 
@@ -1389,6 +1426,7 @@ def create_brew(
     planned_brew_id: int = Form(None),
     curve: str = Form(None),
     then: str = Form(None),
+    finish_bag: str = Form(None),
 ):
     rec_delta: Optional[float] = None
     if recommended_delta and recommended_delta.strip():
@@ -1417,6 +1455,8 @@ def create_brew(
             crud.save_curve(session, new_brew.id, samples)  # type: ignore[arg-type]
         if planned_brew_id:
             crud.delete_plan(session, planned_brew_id)
+        if finish_bag:  # the cup used the last of the bag
+            crud.complete_bag(session, bag_id)
         if then == "change":  # "Save and edit the steps now", with this brew's real timings beside them
             line_id = session.get(models.Recipe, recipe_id).line_id  # type: ignore[union-attr]
             return RedirectResponse(url=f"/lines/{line_id}/change?bag_id={bag_id}&method=1&actual={new_brew.id}", status_code=303)

@@ -59,7 +59,7 @@
                         {% if step %}inputmode="decimal"{% endif %} />
                     {% else %}
                     <input id="change-{{ key }}" name="{{ key }}" type="number" inputmode="decimal" value="{{ value|num }}"
-                        data-original="{{ value|num }}" step="any" min="{{ limits[key][1] }}" max="{{ limits[key][2] }}" required />
+                        data-original="{{ value|num }}" step="any" min="{{ limits[key][1] }}" max="{{ limits[key][2] }}" data-label="{{ label }}" data-unit="{{ unit }}" required />
                     {% endif %}
                     {% if step %}<button type="button" class="stepper-btn" data-step="{{ step }}" aria-label="More">+</button>{% endif %}
                 </div>
@@ -91,7 +91,7 @@
                 <label class="check-row"><input type="checkbox" name="bag_id" value="{{ bag.id }}" /> Log a cup of the new version from the {{ bag.roast_date.strftime('%b %d') if bag.roast_date else '' }} bag</label>
                 {% if plan %}<input type="hidden" name="planned_brew_id" value="{{ plan.id }}" />{% endif %}
                 <label for="change-notes">Tasting notes</label>
-                <textarea id="change-notes" name="brew_notes" rows="2" placeholder="How did it taste?"></textarea>
+                <textarea id="change-notes" name="brew_notes" rows="2" placeholder="How did it taste?" data-draft="change-{{ latest.id }}"></textarea>
                 <label>Rating {{ tip('rating') }}</label>
                 {% with star_name='brew_rating' %}{% include 'partials/star_input.html' %}{% endwith %}
                 <label for="change-next">Next time {{ tip('log_next_time') }}</label>

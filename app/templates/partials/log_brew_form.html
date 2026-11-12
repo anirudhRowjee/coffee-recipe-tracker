@@ -21,7 +21,7 @@
         <button type="button" class="chip" data-word="{{ word|lower }}" aria-pressed="false">{{ word }}</button>
         {% endfor %}
     </div>
-    <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?"></textarea>
+    <textarea name="notes" id="log-notes" rows="3" placeholder="How did it taste?" data-draft="log-{{ log_recipe_id }}"></textarea>
 
     <label style="margin-top:10px">Next time {{ tip('log_next_time') }}</label>
     <div class="chips next-chips" hidden>
@@ -57,6 +57,13 @@
         <input name="recommended_rationale" placeholder="e.g. slightly bitter, try less" />
     </label>
 
+    {% if log_bag_left is defined and log_dose is defined and log_bag_left is not none and log_bag_left - log_dose < log_dose %}
+    <div class="form-warning">
+        {% if log_bag_left < log_dose %}The bag has only {{ log_bag_left|int }} g left, less than this cup's {{ log_dose|num }} g.
+        {% else %}After this cup the bag has {{ (log_bag_left - log_dose)|int }} g left, not enough for another.{% endif %}
+        <label class="check-row"><input type="checkbox" name="finish_bag" value="1" {% if log_bag_left - log_dose < 5 %}checked{% endif %} /> Mark the bag finished</label>
+    </div>
+    {% endif %}
     <div class="log-steps-choice" hidden>
         <button type="submit" data-then="change">Save and edit the steps now</button>
         <button type="submit" class="btn-secondary" data-then="">Save, note it for next time</button>
