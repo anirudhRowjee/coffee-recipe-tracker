@@ -3,7 +3,7 @@
 {% endif %}
 
 {% if latest %}
-{% set rec = recent_brews[0] if recent_brews and recent_brews[0].recommended_param else none %}
+{# rec: the newest brew's recommendation, or the scheduled brew's suggestion (main._latest_recipe_context) #}
 {# Only name the recipe once there is a choice, or it has been renamed #}
 {% set show_line_name = line and (lines|length > 1 or line.name != 'Default') %}
 {% if lines|length > 1 %}
@@ -59,14 +59,16 @@
     <input type="hidden" name="grinder_id" value="{{ grinder_id }}" />
     <input type="hidden" name="line_id" value="{{ line.id }}" />
     <input type="text" name="notes" placeholder="Optional note (e.g. want it stronger)" />
+    {% if not rec %}
+    {% include 'partials/plan_suggestion_fields.html' %}
+    {% endif %}
     <button type="submit">📅 Plan for next time</button>
 </form>
 {% endif %}
 
-{% if recent_brews and recent_brews[0].recommended_param %}
-{% set rec = recent_brews[0] %}
+{% if rec %}
 <div class="recommendation-banner">
-    <span class="rec-label">Recommended next</span>
+    <span class="rec-label">{% if rec.from_plan %}Planned change{% else %}Recommended next{% endif %}</span>
     <span class="rec-body">
         Change <strong>{{ rec.recommended_param.replace('_', ' ') }}</strong>
         {% if rec.recommended_delta is not none %} by <strong>{{ rec.recommended_delta }}</strong>{% endif %}

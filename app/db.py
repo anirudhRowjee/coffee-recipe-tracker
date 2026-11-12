@@ -62,6 +62,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_bean_art(conn)
         _migrate_accounts(conn)
         _migrate_brew_settings(conn)
+        _migrate_plan_suggestion(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -106,6 +107,14 @@ def _migrate_brew_settings(conn) -> None:
         conn.execute(text("ALTER TABLE user ADD COLUMN show_brew_animation BOOLEAN NOT NULL DEFAULT 1"))
     if "show_live_graph" not in user_columns:
         conn.execute(text("ALTER TABLE user ADD COLUMN show_live_graph BOOLEAN NOT NULL DEFAULT 0"))
+
+
+def _migrate_plan_suggestion(conn) -> None:
+    """A suggested change on a scheduled brew."""
+    plan_columns = _columns(conn, "plannedbrew")
+    for name, kind in (("suggested_param", "VARCHAR"), ("suggested_delta", "FLOAT"), ("suggested_rationale", "VARCHAR")):
+        if name not in plan_columns:
+            conn.execute(text(f"ALTER TABLE plannedbrew ADD COLUMN {name} {kind}"))
 
 
 DEFAULT_LINE_NAME = "Default"

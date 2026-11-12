@@ -1,0 +1,24 @@
+{# A change to try on the scheduled brew, for a recipe with no recommendation yet.
+   Fields inside a closed <details> still submit; an empty "Change" means none. #}
+<details class="plan-suggest">
+    <summary>Suggest a change to try</summary>
+    <label>Change
+        <select name="suggested_param">
+            <option value="">— nothing —</option>
+            <option value="dose_g">Dose</option>
+            <option value="water_ml">Water</option>
+            <option value="temp_c">Temp</option>
+            <option value="grind_size">Grind size</option>
+            <option value="recipe_text">Recipe text</option>
+        </select>
+    </label>
+    <label>By how much
+        <span class="signed-input">
+            <input name="suggested_delta" type="text" inputmode="decimal" placeholder="e.g. -1 (not for recipe text)" />
+            <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+        </span>
+    </label>
+    <label>Why
+        <input name="suggested_rationale" placeholder="e.g. a bit sour, try finer" />
+    </label>
+</details>

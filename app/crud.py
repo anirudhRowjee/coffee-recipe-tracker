@@ -335,6 +335,14 @@ def get_recent_brews_for_panel(session: Session, recipe: models.Recipe) -> List[
     return brews
 
 
+def line_recommendation(session: Session, line_id: int) -> Optional[models.Brew]:
+    """The brew whose recommendation the panel shows for this named recipe: the newest
+    brew of its current version (or the version it was tidied from), if it has one."""
+    latest = get_latest_recipe(session, line_id)
+    brews = get_recent_brews_for_panel(session, latest) if latest else []
+    return brews[0] if brews and brews[0].recommended_param else None
+
+
 def get_recent_deltas(session: Session, line_id: int, limit: int = 10) -> List[models.Delta]:
     return session.exec(
         select(models.Delta)
@@ -779,12 +787,14 @@ def get_pending_plan(session: Session, user_id: int) -> Optional[models.PlannedB
     ).first()
 
 
-def create_plan(session: Session, user_id: int, bag_id: int, brewer_id: int, grinder_id: int, notes: Optional[str] = None, line_id: Optional[int] = None) -> models.PlannedBrew:
+def create_plan(session: Session, user_id: int, bag_id: int, brewer_id: int, grinder_id: int, notes: Optional[str] = None, line_id: Optional[int] = None,
+                suggested_param: Optional[str] = None, suggested_delta: Optional[float] = None, suggested_rationale: Optional[str] = None) -> models.PlannedBrew:
     for existing in session.exec(
         select(models.PlannedBrew).where(models.PlannedBrew.user_id == user_id)
     ).all():
         session.delete(existing)
-    plan = models.PlannedBrew(user_id=user_id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line_id, notes=notes)
+    plan = models.PlannedBrew(user_id=user_id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line_id, notes=notes,
+                              suggested_param=suggested_param, suggested_delta=suggested_delta, suggested_rationale=suggested_rationale)
     session.add(plan)
     session.commit()
     session.refresh(plan)

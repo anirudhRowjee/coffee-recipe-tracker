@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from . import auth, brew, crud, db, export, models, theme
 
@@ -342,6 +342,13 @@ def delete_user(target_user_id: int, request: Request, admin_password: str = For
     return RedirectResponse(url="/manage", status_code=303)
 
 
+class _Rec(NamedTuple):
+    recommended_param: str
+    recommended_delta: Optional[float]
+    recommended_rationale: Optional[str]
+    from_plan: bool
+
+
 def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_id_int: Optional[int], grinder_id_int: Optional[int], user_id: Optional[int], line_id_int: Optional[int] = None) -> dict:
     pending_plan = crud.get_pending_plan(session, user_id) if user_id else None
 
@@ -357,6 +364,7 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
             "bean_id": None,
             "brewer_id": brewer_id_int,
             "grinder_id": grinder_id_int,
+            "rec": None,
             "message": "Select a bag, brewer, and grinder to show recipes.",
             "pending_plan": pending_plan,
             "is_current_plan": False,
@@ -382,7 +390,14 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         and pending_plan.grinder_id == grinder_id_int
         and (pending_plan.line_id == line.id or (pending_plan.line_id is None and line is lines[0]))
     )
+    # What to try next: the newest brew's recommendation, else the scheduled brew's suggestion
+    rec = None
+    if recent_brews and recent_brews[0].recommended_param:
+        rec = _Rec(recent_brews[0].recommended_param, recent_brews[0].recommended_delta, recent_brews[0].recommended_rationale, False)
+    elif is_current_plan and pending_plan.suggested_param:  # type: ignore[union-attr]
+        rec = _Rec(pending_plan.suggested_param, pending_plan.suggested_delta, pending_plan.suggested_rationale, True)  # type: ignore[union-attr,arg-type]
     return {
+        "rec": rec,
         "latest": latest,
         "recent_brews": recent_brews,
         "curve_ids": crud.brews_with_curves(session, [b.id for b in recent_brews]),  # type: ignore[misc]
@@ -518,7 +533,8 @@ def browse(request: Request):
         }
         recipe_options_by_bean = {
             bean.id: [
-                (line.id, f"{line.name} · {session.get(models.Brewer, line.brewer_id).name} · {session.get(models.Grinder, line.grinder_id).name}")  # type: ignore[union-attr]
+                (line.id, f"{line.name} · {session.get(models.Brewer, line.brewer_id).name} · {session.get(models.Grinder, line.grinder_id).name}",  # type: ignore[union-attr]
+                 crud.line_recommendation(session, line.id) is not None)  # type: ignore[arg-type]
                 for line in crud.get_lines_for_bean(session, bean.id)  # type: ignore[arg-type]
             ]
             for bean, _, _, _, _ in bean_recipes
@@ -760,7 +776,11 @@ def create_plan(
     grinder_id: int = Form(None),
     notes: str = Form(None),
     line_id: int = Form(None),
+    suggested_param: str = Form(None),
+    suggested_delta: str = Form(None),
+    suggested_rationale: str = Form(None),
 ):
+    suggestion = _plan_suggestion(suggested_param, suggested_delta, suggested_rationale)
     with Session(db.engine) as session:
         user = _require_user(request, session)
         bag = _owned(session, user, models.BeanBag, bag_id)
@@ -778,8 +798,31 @@ def create_plan(
             raise HTTPException(status_code=400, detail="Choose a brewer and grinder")
         if line and (line.brewer_id, line.grinder_id) != (brewer_id, grinder_id):
             line = None  # different gear: fall back to that combination's default recipe
-        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line.id if line else None)  # type: ignore[arg-type,union-attr]
+        # Only when the recipe has no recommendation yet: its own always wins
+        if line and crud.line_recommendation(session, line.id):  # type: ignore[arg-type]
+            suggestion = {}
+        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line.id if line else None, **suggestion)  # type: ignore[arg-type,union-attr]
     return RedirectResponse(url="/", status_code=303)
+
+
+SUGGESTABLE_PARAMS = ("dose_g", "water_ml", "temp_c", "grind_size", "recipe_text")
+
+
+def _plan_suggestion(param: Optional[str], delta: Optional[str], rationale: Optional[str]) -> dict:
+    """The change to try on a scheduled brew, from the schedule form; {} for none."""
+    param = (param or "").strip()
+    if not param:
+        return {}
+    if param not in SUGGESTABLE_PARAMS:
+        raise HTTPException(status_code=400, detail="Unknown parameter to change")
+    amount = None
+    if delta and delta.strip() and param != "recipe_text":
+        try:
+            amount = float(delta.strip().replace("\u2212", "-"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="The amount to change by must be a number")
+    return {"suggested_param": param, "suggested_delta": amount,
+            "suggested_rationale": (rationale or "").strip() or None}
 
 
 @app.post("/lines/{line_id}/rename")

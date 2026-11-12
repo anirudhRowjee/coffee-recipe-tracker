@@ -167,6 +167,11 @@ class PlannedBrew(SQLModel, table=True):
     # the plan is opened (plans made from the browse page don't pick one).
     line_id: Optional[int] = Field(default=None, foreign_key="recipeline.id")
     notes: Optional[str] = None
+    # A change to try, set when scheduling a recipe that has no recommendation yet.
+    # Shown like one; the brew's own recommendation always wins.
+    suggested_param: Optional[str] = None
+    suggested_delta: Optional[float] = None
+    suggested_rationale: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

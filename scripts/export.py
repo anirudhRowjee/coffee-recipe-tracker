@@ -121,9 +121,11 @@ def export_all(engine: Engine, out: Path) -> None:
         # Planned (scheduled) brews
         with open(out / "planned_brews.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "user_id", "bag_id", "brewer_id", "grinder_id", "line_id", "notes", "created_at"])
+            w.writerow(["id", "user_id", "bag_id", "brewer_id", "grinder_id", "line_id", "notes", "created_at",
+                        "suggested_param", "suggested_delta", "suggested_rationale"])
             for p in session.exec(select(PlannedBrew).order_by(PlannedBrew.id)).all():
-                w.writerow([p.id, p.user_id, p.bag_id, p.brewer_id, p.grinder_id, p.line_id, p.notes, p.created_at])
+                w.writerow([p.id, p.user_id, p.bag_id, p.brewer_id, p.grinder_id, p.line_id, p.notes, p.created_at,
+                            p.suggested_param, p.suggested_delta, p.suggested_rationale])
 
         # Deltas (change history)
         with open(out / "deltas.csv", "w", newline="") as f:

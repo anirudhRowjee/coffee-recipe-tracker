@@ -335,6 +335,15 @@ details[open] > .history-summary::before {
     white-space: nowrap;
 }
 
+/* "Suggest a change to try" on the schedule forms */
+.plan-suggest { flex: 1 1 100%; min-width: 0; }
+.plan-suggest > summary { cursor: pointer; color: #6b3d2e; font-size: 0.9rem; }
+.plan-suggest label { display: block; margin-top: 8px; }
+.plan-suggest select, .plan-suggest input { width: 100%; }
+.plan-suggest .signed-input input { flex: 1 1 auto; min-width: 0; }
+.plan-suggest[hidden] { display: none; }
+.plan-suggest-wrap { margin-top: 8px; }
+
 .recommendation-banner {
     display: flex;
     align-items: baseline;

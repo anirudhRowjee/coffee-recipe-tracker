@@ -37,8 +37,8 @@
                 {% if recipe_options %}
                 <label>Recipe
                     <select name="line_id" required>
-                        {% for line_id, label in recipe_options %}
-                        <option value="{{ line_id }}">{{ label }}</option>
+                        {% for line_id, label, has_rec in recipe_options %}
+                        <option value="{{ line_id }}"{% if has_rec %} data-has-rec="1"{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </label>
@@ -80,6 +80,10 @@
                 </label>
                 {% endif %}
                 <label>Note <input name="notes" placeholder="Optional note (e.g. want it stronger)" /></label>
+                <div class="plan-suggest-wrap">
+                    {% include 'partials/plan_suggestion_fields.html' %}
+                    <p class="muted plan-suggest-has-rec" hidden>This recipe already has a recommendation for next time.</p>
+                </div>
                 <button type="submit" style="margin-top:8px">📅 Schedule this brew</button>
             </form>
         </div>
@@ -227,4 +231,21 @@
     </section>
     {% endif %}
 </div>
+<script>
+// Offer a change to try only for a recipe with no recommendation of its own yet
+// (the server ignores one otherwise, so without JavaScript nothing goes wrong)
+document.querySelectorAll('.plan-suggest-wrap').forEach(function (wrap) {
+    var picker = wrap.closest('form').querySelector('select[name="line_id"]');
+    if (!picker) return;
+    function update() {
+        var option = picker.options[picker.selectedIndex];
+        var hasRec = !!(option && option.dataset.hasRec);
+        wrap.querySelector('.plan-suggest').hidden = hasRec;
+        wrap.querySelector('.plan-suggest-has-rec').hidden = !hasRec;
+        if (hasRec) wrap.querySelector('[name="suggested_param"]').value = '';
+    }
+    picker.addEventListener('change', update);
+    update();
+});
+</script>
 {% endblock %}

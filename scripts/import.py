@@ -294,6 +294,9 @@ def import_all(engine: Engine, src: Path) -> None:
                 line_id=_int(r.get("line_id")),
                 notes=_str(r["notes"]),
                 created_at=_datetime(r["created_at"]) or datetime.now(timezone.utc),
+                suggested_param=_str(r.get("suggested_param")),
+                suggested_delta=_float(r.get("suggested_delta")),
+                suggested_rationale=_str(r.get("suggested_rationale")),
             ))
         session.commit()
         print(f"  planned:  {len(rows)}")
