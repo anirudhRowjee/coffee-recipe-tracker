@@ -1897,3 +1897,10 @@ dialog.sheet .sheet-close { margin-left: auto; }
 .split-start .btn-start-plain { display: flex; align-items: center; justify-content: center; }
 .brew-trial { margin: 8px 0 4px; padding: 8px 12px; border-radius: 10px; background: #fff4e0; color: #4a3300; font-size: 0.9rem; line-height: 1.4; }
 .brew-trial span { color: #7d5f4b; font-size: 0.85rem; }
+/* "📅 Planned ×": the plan's cancel sits on the tag itself */
+.planned-tag { display: flex; align-items: center; gap: 4px; }
+.planned-tag form { display: inline-flex; margin: 0; }
+.plan-x { width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 50%; border: 1px solid #e0c9b0; background: #f0e4d4; color: #6b3d2e; font-size: 0.95rem; line-height: 1; position: relative; display: inline-grid; place-items: center; }
+.plan-x::after { content: ""; position: absolute; inset: -11px; } /* 44 px target */
+.plan-x:hover, .plan-x:focus-visible { background: #6b3d2e; color: #fff; }
+.plan-note { margin: 0 0 4px; font-style: italic; color: #5c3520; font-size: 0.9rem; }

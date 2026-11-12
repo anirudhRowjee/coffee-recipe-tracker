@@ -23,8 +23,17 @@
         <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
         {% endif %}
         <div class="recipe-head-text">
-            <p class="eyebrow">{% if is_current_plan %}📅 Planned{% else %}Up next{% endif %}</p>
+            {% if is_current_plan %}
+            <div class="eyebrow planned-tag">📅 Planned
+                <form method="post" action="/plan/{{ pending_plan.id }}/cancel">
+                    <button type="submit" class="plan-x" aria-label="Planned as Up next: cancel the plan" title="Cancel the plan">×</button>
+                </form>
+            </div>
+            {% else %}
+            <p class="eyebrow">Up next</p>
+            {% endif %}
             {% if bag %}<p class="recipe-bean-name">{{ bag.bean.name }}{% if show_line_name %} · {{ line.name }}{% endif %}</p>{% endif %}
+            {% if is_current_plan and pending_plan.notes %}<p class="plan-note">"{{ pending_plan.notes }}"</p>{% endif %}
             <p class="recipe-meta">{% if brewer and grinder %}{{ brewer.name }} · {{ grinder.name }} · {% endif %}version {{ version }}{% if bean_bags|length > 1 and bag %} · {{ bag.roast_date.strftime('bag of %b %d') if bag.roast_date else 'bag #' ~ bag.id }}{% endif %}</p>
             <div class="chips recipe-chips">
                 {% if brewer and grinder %}<button type="button" class="chip small" data-sheet="gear-sheet">Change gear</button>{% endif %}
@@ -81,14 +90,6 @@
     </div>
     {% endif %}
 
-    {% if is_current_plan %}
-    <div class="plan-status">
-        <span>📅 Planned as Up next{% if pending_plan.notes %} — "{{ pending_plan.notes }}"{% endif %}</span>
-        <form method="post" action="/plan/{{ pending_plan.id }}/cancel" style="display:inline">
-            <button type="submit" class="btn-action">Cancel</button>
-        </form>
-    </div>
-    {% endif %}
 
     <div class="dock">
         {% if trial %}
