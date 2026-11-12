@@ -1,14 +1,20 @@
 {% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
 
 {% block content %}
+{#
+  Brew. "Up next" is the planned brew, else the coffee brewed most recently with its
+  gear and recipe (main.index). Nothing to suggest, or "Pick another coffee": the
+  coffees as cards. A coffee never brewed asks for a brewer and grinder first.
+#}
 {% if saved %}
 <div class="saved-banner" role="status">
     <span><strong>Version {{ saved.version }} saved.</strong> {{ saved.change }}{% if saved.why %}, {{ saved.why }}{% endif %}.</span>
-    {% if bags_with_remaining %}{% set sb = (bags_with_remaining|selectattr('0.bean_id', 'equalto', saved.recipe.bean_id)|first) %}{% if sb %}
-    <a class="btn-brew" href="/lines/{{ saved.recipe.line_id }}/brew?bag_id={{ sb[0].id }}">▶ Brew version {{ saved.version }} now</a>
-    {% endif %}{% endif %}
+    {% set sb = (coffees|selectattr('0.bean_id', 'equalto', saved.recipe.bean_id)|first) %}
+    {% if sb %}<a class="btn-brew" href="/lines/{{ saved.recipe.line_id }}/brew?bag_id={{ sb[0].id }}">▶ Brew version {{ saved.version }} now</a>{% endif %}
 </div>
 {% endif %}
+
 <section class="morning-strip">
     <div class="pixel-art">{{ pixel_art_svg | safe }}</div>
     <div>
@@ -16,143 +22,49 @@
         <p class="quote">"{{ morning_quote }}"</p>
     </div>
 </section>
-{% set picker_section %}
-    <section class="card">
-        <h2>What are we brewing today?</h2>
-        <form id="picker-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change"
-            class="stacked-form">
 
-            <div class="form-group">
-                <label>Bag</label>
-                <input type="hidden" name="bag_id" id="bag_id_input" value="{{ bag_id or '' }}" />
-                <button type="button" class="bag-picker-btn {% if pending_plan and bag %}bag-picker-btn--selected{% endif %}" id="bag-picker-btn" onclick="openBagModal()">
-                    {% if pending_plan and bag %}{{ bag.bean.name }}{% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %} · {{ planned_bag_remaining|int }}g{% else %}Choose a bag{% endif %}
-                </button>
-            </div>
+{% if combo and combo[1] and combo[2] %}
+<section class="up-next" id="latest-wing"{% if is_current_plan %} data-planned="1"{% endif %}>
+    {% include 'partials/latest_recipe.html' %}
+</section>
 
-            <div class="form-group">
-                <label>Brewer</label>
-                <select id="brewer-select" name="brewer_id" required>
-                    <option value="" disabled {% if not pending_plan %}selected{% endif %}>Choose</option>
-                    {% for brewer in brewers %}
-                    <option value="{{ brewer.id }}" {% if pending_plan and pending_plan.brewer_id == brewer.id %}selected{% endif %}>{{ brewer.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+{% elif combo and bag %}
+<section class="card" style="{{ bag.bean|bean_theme }}">
+    <p class="eyebrow">Brewing</p>
+    <h2 class="recipe-bean-name">{{ bag.bean.name }}</h2>
+    <p>What are you brewing it with?</p>
+    {% with gear_bag=bag, gear_brewer_id=combo[1], gear_grinder_id=combo[2] %}{% include 'partials/gear_choice.html' %}{% endwith %}
+    <p class="muted" style="margin-top:12px"><button type="button" class="link-button" data-sheet="coffee-sheet">Pick another coffee</button></p>
+</section>
 
-            <div class="form-group">
-                <label>Grinder</label>
-                <select id="grinder-select" name="grinder_id" required>
-                    <option value="" disabled {% if not pending_plan %}selected{% endif %}>Choose</option>
-                    {% for grinder in grinders %}
-                    <option value="{{ grinder.id }}" {% if pending_plan and pending_plan.grinder_id == grinder.id %}selected{% endif %}>{{ grinder.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </form>
-    </section>
-{% endset %}
-{% set brew_section %}
-    <section class="card {% if not pending_plan %}hidden{% endif %}" id="latest-wing"{% if pending_plan %} data-planned="1"{% endif %}>
-        <h2>{% if pending_plan %}Up next{% else %}Recipe{% endif %}</h2>
-        {% if pending_plan %}
-        {% include 'partials/latest_recipe.html' %}
-        {% endif %}
-    </section>
-{% endset %}
-<div class="grid">
-    {% if pending_plan %}
-    {{ brew_section }}
-    {{ picker_section }}
+{% else %}
+<section class="card choose-coffee">
+    <h2>What are we brewing?</h2>
+    {% if coffees %}
+    {% include 'partials/coffee_cards.html' %}
     {% else %}
-    {{ picker_section }}
-    {{ brew_section }}
+    <p class="muted">No coffee with any left. <a href="/browse">Add a coffee</a> to get started.</p>
     {% endif %}
-</div>
+</section>
+{% endif %}
+
+<dialog class="sheet" id="coffee-sheet" aria-label="Pick a coffee">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Pick a coffee</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    {% if coffees|length > 5 %}<input type="search" class="coffee-search" placeholder="Search coffees or flavours" aria-label="Search coffees" />{% endif %}
+    {% include 'partials/coffee_cards.html' %}
+    <p class="muted" style="margin-top:12px"><a href="/browse">+ Add a coffee</a></p>
+</dialog>
 
 {% if show_welcome %}{% include 'partials/welcome.html' %}{% endif %}
-
-{# Bag picker modal #}
-<div id="bag-modal-overlay" class="bag-modal-overlay hidden" onclick="closeBagModalOnOverlay(event)">
-    <div class="bag-modal">
-        <div class="bag-modal-header">
-            <h3>Pick a bag</h3>
-            <button type="button" class="bag-modal-close" onclick="closeBagModal()">✕</button>
-        </div>
-        <input type="text" id="bag-search" placeholder="Search by bean name or flavor notes…"
-            oninput="filterBags(this.value)" autocomplete="off" />
-        <div class="bag-modal-list" id="bag-modal-list">
-            {% for bag, remaining in bags_with_remaining %}
-            {% set bag_label %}{{ bag.bean.name }}{% if bag.roast_date %} · {{ bag.roast_date.strftime('%b %d') }}{% endif %} · {{ remaining|int }}g{% endset %}
-            <div class="bag-card"
-                data-name="{{ bag.bean.name | lower }}"
-                data-flavor="{{ (bag.bean.flavor_notes or '') | lower }}"
-                data-id="{{ bag.id }}"
-                data-label="{{ bag_label }}"
-                onclick="selectBag(this.dataset.id, this.dataset.label)">
-                {% if bag.bean.image_version %}
-                <img class="bag-art-thumb" src="/beans/{{ bag.bean_id }}/image?v={{ bag.bean.image_version }}" alt="" loading="lazy" />
-                {% endif %}
-                <div class="bag-card-title">{{ bag.bean.name }}</div>
-                {% if bag.bean.flavor_notes %}
-                <div class="bag-card-flavor">{{ bag.bean.flavor_notes }}</div>
-                {% endif %}
-                <div class="bag-card-meta">
-                    {% if bag.roast_date %}{{ bag.roast_date.strftime('%b %d, %Y') }} · {% endif %}
-                    {{ remaining|int }}g remaining
-                    {% if bag.is_frozen %} · ❄ Frozen{% endif %}
-                    {% if remaining <= bag.low_threshold_g %} · ⚠ Low{% endif %}
-                </div>
-            </div>
-            {% else %}
-            <p class="muted" style="padding:12px">No active bags.</p>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
 <script>
-    function openBagModal() {
-        document.getElementById('bag-modal-overlay').classList.remove('hidden');
-        setTimeout(() => document.getElementById('bag-search').focus(), 50);
-    }
-
-    function closeBagModal() {
-        document.getElementById('bag-modal-overlay').classList.add('hidden');
-        document.getElementById('bag-search').value = '';
-        filterBags('');
-    }
-
-    function closeBagModalOnOverlay(e) {
-        if (e.target === document.getElementById('bag-modal-overlay')) closeBagModal();
-    }
-
-    function filterBags(query) {
-        const q = query.toLowerCase();
-        document.querySelectorAll('.bag-card').forEach(card => {
-            const matches = card.dataset.name.includes(q) || card.dataset.flavor.includes(q);
-            card.style.display = matches ? '' : 'none';
+    // Search the coffee sheet by name or flavour notes
+    document.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('coffee-search')) return;
+        var q = e.target.value.toLowerCase();
+        e.target.closest('dialog').querySelectorAll('.coffee-card').forEach(function (c) {
+            c.hidden = q && c.getAttribute('data-search').indexOf(q) === -1;
         });
-    }
-
-    function selectBag(id, label) {
-        document.getElementById('bag_id_input').value = id;
-        document.getElementById('bag-picker-btn').textContent = label;
-        document.getElementById('bag-picker-btn').classList.add('bag-picker-btn--selected');
-        closeBagModal();
-        document.getElementById('bag_id_input').dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') closeBagModal();
-    });
-
-    document.body.addEventListener('htmx:afterSwap', e => {
-        if (e.target.id !== 'latest-wing') return;
-        const complete = document.getElementById('bag_id_input').value
-            && document.getElementById('brewer-select').value
-            && document.getElementById('grinder-select').value;
-        e.target.classList.toggle('hidden', !complete);
     });
 </script>
 {% endblock %}

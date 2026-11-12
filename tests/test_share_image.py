@@ -67,7 +67,7 @@ def test_nothing_private_on_the_card(app):
 
 def test_recipe_card_links_to_it(app):
     post(app, "/recipes", BASELINE)
-    assert 'href="/lines/1/share-image">Share as image</a>' in latest(app)
+    assert 'href="/lines/1/share-image">As a picture' in latest(app)
 
 
 def test_tasting_notes_only_when_asked_for(app):

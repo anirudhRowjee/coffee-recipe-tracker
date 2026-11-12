@@ -200,6 +200,60 @@ def get_active_bags_for_user(session: Session, user_id: int) -> List[models.Bean
     ).all()
 
 
+def pick_bag(session: Session, bean_id: int, exclude_empty: bool = True) -> Optional[models.BeanBag]:
+    """Which bag of a coffee to brew from: the oldest open one that isn't frozen
+    (by roast date, then purchase date), else a frozen one, else None."""
+    bags = [b for b in get_bags_for_bean(session, bean_id) if not b.is_completed]
+    if exclude_empty:
+        bags = [b for b in bags if get_remaining_quantity(session, b) > 0]
+    bags.sort(key=lambda b: (bool(b.is_frozen), b.roast_date or b.purchase_date or date.max, b.id or 0))
+    return bags[0] if bags else None
+
+
+def last_brewed_at(session: Session, bean_id: int) -> Optional[datetime]:
+    return session.exec(
+        select(func.max(models.Brew.brewed_at))
+        .join(models.Recipe, models.Recipe.id == models.Brew.recipe_id)  # type: ignore[arg-type]
+        .where(models.Recipe.bean_id == bean_id)
+    ).first()
+
+
+def coffees_to_brew(session: Session, user_id: int) -> List[Tuple[models.BeanBag, float, Optional[datetime]]]:
+    """One entry per coffee with coffee left: (the bag to use, grams left, last brewed),
+    the most recently brewed first, then the rest by name."""
+    out = []
+    for bean in session.exec(select(models.Bean).where(models.Bean.user_id == user_id).order_by(models.Bean.name)).all():
+        bag = pick_bag(session, bean.id)  # type: ignore[arg-type]
+        if bag:
+            out.append((bag, get_remaining_quantity(session, bag), last_brewed_at(session, bean.id)))  # type: ignore[arg-type]
+    out.sort(key=lambda e: (e[2] is None, -(e[2].timestamp() if e[2] else 0)))
+    return out
+
+
+def gear_for_bean(session: Session, bean_id: int) -> Optional[models.RecipeLine]:
+    """The named recipe last used with a coffee: its brewer and grinder are the ones to suggest."""
+    lines = get_lines_for_bean(session, bean_id)
+    return lines[0] if lines else None
+
+
+def copy_line(session: Session, source: models.RecipeLine, bean_id: int, brewer_id: int, grinder_id: int) -> models.RecipeLine:
+    """Start a new named recipe for another coffee or gear from an existing one's current
+    version (version 1 of the copy). Keeps the name if it's free there."""
+    latest = get_latest_recipe(session, source.id)  # type: ignore[arg-type]
+    name = source.name
+    if get_lines_for_combo(session, bean_id, brewer_id, grinder_id):
+        bean = session.get(models.Bean, source.bean_id)
+        base = name if name != "Default" else f"From {bean.name if bean else 'another coffee'}"
+        name, n = base, 2
+        while line_name_taken(session, bean_id, brewer_id, grinder_id, name):
+            name, n = f"{base} {n}", n + 1
+    line = create_line(session, bean_id, brewer_id, grinder_id, name)
+    create_recipe(session, bean_id=bean_id, brewer_id=brewer_id, grinder_id=grinder_id, line_id=line.id,  # type: ignore[arg-type]
+                  dose_g=latest.dose_g, water_ml=latest.water_ml, temp_c=latest.temp_c,  # type: ignore[union-attr]
+                  grind_size=latest.grind_size, recipe_text=latest.recipe_text)  # type: ignore[union-attr]
+    return line
+
+
 def get_remaining_quantity(session: Session, bag: models.BeanBag) -> float:
     used = session.exec(
         select(func.sum(models.Recipe.dose_g))

@@ -222,9 +222,9 @@ def test_browse_shows_latest_version_per_bean(app):
 
 
 def test_completed_bag_is_hidden_from_picker(app):
-    assert 'data-id="1"' in app.client.get("/").text
+    assert 'href="/?bag_id=1"' in app.client.get("/").text
     post(app, "/bags/1/complete", {})
-    assert 'data-id="1"' not in app.client.get("/").text
+    assert 'href="/?bag_id=1"' not in app.client.get("/").text
 
 
 def test_delete_bag_removes_its_brews_and_plans(app):

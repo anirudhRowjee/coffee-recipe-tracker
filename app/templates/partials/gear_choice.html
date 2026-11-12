@@ -1,0 +1,19 @@
+{% from 'partials/tip.html' import tip %}
+{# Brewer and grinder as chips; each is a link that keeps the other choice.
+   Expects gear_bag, gear_brewer_id, gear_grinder_id, and brewers/grinders (all_brewers/all_grinders in the card). #}
+{% set gear_brewers = all_brewers if all_brewers is defined and all_brewers else brewers %}
+{% set gear_grinders = all_grinders if all_grinders is defined and all_grinders else grinders %}
+<p class="eyebrow" style="margin-top:8px">Brewer</p>
+<div class="chips">
+    {% for b in gear_brewers %}
+    <a class="chip{% if b.id == gear_brewer_id %} on{% endif %}" href="/?bag_id={{ gear_bag.id }}&amp;brewer_id={{ b.id }}{% if gear_grinder_id %}&amp;grinder_id={{ gear_grinder_id }}{% endif %}">{{ b.name }}</a>
+    {% endfor %}
+    <a class="chip ghost" href="/manage#brewers">+ Add</a>
+</div>
+<p class="eyebrow" style="margin-top:8px">Grinder {{ tip('grind') }}</p>
+<div class="chips">
+    {% for g in gear_grinders %}
+    <a class="chip{% if g.id == gear_grinder_id %} on{% endif %}" href="/?bag_id={{ gear_bag.id }}&amp;grinder_id={{ g.id }}{% if gear_brewer_id %}&amp;brewer_id={{ gear_brewer_id }}{% endif %}">{{ g.name }}</a>
+    {% endfor %}
+    <a class="chip ghost" href="/manage#grinders">+ Add</a>
+</div>

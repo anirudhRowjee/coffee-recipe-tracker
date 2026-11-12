@@ -1,0 +1,16 @@
+{# Coffees with coffee left, as big cards; most recently brewed first. Expects coffees: (bag, grams left, last brewed). #}
+<div class="coffee-cards">
+    {% for bag, remaining, last in coffees %}
+    <a class="coffee-card" href="/?bag_id={{ bag.id }}" style="{{ bag.bean|bean_theme }}"
+        data-search="{{ (bag.bean.name ~ ' ' ~ (bag.bean.flavor_notes or ''))|lower }}">
+        {% if bag.bean.image_version %}
+        <img src="/beans/{{ bag.bean_id }}/image?v={{ bag.bean.image_version }}" alt="" loading="lazy" />
+        {% else %}<span class="coffee-card-swatch"></span>{% endif %}
+        <span class="coffee-card-text">
+            <b>{{ bag.bean.name }}</b>
+            <span>{{ remaining|int }} g left{% if remaining <= bag.low_threshold_g %} · low{% endif %}{% if bag.is_frozen %} · frozen{% endif %}</span>
+            <span class="muted">{% if last %}brewed {{ last|ist('%b %d') }}{% else %}not brewed yet{% endif %}</span>
+        </span>
+    </a>
+    {% endfor %}
+</div>

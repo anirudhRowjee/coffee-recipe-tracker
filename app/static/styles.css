@@ -1628,3 +1628,55 @@ button, .btn-brew, select, input:not([type=radio]):not([type=checkbox]) { min-he
 .log-steps-choice { display: grid; gap: 8px; margin-top: 10px; }
 .actuals-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 6px 0; }
 .step-actual { grid-column: 1 / -1; font-size: 0.8rem; color: #6b3d2e; margin-top: -2px; }
+
+/* ==== Brew: the Up next card ==== */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.eyebrow { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8a6a55; font-weight: 700; margin: 0; }
+.up-next-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) {
+    .up-next-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+    .up-next-side { position: sticky; top: 20px; }
+}
+.up-next .recipe-card { padding: 16px; border-radius: 14px; }
+.recipe-head { display: flex; gap: 12px; align-items: flex-start; }
+.recipe-head .bag-art-thumb { position: static; width: 64px; height: 64px; flex: 0 0 64px; border-radius: 12px; object-fit: cover; }
+.recipe-head-text { min-width: 0; flex: 1; }
+.recipe-head .recipe-bean-name { font-family: Georgia, 'Palatino Linotype', Palatino, serif; font-size: 1.35rem; margin: 2px 0 4px; line-height: 1.2; }
+.recipe-chips { margin: 4px 0 0; }
+a.chip, span.chip { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.chip.ghost { border-style: dashed; color: #8a6a55; }
+.line-picker { margin: 10px 0 0; }
+.rtiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 4px; }
+@media (min-width: 600px) { .rtiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.rtile { border: 1px solid #e0c9b0; border-radius: 12px; padding: 8px 10px; background: #fffaf3; min-width: 0; }
+.rtile b { display: block; font-size: 1.6rem; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rtile b small { font-size: 0.8rem; font-weight: 500; }
+.rtile i { display: block; font-style: normal; font-size: 0.75rem; color: #8a6a55; }
+.rtile .eyebrow { font-size: 0.64rem; }
+.tile-tips { font-size: 0.8rem; margin: 2px 0 8px; }
+.method-block { margin: 8px 0; }
+.method-block summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.recommendation-banner .btn-action { margin-left: auto; text-decoration: none; }
+.recommendation-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.btn-start { display: block; width: 100%; text-align: center; font-size: 1.1rem; padding: 14px; border-radius: 12px; margin-top: 6px; }
+.link-button { display: block; width: 100%; background: none; border: 0; color: #6b3d2e; text-decoration: underline; font-weight: 500; min-height: 40px; }
+.dock .link-button { margin-top: 2px; }
+.action-list { display: flex; flex-direction: column; border: 1px solid #e0c9b0; border-radius: 14px; overflow: hidden; background: #fffcf7; margin-top: 12px; }
+.action-list > a, .action-list > button {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 50px; padding: 10px 14px; text-align: left;
+    background: none; border: 0; border-bottom: 1px solid #efe2d3; border-radius: 0; color: #2c1810; font-weight: 500; text-decoration: none; font-size: 1rem;
+}
+.action-list > :last-child { border-bottom: 0; }
+.action-list .chev { margin-left: auto; color: #8a6a55; }
+.action-list .muted { margin-left: auto; font-size: 0.82rem; }
+.up-next-side h3 { margin: 4px 0 8px; }
+.coffee-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.coffee-card { display: flex; flex-direction: column; border: 1px solid #e0c9b0; border-radius: 14px; overflow: hidden; background: #fffcf7; color: #2c1810; text-decoration: none; min-height: 150px; }
+.coffee-card img, .coffee-card-swatch { width: 100%; height: 84px; object-fit: cover; display: block; background: var(--mesh-strong, linear-gradient(135deg, #e8c9a0, #b06a43 55%, #4b2a1b)); }
+.coffee-card-text { display: flex; flex-direction: column; padding: 8px 10px 10px; font-size: 0.85rem; gap: 1px; }
+.coffee-card-text b { font-size: 0.95rem; line-height: 1.25; }
+.coffee-card[hidden] { display: none; }
+.coffee-search { margin-bottom: 10px; }
+.copy-list { display: grid; gap: 8px; margin-top: 8px; }
+.copy-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; background: #fffcf7; color: #2c1810; border: 1px solid #e0c9b0; border-radius: 12px; padding: 10px 12px; }
+.copy-row .muted { font-weight: 400; font-size: 0.85rem; }

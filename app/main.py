@@ -38,6 +38,7 @@ templates.env.filters["bean_theme"] = theme.bean_style
 templates.env.filters["needs_tidy"] = brew.needs_tidy
 templates.env.filters["num"] = words.num
 templates.env.filters["steps_summary"] = brew.steps_summary
+templates.env.filters["ratio"] = export.ratio
 templates.env.filters["param_label"] = words.label
 templates.env.globals["change_label"] = words.change
 templates.env.globals["TIPS"] = tips.TIPS
@@ -357,6 +358,20 @@ class _Rec(NamedTuple):
     from_plan: bool
 
 
+def _copy_sources(session: Session, user_id: Optional[int]) -> list:
+    """Every named recipe of yours, newest first, as something to copy onto a coffee and gear that has none."""
+    if not user_id:
+        return []
+    out = []
+    for bean in crud.get_beans(session, user_id):
+        for line in crud.get_lines_for_bean(session, bean.id):  # type: ignore[arg-type]
+            latest = crud.get_latest_recipe(session, line.id)  # type: ignore[arg-type]
+            if latest:
+                out.append((line, bean, latest))
+    out.sort(key=lambda e: e[2].created_at, reverse=True)
+    return out[:12]
+
+
 def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_id_int: Optional[int], grinder_id_int: Optional[int], user_id: Optional[int], line_id_int: Optional[int] = None) -> dict:
     pending_plan = crud.get_pending_plan(session, user_id) if user_id else None
 
@@ -413,6 +428,13 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
         if 0 <= minutes < 60:
             cooling_brew, cooling_minutes = recent_brews[0], max(minutes, 1)
     return {
+        "version": crud.version_number(session, latest) if latest else 0,
+        "brewer": session.get(models.Brewer, brewer_id_int),
+        "grinder": session.get(models.Grinder, grinder_id_int),
+        "all_brewers": crud.get_brewers(session, user_id) if user_id else [],
+        "all_grinders": crud.get_grinders(session, user_id) if user_id else [],
+        "bean_bags": [(b, crud.get_remaining_quantity(session, b)) for b in crud.get_bags_for_bean(session, bean_id) if not b.is_completed],
+        "copy_sources": [] if latest else _copy_sources(session, user_id),
         "cooling_brew": cooling_brew,
         "cooling_minutes": cooling_minutes,
         "rec": rec,
@@ -434,33 +456,54 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[str] = None,
+          grinder_id: Optional[str] = None, line_id: Optional[str] = None, pick: int = 0):
+    """Brew. "Up next" is the brew you planned; otherwise the coffee you brewed most
+    recently (with the gear and recipe you used); otherwise, or with ?pick=1, a choice
+    of coffees. ?bag_id= (and optionally brewer, grinder, recipe) picks one."""
+    ints = {k: int(v) if v and v.isdigit() else None
+            for k, v in (("bag", bag_id), ("brewer", brewer_id), ("grinder", grinder_id), ("line", line_id))}
     with Session(db.engine) as session:
         user = _require_user(request, session)
-        bags = crud.get_active_bags_for_user(session, user.id)  # type: ignore[arg-type]
-        bags_with_remaining = [
-            (bag, rem) for bag in bags
-            if (rem := crud.get_remaining_quantity(session, bag)) > 0
-        ]
-        brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
-        grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
-
+        coffees = crud.coffees_to_brew(session, user.id)  # type: ignore[arg-type]
         pending_plan = crud.get_pending_plan(session, user.id)  # type: ignore[arg-type]
         context = {
             "request": request,
-            "bags_with_remaining": bags_with_remaining,
-            "brewers": brewers,
-            "grinders": grinders,
+            "coffees": coffees,
+            "brewers": crud.get_brewers(session, user.id),  # type: ignore[arg-type]
+            "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
             "current_user": user,
             "pending_plan": pending_plan,
             "show_welcome": not crud.user_has_recipes(session, user.id),  # type: ignore[arg-type]
             "pixel_art_svg": _generate_pixel_art_svg(cell=4),
             "morning_quote": random.choice(QUOTES),
+            "picking": bool(pick),
         }
-        if pending_plan:
-            context.update(_latest_recipe_context(session, pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, user.id, pending_plan.line_id))  # type: ignore[arg-type]
+        combo = None
+        if ints["bag"]:
+            bag = _owned(session, user, models.BeanBag, ints["bag"])
+            line = crud.gear_for_bean(session, bag.bean_id)
+            brewer = ints["brewer"] or (line.brewer_id if line else None)
+            grinder = ints["grinder"] or (line.grinder_id if line else None)
+            if brewer:
+                _owned(session, user, models.Brewer, brewer)
+            if grinder:
+                _owned(session, user, models.Grinder, grinder)
+            combo = (bag.id, brewer, grinder, ints["line"])
+        elif pending_plan and not pick:
+            combo = (pending_plan.bag_id, pending_plan.brewer_id, pending_plan.grinder_id, pending_plan.line_id)
+        elif coffees and coffees[0][2] and not pick:
+            bag = coffees[0][0]
+            line = crud.gear_for_bean(session, bag.bean_id)
+            if line:
+                combo = (bag.id, line.brewer_id, line.grinder_id, line.id)
+        context["combo"] = combo
+        if combo and combo[1] and combo[2]:
+            context.update(_latest_recipe_context(session, combo[0], combo[1], combo[2], user.id, combo[3]))  # type: ignore[arg-type]
             if context.get("bag"):
                 context["planned_bag_remaining"] = crud.get_remaining_quantity(session, context["bag"])
+        elif combo:
+            context["bag"] = session.get(models.BeanBag, combo[0])
         # Just saved a new version on Try a change: say what changed, offer to brew it
         saved_id = request.query_params.get("saved", "")
         if saved_id.isdigit():
@@ -858,6 +901,22 @@ def _plan_suggestion(param: Optional[str], delta: Optional[str], rationale: Opti
             raise HTTPException(status_code=400, detail="The amount to change by must be a number")
     return {"suggested_param": param, "suggested_delta": amount,
             "suggested_rationale": (rationale or "").strip() or None}
+
+
+@app.post("/lines/{line_id}/copy")
+def copy_line(request: Request, line_id: int, bean_id: int = Form(...), brewer_id: int = Form(...),
+              grinder_id: int = Form(...), bag_id: int = Form(None)):
+    """Copy a named recipe's current version onto another coffee and gear, as its version 1."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        source = _owned(session, user, models.RecipeLine, line_id)
+        _owned(session, user, models.Bean, bean_id)
+        _owned(session, user, models.Brewer, brewer_id)
+        _owned(session, user, models.Grinder, grinder_id)
+        bag = _owned(session, user, models.BeanBag, bag_id) if bag_id else crud.pick_bag(session, bean_id)
+        new_line = crud.copy_line(session, source, bean_id, brewer_id, grinder_id)
+        target = f"/?bag_id={bag.id}&brewer_id={brewer_id}&grinder_id={grinder_id}&line_id={new_line.id}" if bag else "/"
+    return RedirectResponse(url=target, status_code=303)
 
 
 @app.post("/lines/{line_id}/rename")
