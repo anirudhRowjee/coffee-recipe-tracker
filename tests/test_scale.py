@@ -49,7 +49,7 @@ def test_free_text_still_renders(app):
 
 def test_script_is_served(app):
     r = app.client.get("/static/scale.js")
-    assert r.status_code == 200 and "0x0ffe" in r.text
+    assert r.status_code == 200 and "00000ffe-0000-1000-8000-00805f9b34fb" in r.text
 
 
 def test_static_urls_change_when_the_file_does(app, tmp_path, monkeypatch):

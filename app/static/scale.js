@@ -14,7 +14,11 @@
     var timer = document.getElementById('brew-timer');
     if (!timer || !navigator.bluetooth || !window.isSecureContext) return;
 
-    var SERVICE = 0x0ffe, WEIGHT = 0xff11, COMMAND = 0xff12;
+    // 0x0FFE, 0xFF11, 0xFF12 written out in full: Chrome takes the short numbers, but
+    // iOS Bluetooth browsers such as Bluefy may only take the full form
+    var SERVICE = '00000ffe-0000-1000-8000-00805f9b34fb',
+        WEIGHT = '0000ff11-0000-1000-8000-00805f9b34fb',
+        COMMAND = '0000ff12-0000-1000-8000-00805f9b34fb';
     // 03 0A <command> 00 00, then the checksum (send adds it)
     var COMMANDS = { tare: 0x01, start: 0x04, stop: 0x05, reset: 0x06, tareAndStart: 0x07 };
     var EVENT_STOPPED = 0x00, EVENT_STARTED = 0x01;
@@ -180,9 +184,18 @@
         connectBtn.disabled = true;
         connectBtn.textContent = 'Connecting…';
         var stage = 'choosing the scale';  // named in the error, since some browsers give no message
+        function isCancel(err) {
+            var text = err && (err.message || (typeof err === 'string' ? err : ''));
+            return (err && err.name === 'NotFoundError') || /cancel/i.test(text || '');
+        }
         navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: 'BOOKOO' }, { namePrefix: 'Bookoo' }, { services: [SERVICE] }],
             optionalServices: [SERVICE]
+        })['catch'](function (err) {
+            // a browser that can't take these filters (Bluefy answered just "2"): list
+            // every nearby device instead, and the scale is the one called BOOKOO…
+            if (isCancel(err)) throw err;
+            return navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE] });
         }).then(function (d) {
             device = d;
             stage = 'connecting';
@@ -222,8 +235,7 @@
             // Chrome rejects with an Error; Bluefy may reject with a bare string or object
             var name = err && err.name, text = err && (err.message || (typeof err === 'string' ? err : ''));
             if (!text && err) { try { text = JSON.stringify(err); } catch (e) { text = String(err); } }
-            var cancelled = name === 'NotFoundError' || /cancel/i.test(text || '');
-            if (!cancelled) {
+            if (!isCancel(err)) {
                 window.alert('Could not connect to the scale while ' + stage + ': ' +
                     (name && name !== 'Error' ? name + ': ' : '') + (text || String(err)) +
                     '\n\nIf it isn’t listed: close the Bookoo app (on every phone or tablet nearby) and wake the scale.');
