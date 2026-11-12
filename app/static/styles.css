@@ -1315,7 +1315,7 @@ textarea[hidden] {
 .brew-scale.at-target strong, .brew-scale.at-target > span { color: #2e7d4f; }
 .brew-scale.at-target .brew-ok { display: block; }
 .brew-scale.at-target .brew-bar span { background: #2e7d4f; }
-.brew-scale.over-target .brew-bar span { background: #b3261e; }
+.brew-scale .brew-over { color: #9a5b00; font-weight: 700; white-space: nowrap; }
 
 .brew-card { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, #f5ebe0); transition: background 0.3s; }
 .brew-card.reached { background: #e3efe5; }

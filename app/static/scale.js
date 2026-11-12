@@ -226,10 +226,14 @@
         var tg = t ? (t % 1 ? t.toFixed(1) : String(t)) + ' g' : '';
         label.textContent = stopped ? 'In the cup' : 'Weight';
         tareBtn.hidden = stopped;  // after a brew the bar is Reset, Resume and Log
-        targetBox.textContent = stopped ? 'g' : !running() ? 'g on the scale'
-            : !t ? 'g' : reached ? 'g · ' + tg + ' reached' : 'g → ' + tg;
+        // Past the target is still reached: the tick stays, so a glance says "no need to
+        // pour more", and the overshoot is shown beside it for anyone aiming to be exact.
+        var over = running() && reached && w > t + CLOSE_G ? Math.round(w - t) : 0;
+        targetBox.innerHTML = stopped ? 'g' : !running() ? 'g on the scale'
+            : !t ? 'g' : reached ? 'g · ' + tg + ' reached' + (over ? ' <span class="brew-over">+' + over + ' g</span>' : '')
+            : 'g → ' + tg;
         fill.style.width = (stopped ? 100 : running() && t ? Math.max(0, Math.min(1, w / t)) * 100 : 0).toFixed(1) + '%';
-        panel.className = 'brew-tile brew-scale' + (running() && t && w > t + CLOSE_G ? ' over-target' : running() && reached ? ' at-target' : '');
+        panel.className = 'brew-tile brew-scale' + (running() && reached ? ' at-target' : '');
     }
 
     function say(text) { note.textContent = text; note.hidden = !text; }
