@@ -1,3 +1,4 @@
+{% from 'partials/tip.html' import tip %}
 {% if message %}
 <p class="help">{{ message }}</p>
 {% endif %}
@@ -8,7 +9,7 @@
 {% set show_line_name = line and (lines|length > 1 or line.name != 'Default') %}
 {% if lines|length > 1 %}
 <form class="line-picker stacked-form" hx-get="/recipes/latest" hx-target="#latest-wing" hx-trigger="change" hx-include="#picker-form">
-    <label>Recipe
+    <label>Recipe {{ tip('recipes') }}
         <select name="line_id">
             {% for ln in lines %}
             <option value="{{ ln.id }}" {% if ln.id == line.id %}selected{% endif %}>{{ ln.name }}</option>
@@ -17,7 +18,7 @@
     </label>
 </form>
 {% endif %}
-<div class="recipe-card" style="{{ latest.bean|bean_theme }}">
+<div class="recipe-card" style="{{ latest.bean|bean_theme }}" data-tour="1" data-tour-text="{{ TIPS.up_next }}">
     {% if latest.bean.image_version %}
     <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
     {% endif %}
@@ -27,20 +28,20 @@
     <p><strong>Coffee:</strong> {{ latest.dose_g|num }} g &nbsp;·&nbsp;
        <strong>Water:</strong> {{ latest.water_ml|num }} ml &nbsp;·&nbsp;
        <strong>Temp:</strong> {{ latest.temp_c|num }} °C &nbsp;·&nbsp;
-       <strong>Grind:</strong> {{ latest.grind_size }}</p>
+       <strong>Grind:</strong> {{ latest.grind_size }} {{ tip('grind') }}</p>
     {% if latest.recipe_text %}
     <p><strong>Recipe:</strong></p>
     <pre class="recipe-text">{{ latest.recipe_text }}</pre>
     {% endif %}
     {% if line %}
-    <a class="btn-brew" href="/lines/{{ line.id }}/brew?bag_id={{ bag_id }}{% if is_current_plan %}&amp;plan_id={{ pending_plan.id }}{% endif %}">▶ Brew</a>
+    <a class="btn-brew" data-tour="2" data-tour-text="{{ TIPS.start }}" href="/lines/{{ line.id }}/brew?bag_id={{ bag_id }}{% if is_current_plan %}&amp;plan_id={{ pending_plan.id }}{% endif %}">▶ Brew</a>
     {% if latest.recipe_text|needs_tidy %}
-    <p class="share-links">Not in steps yet · <a href="/lines/{{ line.id }}/tidy?bag_id={{ bag_id }}">Tidy into steps</a></p>
+    <p class="share-links">Not in steps yet · <a href="/lines/{{ line.id }}/tidy?bag_id={{ bag_id }}">Tidy into steps</a> {{ tip('tidy') }}</p>
     {% endif %}
     <p class="share-links">
         <a href="/lines/{{ line.id }}/share-image">Share as image</a>
         · <a href="/lines/{{ line.id }}/export.md" target="_blank" rel="noopener">Share as text</a>
-        · <a href="/lines/{{ line.id }}/export.md?download=1">Save as a file</a>
+        · <a href="/lines/{{ line.id }}/export.md?download=1">Save as a file</a> {{ tip('share') }}
     </p>
     {% endif %}
 </div>
@@ -63,6 +64,7 @@
     {% include 'partials/plan_suggestion_fields.html' %}
     {% endif %}
     <button type="submit">📅 Make this Up next</button>
+    <p class="muted plan-help">{{ tip('plan') }} Puts this at the top of Brew next time.</p>
 </form>
 {% endif %}
 
@@ -75,7 +77,7 @@
 
 {% if rec %}
 <div class="recommendation-banner" data-rec="{{ 'plan' if rec.from_plan else 'brew' }}">
-    <span class="rec-label">{% if rec.from_plan %}Planned change{% else %}Next time{% endif %}</span>
+    <span class="rec-label" data-tour="3" data-tour-text="{{ TIPS.next_time }}">{% if rec.from_plan %}Planned change{% else %}Next time{% endif %}</span>
     <span class="rec-body">
         <strong>{{ change_label(rec.recommended_param, rec.recommended_delta) }}</strong>
         {% if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{% endif %}
@@ -112,7 +114,7 @@
 </details>
 
 <details class="history-block" style="margin-top:8px">
-    <summary class="history-summary">Try a change</summary>
+    <summary class="history-summary">Try a change {{ tip('one_change', 'Why one change?') }}</summary>
     <div style="margin-top:10px">
         {% if rec %}
         <div id="rec-data" hidden

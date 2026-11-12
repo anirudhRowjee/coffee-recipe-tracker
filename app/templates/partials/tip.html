@@ -1,0 +1,7 @@
+{# A "?" button that opens a short explanation (app/tips.py). Uses the browser's
+   popover (iOS 17+): a tap outside closes it. static/tips.js places it next to the
+   button and gives older browsers the same behaviour. #}
+{% macro tip(key, label='What is this?') -%}
+{%- set pid = 'tip-' ~ key ~ '-' ~ range(1000000)|random -%}
+<button type="button" class="tip-btn" popovertarget="{{ pid }}" aria-label="{{ label }}">?</button><span popover id="{{ pid }}" class="tip-pop" role="tooltip">{{ TIPS[key] }} <a href="/help">More</a></span>
+{%- endmacro %}

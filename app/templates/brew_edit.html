@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
 
 {% block content %}
 <section class="card edit-cup" style="{{ recipe.bean|bean_theme }}">
@@ -13,7 +14,7 @@
 
         <label for="edit-notes">Tasting notes</label>
         <textarea name="notes" id="edit-notes" rows="5" placeholder="How did it taste?">{{ brew.notes or '' }}{% if cooled %}{{ '\n' if brew.notes else '' }}Cooled: {% endif %}</textarea>
-        <button type="button" class="btn-secondary btn-inline" id="cooled-note">+ Cooled note</button>
+        <button type="button" class="btn-secondary btn-inline" id="cooled-note">+ Cooled note</button> {{ tip('cooled') }}
 
         <label style="margin-top:12px" for="edit-rec">Next time</label>
         <select name="recommended_param" id="edit-rec">

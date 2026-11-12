@@ -1541,3 +1541,33 @@ dialog.sheet .sheet-close { width: auto; background: none; color: #8a6a55; borde
 
 /* touch targets */
 button, .btn-brew, select, input:not([type=radio]):not([type=checkbox]) { min-height: 44px; }
+
+/* ==== Help: "?" tips, the tour, How this works ==== */
+.tip-btn {
+    display: inline-grid; place-items: center; width: 22px; height: 22px; min-height: 22px; padding: 0; margin: 0 2px;
+    border-radius: 50%; border: 1px solid #e0c9b0; background: #f0e4d4; color: #6b3d2e;
+    font: 800 0.72rem/1 ui-sans-serif, system-ui, sans-serif; vertical-align: middle; position: relative; cursor: pointer;
+}
+.tip-btn::after { content: ""; position: absolute; inset: -11px; } /* a 44 px target */
+.tip-btn:focus-visible { outline: 2px solid #6b3d2e; outline-offset: 2px; }
+.tip-pop {
+    position: fixed; inset: auto; margin: 0; border: 0; padding: 10px 12px; border-radius: 12px;
+    background: #3b2418; color: #fbf3e8; font: 400 0.86rem/1.45 ui-sans-serif, system-ui, sans-serif;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); max-width: calc(100vw - 24px); text-align: left; letter-spacing: 0; text-transform: none;
+}
+.tip-pop a { color: #f4c58b; }
+.tip-pop:not(:popover-open):not(.is-open) { display: none; }
+.tip-pop.is-open { display: block; z-index: 60; }
+.plan-help { font-size: 0.85rem; margin: 6px 0 0; }
+.tour-spot { position: fixed; z-index: 70; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(30, 18, 10, 0.55); pointer-events: none; transition: all .2s; }
+.tour-card { position: fixed; z-index: 71; left: 16px; right: 16px; max-width: 420px; margin: 0 auto; background: #3b2418; color: #fbf3e8; border-radius: 14px; padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.tour-card p { margin: 0 0 10px; line-height: 1.45; }
+.tour-actions { display: flex; align-items: center; gap: 8px; }
+.tour-actions span { flex: 1; opacity: .75; font-size: .85rem; }
+.tour-actions button { width: auto; min-height: 40px; padding: 6px 14px; border-radius: 10px; }
+.tour-actions .tour-skip { background: transparent; border: 0; color: #f4c58b; }
+.tour-actions .tour-next { background: #fbf3e8; color: #3b2418; border: 0; font-weight: 700; }
+.help-loop li { margin: 6px 0; line-height: 1.5; }
+.help-terms dt { font-weight: 700; margin-top: 10px; }
+.help-terms dd { margin: 2px 0 0; color: #5c3520; }
+@media (prefers-reduced-motion: reduce) { .tour-spot { transition: none; } }

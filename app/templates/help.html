@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="card help-page">
+    <h2>How this works</h2>
+    <ol class="help-loop">
+        <li><strong>Add a coffee</strong> and the bag you bought.</li>
+        <li><strong>Brew it.</strong> Start brewing opens a timer that walks you through each step.</li>
+        <li><strong>Rate it</strong>, and say what you'd try next time.</li>
+        <li><strong>Try one change</strong>: grind, temperature, coffee, water or the steps. It's saved as a new version.</li>
+        <li><strong>Repeat</strong> until it's the cup you want.</li>
+    </ol>
+    <p><a class="btn-action" href="/?tour=1">Replay the tour</a></p>
+</section>
+
+<section class="card">
+    <h3>Words you'll see</h3>
+    <dl class="help-terms">
+        <dt>Recipe</dt><dd>{{ TIPS.recipes }}</dd>
+        <dt>Version</dt><dd>{{ TIPS.version }} {{ TIPS.one_change }}</dd>
+        <dt>Next time</dt><dd>{{ TIPS.log_next_time }}</dd>
+        <dt>Up next</dt><dd>{{ TIPS.plan }}</dd>
+        <dt>Grind</dt><dd>{{ TIPS.grind }}</dd>
+        <dt>Ratio (1:16)</dt><dd>{{ TIPS.ratio }}</dd>
+        <dt>Logging a cup</dt><dd>{{ TIPS.log }} {{ TIPS.rating }}</dd>
+        <dt>Scale</dt><dd>{{ TIPS.scale }} {{ TIPS.pour_to }}</dd>
+        <dt>Graph</dt><dd>{{ TIPS.graph }}</dd>
+        <dt>Sharing</dt><dd>{{ TIPS.share }}</dd>
+        <dt>Frozen bags</dt><dd>{{ TIPS.frozen }}</dd>
+    </dl>
+</section>
+{% endblock %}

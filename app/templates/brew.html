@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
 
 {# No site header here: everything down to the Start button has to fit on one phone screen #}
 {% block site_header %}{% endblock %}
@@ -22,7 +23,7 @@
         <img class="bag-art-thumb" src="/beans/{{ latest.bean_id }}/image?v={{ latest.bean.image_version }}" alt="" />
         {% endif %}
         {# A Bookoo scale over Web Bluetooth (static/scale.js); hidden where the browser can't #}
-        <button type="button" id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden>+ Scale</button>
+        <button type="button" id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden>+ Scale</button>{{ tip('scale') }}
         <span class="brew-pill brew-pill-on" id="brew-scale-status" hidden><i></i>Scale</span>
     </div>
 

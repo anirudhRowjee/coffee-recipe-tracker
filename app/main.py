@@ -14,7 +14,7 @@ from sqlmodel import Session
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from . import auth, brew, crud, db, export, models, theme, words
+from . import auth, brew, crud, db, export, models, theme, tips, words
 
 app = FastAPI(title="Coffee Recipe Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -39,6 +39,7 @@ templates.env.filters["needs_tidy"] = brew.needs_tidy
 templates.env.filters["num"] = words.num
 templates.env.filters["param_label"] = words.label
 templates.env.globals["change_label"] = words.change
+templates.env.globals["TIPS"] = tips.TIPS
 templates.env.globals["change_amount"] = words.amount
 templates.env.filters["step_editor_data"] = brew.step_editor_data
 # What a cup costs at a café: every cup brewed at home is that much saved
@@ -526,6 +527,13 @@ def save_brew_settings(request: Request, show_brew_animation: Optional[str] = Fo
         user = _require_user(request, session)
         crud.set_brew_settings(session, user, animation=bool(show_brew_animation), live_graph=bool(show_live_graph))
     return RedirectResponse(url="/manage#brew-mode", status_code=303)
+
+
+@app.get("/help", response_class=HTMLResponse)
+def help_page(request: Request):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        return templates.TemplateResponse("help.html", {"request": request, "current_user": user})
 
 
 @app.get("/browse", response_class=HTMLResponse)

@@ -10,6 +10,7 @@
     <script src="{{ static('htmx.min.js') }}"></script>
     <script src="{{ static('step_editor.js') }}"></script>
     <script src="{{ static('sheet.js') }}" defer></script>
+    <script src="{{ static('tips.js') }}" defer></script>
     <script>
         function toggleForm(formId) {
             const form = document.getElementById(formId);
@@ -29,7 +30,7 @@
     </script>
 </head>
 
-<body>
+<body data-user="{{ current_user.id if current_user else '' }}">
     <div class="app-shell">
         {% block site_header %}
         {% set here = request.url.path if request else '' %}

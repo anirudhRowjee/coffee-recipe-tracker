@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
 
 {% block content %}
 <div class="grid">
 
-    <section class="card savings-card">
-        <h2>Lifetime savings</h2>
+    <p class="help-link"><a href="/help">How this works</a> · <a href="/?tour=1">Replay the tour</a></p>
+<section class="card savings-card">
+        <h2>Lifetime savings {{ tip('savings') }}</h2>
         <p class="savings-amount">{{ (cups * cup_price)|inr }}</p>
         {% if cups %}
         <p class="muted">{{ cups }} cup{{ '' if cups == 1 else 's' }} brewed since {{ first_brew.day }} {{ first_brew.strftime('%b %Y') }}, at {{ cup_price|inr }} a café cup.</p>
@@ -14,7 +16,7 @@
     </section>
 
     <section class="card streak-card">
-        <h2>Brewing streak</h2>
+        <h2>Brewing streak {{ tip('streak') }}</h2>
         <dl class="streak-stats">
             <div><dt>Current</dt><dd>{{ streak.current|days }}</dd></div>
             <div>
