@@ -1777,3 +1777,17 @@ a.chip, span.chip { display: inline-flex; align-items: center; gap: 4px; text-de
 .check.done .t { color: #8a6a55; text-decoration: line-through; }
 .check .chips form { display: inline; margin: 0; }
 .starter-grind { display: block; width: 100%; margin-top: 6px; font-weight: 500; }
+
+/* ==== Share page: size as a segmented control, extras as switches ==== */
+.seg-links { display: flex; }
+.seg-links a, .seg-links b { flex: 1; text-align: center; padding: 9px 8px; border-radius: 9px; font-weight: 600; text-decoration: none; min-height: 40px; }
+.seg-links a { color: #8a6a55; }
+.seg-links b { background: #fffcf7; color: #2c1810; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.share-switches { margin: 10px 0; }
+.switch-link .switch-ui { margin-left: auto; width: 44px; height: 26px; border-radius: 13px; background: #d9c6b3; position: relative; flex: 0 0 44px; }
+.switch-link .switch-ui::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+.switch-link.on .switch-ui { background: #6b3d2e; }
+.switch-link.on .switch-ui::after { left: 21px; }
+.put-away summary { cursor: pointer; min-height: 40px; }
+.put-away-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; }
+.put-away-row .btn-action { margin-left: auto; width: auto; }

@@ -92,10 +92,12 @@ def get_beans(session: Session, user_id: int) -> List[models.Bean]:
     ).all())
 
 
-def get_brewers(session: Session, user_id: int) -> List[models.Brewer]:
+def get_brewers(session: Session, user_id: int, archived: bool = False) -> List[models.Brewer]:
+    """Your brewers in use (archived=True: the ones put away)."""
     return list(session.exec(
         select(models.Brewer)
         .where(models.Brewer.user_id == user_id)
+        .where(models.Brewer.archived == archived)  # noqa: E712
         .order_by(models.Brewer.name)
     ).all())
 
@@ -174,10 +176,12 @@ def user_has_recipes(session: Session, user_id: int) -> bool:
     ).first() is not None
 
 
-def get_grinders(session: Session, user_id: int) -> List[models.Grinder]:
+def get_grinders(session: Session, user_id: int, archived: bool = False) -> List[models.Grinder]:
+    """Your grinders in use (archived=True: the ones put away)."""
     return list(session.exec(
         select(models.Grinder)
         .where(models.Grinder.user_id == user_id)
+        .where(models.Grinder.archived == archived)  # noqa: E712
         .order_by(models.Grinder.name)
     ).all())
 

@@ -77,6 +77,7 @@ class Brewer(SQLModel, table=True):
     method: Optional[str] = None
     notes: Optional[str] = None
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    archived: bool = False  # put away: out of the pickers, its recipes kept
 
     user: Optional["User"] = Relationship(back_populates="brewers")
     recipes: List["Recipe"] = Relationship(back_populates="brewer")
@@ -87,6 +88,7 @@ class Grinder(SQLModel, table=True):
     name: str
     notes: Optional[str] = None
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    archived: bool = False  # put away: out of the pickers, its recipes kept
 
     user: Optional["User"] = Relationship(back_populates="grinders")
     recipes: List["Recipe"] = Relationship(back_populates="grinder")

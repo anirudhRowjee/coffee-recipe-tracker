@@ -63,6 +63,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_accounts(conn)
         _migrate_brew_settings(conn)
         _migrate_plan_suggestion(conn)
+        _migrate_gear_archive(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -115,6 +116,13 @@ def _migrate_plan_suggestion(conn) -> None:
     for name, kind in (("suggested_param", "VARCHAR"), ("suggested_delta", "FLOAT"), ("suggested_rationale", "VARCHAR")):
         if name not in plan_columns:
             conn.execute(text(f"ALTER TABLE plannedbrew ADD COLUMN {name} {kind}"))
+
+
+def _migrate_gear_archive(conn) -> None:
+    """Brewers and grinders can be put away instead of deleted."""
+    for table in ("brewer", "grinder"):
+        if "archived" not in _columns(conn, table):
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
 
 
 DEFAULT_LINE_NAME = "Default"

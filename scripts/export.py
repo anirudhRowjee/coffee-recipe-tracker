@@ -71,16 +71,16 @@ def export_all(engine: Engine, out: Path) -> None:
         # Brewers
         with open(out / "brewers.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "user_id", "name", "method", "notes"])
+            w.writerow(["id", "user_id", "name", "method", "notes", "archived"])
             for b in session.exec(select(Brewer).order_by(Brewer.id)).all():
-                w.writerow([b.id, b.user_id, b.name, b.method, b.notes])
+                w.writerow([b.id, b.user_id, b.name, b.method, b.notes, b.archived])
 
         # Grinders
         with open(out / "grinders.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "user_id", "name", "notes"])
+            w.writerow(["id", "user_id", "name", "notes", "archived"])
             for g in session.exec(select(Grinder).order_by(Grinder.id)).all():
-                w.writerow([g.id, g.user_id, g.name, g.notes])
+                w.writerow([g.id, g.user_id, g.name, g.notes, g.archived])
 
         # Named recipes
         with open(out / "recipe_lines.csv", "w", newline="") as f:

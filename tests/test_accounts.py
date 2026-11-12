@@ -319,6 +319,8 @@ POST_ATTACKS = [
     ("/lines/1/copy", {"bean_id": 2, "brewer_id": 2, "grinder_id": 3}),
     ("/lines/1/copy", {"bean_id": 1, "brewer_id": 1, "grinder_id": 1}),
     ("/lines/1/undo", {}),
+    ("/brewers/1/archive", {}),
+    ("/grinders/1/archive", {}),
     ("/recipes/1/fix", {"dose_g": "1", "water_ml": "1", "temp_c": "90", "grind_size": "1"}),
     ("/recipes/1/reason", {"rationale": "x"}),
     ("/recipes/1/delete", {}),

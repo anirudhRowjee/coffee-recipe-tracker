@@ -602,6 +602,7 @@ def manage(request: Request):
         ]
         brewers = crud.get_brewers(session, user.id)  # type: ignore[arg-type]
         grinders = crud.get_grinders(session, user.id)  # type: ignore[arg-type]
+        put_away = crud.get_brewers(session, user.id, archived=True) + crud.get_grinders(session, user.id, archived=True)  # type: ignore[operator,arg-type]
         all_users = crud.get_users(session) if user.is_admin else []
         cups, first_brew = crud.get_brew_totals(session, user.id)  # type: ignore[arg-type]
         return templates.TemplateResponse("manage.html", {
@@ -614,6 +615,7 @@ def manage(request: Request):
             "archived_beans_with_bags": archived_beans_with_bags,
             "brewers": brewers,
             "grinders": grinders,
+            "put_away": put_away,
             "current_user": user,
             "all_users": all_users,
         })
@@ -889,6 +891,21 @@ def delete_grinder(request: Request, grinder_id: int):
         user = _require_user(request, session)
         _owned(session, user, models.Grinder, grinder_id)
         crud.delete_grinder(session, grinder_id)
+    return RedirectResponse(url="/manage#gear", status_code=303)
+
+
+@app.post("/{kind}/{item_id}/archive")
+def archive_gear(request: Request, kind: str, item_id: int, archived: str = Form("1")):
+    """Put a brewer or grinder away (out of the pickers, its recipes and cups kept), or bring it back."""
+    model = {"brewers": models.Brewer, "grinders": models.Grinder}.get(kind)
+    with Session(db.engine) as session:
+        user = _require_user(request, session)  # sign-in first, like every route
+        if not model:
+            raise HTTPException(status_code=404, detail="Not found")
+        item = _owned(session, user, model, item_id)
+        item.archived = archived == "1"
+        session.add(item)
+        session.commit()
     return RedirectResponse(url="/manage#gear", status_code=303)
 
 

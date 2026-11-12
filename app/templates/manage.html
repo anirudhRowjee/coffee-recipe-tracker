@@ -49,6 +49,10 @@
                     <label>Notes <input name="notes" value="{{ b.notes or '' }}" /></label>
                     <button type="submit">Save</button>
                 </form>
+                <form method="post" action="/brewers/{{ b.id }}/archive">
+                    <button type="submit" class="btn-secondary">Put away</button>
+                    <p class="muted">Takes it out of the pickers. Its recipes and cups stay, and you can bring it back.</p>
+                </form>
                 <form method="post" action="/brewers/{{ b.id }}/delete" onsubmit="return confirm('Delete {{ b.name }} and every recipe and cup made with it?')">
                     <button type="submit" class="btn-danger">Delete {{ b.name }}</button>
                 </form>
@@ -68,6 +72,10 @@
                     <label>Notes <input name="notes" value="{{ g.notes or '' }}" /></label>
                     <button type="submit">Save</button>
                 </form>
+                <form method="post" action="/grinders/{{ g.id }}/archive">
+                    <button type="submit" class="btn-secondary">Put away</button>
+                    <p class="muted">Takes it out of the pickers. Its recipes and cups stay, and you can bring it back.</p>
+                </form>
                 <form method="post" action="/grinders/{{ g.id }}/delete" onsubmit="return confirm('Delete {{ g.name }} and every recipe and cup made with it?')">
                     <button type="submit" class="btn-danger">Delete {{ g.name }}</button>
                 </form>
@@ -77,6 +85,21 @@
             {% endfor %}
         </div>
     </section>
+
+    {% if put_away %}
+    <details class="card put-away">
+        <summary><h3 style="display:inline">Put away ({{ put_away|length }})</h3></summary>
+        <div class="action-list">
+            {% for item in put_away %}
+            <form method="post" action="/{{ 'brewers' if item.__tablename__ == 'brewer' else 'grinders' }}/{{ item.id }}/archive" class="gear-row put-away-row">
+                <input type="hidden" name="archived" value="0" />
+                <span class="row-text"><b>{{ item.name }}</b></span>
+                <button type="submit" class="btn-action">Bring back</button>
+            </form>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
 
     <section class="card brew-settings" id="brew-mode">
         <h2>Brew mode</h2>

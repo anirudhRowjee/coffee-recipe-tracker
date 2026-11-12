@@ -179,6 +179,7 @@ def import_all(engine: Engine, src: Path) -> None:
                 name=r["name"],
                 method=_str(r["method"]),
                 notes=_str(r["notes"]),
+                archived=_bool(r.get("archived")),
             ))
         session.commit()
         print(f"  brewers:  {len(rows)}")
@@ -191,6 +192,7 @@ def import_all(engine: Engine, src: Path) -> None:
                 user_id=_int(r.get("user_id")),
                 name=r["name"],
                 notes=_str(r["notes"]),
+                archived=_bool(r.get("archived")),
             ))
         session.commit()
         print(f"  grinders: {len(rows)}")
