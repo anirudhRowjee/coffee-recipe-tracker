@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<section class="card morning-banner">
+<section class="morning-strip">
     <div class="pixel-art">{{ pixel_art_svg | safe }}</div>
-    <p class="greeting">Hi, {{ current_user.name }}!</p>
-    <p class="quote">"{{ morning_quote }}"</p>
+    <div>
+        <p class="greeting">Hi, {{ current_user.name }}!</p>
+        <p class="quote">"{{ morning_quote }}"</p>
+    </div>
 </section>
 {% set picker_section %}
     <section class="card">
