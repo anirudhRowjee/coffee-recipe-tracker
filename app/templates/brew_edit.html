@@ -8,7 +8,7 @@
     <p class="muted">{{ recipe.bean.name }}{% if recipe.line and recipe.line.name != 'Default' %} · {{ recipe.line.name }}{% endif %} · version {{ version }}
         · {{ recipe.dose_g|num }} g · {{ recipe.water_ml|num }} ml{% if has_curve %} · <a href="/brews/{{ brew.id }}/graph">Graph</a>{% endif %}</p>
 
-    <form method="post" action="/brews/{{ brew.id }}/edit" class="stacked-form" id="edit-cup-form">
+    <form method="post" action="/brews/{{ brew.id }}/edit" class="stacked-form" id="edit-cup-form" data-next-time>
         <label style="margin-top:8px">Rating</label>
         {% with star_name='rating', star_value=brew.rating %}{% include 'partials/star_input.html' %}{% endwith %}
 
@@ -16,25 +16,10 @@
         <textarea name="notes" id="edit-notes" rows="5" placeholder="How did it taste?">{{ brew.notes or '' }}{% if cooled %}{{ '\n' if brew.notes else '' }}Cooled: {% endif %}</textarea>
         <button type="button" class="btn-secondary btn-inline" id="cooled-note">+ Cooled note</button> {{ tip('cooled') }}
 
-        <label style="margin-top:12px" for="edit-rec">Next time</label>
-        <select name="recommended_param" id="edit-rec">
-            <option value="">— same again —</option>
-            {% for value, text in [('dose_g', 'Coffee'), ('water_ml', 'Water'), ('temp_c', 'Temp'), ('grind_size', 'Grind'), ('recipe_text', 'Method')] %}
-            <option value="{{ value }}" {% if brew.recommended_param == value %}selected{% endif %}>{{ text }}</option>
-            {% endfor %}
-        </select>
-        <div id="edit-rec-delta-row">
-            <label style="margin-top:6px">By how much
-                <span class="signed-input">
-                    <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -1"
-                        value="{{ brew.recommended_delta|num if brew.recommended_delta is not none else '' }}" />
-                    <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
-                </span>
-            </label>
-        </div>
-        <label>Why
-            <input name="recommended_rationale" value="{{ brew.recommended_rationale or '' }}" placeholder="e.g. still a bit sour" />
-        </label>
+        {% with nt_param=brew.recommended_param, nt_delta=brew.recommended_delta, nt_rationale=brew.recommended_rationale %}
+        {% include 'partials/next_time_fields.html' %}
+        {% endwith %}
+        <input type="hidden" name="then" value="" />
 
         {% if bags|length > 1 %}
         <label>Bag
@@ -48,7 +33,11 @@
         </label>
         {% endif %}
 
-        <button type="submit" style="margin-top:12px">Save</button>
+        <div class="log-steps-choice" hidden>
+            <button type="submit" data-then="change">Save and edit the steps now</button>
+            <button type="submit" class="btn-secondary" data-then="">Save, note it for next time</button>
+        </div>
+        <button type="submit" class="log-save" style="margin-top:12px">Save</button>
     </form>
     <form method="post" action="/brews/{{ brew.id }}/delete" style="margin-top:10px">
         <button type="submit" class="btn-secondary btn-danger-text">Delete this cup</button>
@@ -67,12 +56,7 @@
         notes.focus();
         notes.setSelectionRange(notes.value.length, notes.value.length);
     }
-    var sel = document.getElementById('edit-rec');
-    function sync() {
-        document.getElementById('edit-rec-delta-row').hidden = !sel.value || sel.value === 'recipe_text';
-    }
-    sel.addEventListener('change', sync);
-    sync();
 })();
 </script>
+<script src="{{ static('log_form.js') }}"></script>
 {% endblock %}

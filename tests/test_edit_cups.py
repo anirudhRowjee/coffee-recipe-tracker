@@ -120,3 +120,17 @@ def test_nobody_else_can_undo_or_edit(app):
     assert app.client.post("/brews/1/edit", data={"notes": "x"}).status_code == 404
     assert app.client.post("/brews/1/delete").status_code == 404
     assert re.search("warm, a bit sour", app.client.get("/").text) is None
+
+
+def test_correcting_a_cup_uses_the_next_time_chips_and_can_go_to_try_a_change(app):
+    brew = logged(app)
+    post(app, f"/brews/{brew}/edit", {"notes": "x", "recommended_param": "temp_c", "recommended_delta": "3"})
+    page = app.client.get(f"/brews/{brew}/edit?cooled=1").text
+    assert 'class="chips next-chips"' in page and "data-next-time" in page
+    assert '<option value="temp_c" selected>' in page and 'value="3"' in page
+    r = app.client.post(f"/brews/{brew}/edit", data={"notes": "x\nCooled: sour", "recommended_param": "recipe_text",
+                                                     "then": "change"}, follow_redirects=False)
+    assert r.status_code == 303
+    line = app.scalar("select r.line_id from brew b join recipe r on r.id = b.recipe_id where b.id = :b", b=brew)
+    assert r.headers["location"].startswith(f"/lines/{line}/change?") and f"actual={brew}" in r.headers["location"]
+    assert app.client.get(r.headers["location"]).status_code == 200

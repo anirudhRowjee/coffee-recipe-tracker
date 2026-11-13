@@ -1,0 +1,40 @@
+{% from 'partials/tip.html' import tip %}
+{# Next time, as taps: a chip picks the setting and a default amount, − / + adjust it
+   (static/log_form.js). The select and amount underneath are what's sent, so no-JS
+   still works. Used by the log form and by correcting a cup (brew_edit.html), which
+   passes the cup's own nt_param / nt_delta / nt_rationale to start from. With
+   nt_then, "Change steps" offers "Save and edit the steps now" (then=change). #}
+{% set nt_param = nt_param if nt_param is defined else none %}
+{% set nt_delta = nt_delta if nt_delta is defined else none %}
+<label style="margin-top:10px">Next time {{ tip('log_next_time') }}</label>
+<div class="chips next-chips" hidden>
+    {% for label, param, amount in [('Finer', 'grind_size', -1), ('Coarser', 'grind_size', 1), ('Hotter', 'temp_c', 2), ('Cooler', 'temp_c', -2),
+                                    ('More coffee', 'dose_g', 0.5), ('Less coffee', 'dose_g', -0.5), ('More water', 'water_ml', 10), ('Less water', 'water_ml', -10),
+                                    ('Change steps', 'recipe_text', ''), ('Same again', '', '')] %}
+    <button type="button" class="chip" data-param="{{ param }}" data-amount="{{ amount }}" aria-pressed="false">{{ label }}</button>
+    {% endfor %}
+</div>
+<div class="next-amount" hidden>
+    <span class="next-amount-label"></span>
+    <span class="mini-stepper"><button type="button" data-nudge="-1" aria-label="Less">−</button><b class="next-amount-value"></b><button type="button" data-nudge="1" aria-label="More">+</button></span>
+</div>
+<div class="next-fields">
+    <select name="recommended_param" onchange="this.form.querySelector('.rec-delta-row').hidden = !this.value || this.value === 'recipe_text'">
+        <option value="">— same again —</option>
+        {% for value, text in [('dose_g', 'Coffee'), ('water_ml', 'Water'), ('temp_c', 'Temp'), ('grind_size', 'Grind'), ('recipe_text', 'Method')] %}
+        <option value="{{ value }}" {% if nt_param == value %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+    </select>
+    <div class="rec-delta-row" {% if not nt_param or nt_param == 'recipe_text' %}hidden{% endif %}>
+        <label style="margin-top:6px">By how much
+            <span class="signed-input">
+                <input name="recommended_delta" type="text" inputmode="decimal" placeholder="e.g. -0.5"
+                    value="{{ nt_delta|num if nt_delta is not none else '' }}" />
+                <button type="button" class="btn-sign" onclick="flipSign(this)" aria-label="Flip sign">±</button>
+            </span>
+        </label>
+    </div>
+</div>
+<label>Why <span class="muted">(optional)</span>
+    <input name="recommended_rationale" value="{{ nt_rationale or '' if nt_rationale is defined else '' }}" placeholder="e.g. slightly bitter, try less" />
+</label>

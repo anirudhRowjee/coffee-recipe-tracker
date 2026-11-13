@@ -1737,6 +1737,7 @@ def edit_brew(
     recommended_delta: str = Form(None),
     recommended_rationale: str = Form(None),
     bag_id: int = Form(None),
+    then: str = Form(None),
 ):
     param = (recommended_param or "").strip() or None
     if param and param not in SUGGESTABLE_PARAMS:
@@ -1758,6 +1759,10 @@ def edit_brew(
                 raise HTTPException(status_code=400, detail="That bag is a different coffee")
             fields["bag_id"] = bag_id
         crud.update_brew(session, brew, **fields)
+        if then == "change":  # "Save and edit the steps now": Try a change, with this cup's timings
+            return RedirectResponse(
+                url=f"/lines/{brew.recipe.line_id}/change?bag_id={brew.bag_id}&method=1&actual={brew.id}",  # type: ignore[union-attr]
+                status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 
