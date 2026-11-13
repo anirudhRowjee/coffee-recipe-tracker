@@ -26,6 +26,8 @@
         {# A Bookoo scale over Web Bluetooth (static/scale.js); hidden where the browser can't #}
         <button type="button" id="brew-scale-connect" class="brew-pill brew-scale-btn" hidden>+ Scale</button>{{ tip('scale') }}
         <span class="brew-pill brew-pill-on" id="brew-scale-status" hidden><i></i>Scale</span>
+        {# shown by the script when the browser has stopped the beeps; a tap turns them back on and plays one #}
+        <button type="button" id="brew-sound" class="brew-pill brew-sound" hidden>🔇 Sound off · tap</button>
     </div>
     {% if trial %}<p class="brew-trial"><strong>Trying {{ trial.before_after }}</strong>{% if trial.rationale %} · {{ trial.rationale }}{% endif %}<br /><span>Saved as version {{ trial.version }} only if you log this cup.</span></p>{% endif %}
 
@@ -242,12 +244,15 @@
             // says it's playing on purpose (Safari 16.4+; other browsers don't have this)
             try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
             var Ctx = window.AudioContext || window.webkitAudioContext;
-            if (Ctx && !audio) { try { audio = new Ctx(); } catch (e) { audio = null; } }
+            if (Ctx && !audio) {
+                try { audio = new Ctx(); audio.onstatechange = soundCheck; } catch (e) { audio = null; }
+            }
             if (!audio) return;
             if (audio.state !== 'running' && audio.resume) { try { audio.resume(); } catch (e) {} }
             // iOS only lets a page make sound later if it played something during a tap:
-            // a silent blip, once
-            if (!unlocked) {
+            // a silent blip, and again on any tap after the sound was suspended (a lock, a
+            // call, the scale's picker sheet)
+            if (!unlocked || audio.state !== 'running') {
                 try {
                     var blip = audio.createBufferSource();
                     blip.buffer = audio.createBuffer(1, 1, 22050);
@@ -256,7 +261,53 @@
                     unlocked = true;
                 } catch (e) {}
             }
+            holdSession();
         }
+        // Where the page can't say it plays on purpose (no navigator.audioSession: Bluefy and
+        // other in-app browsers), an iPad's or iPhone's silent mode mutes every beep. Playing a
+        // silent <audio> on a loop marks the page as playing, which lets the beeps through and
+        // keeps the sound awake between steps. Started by a tap, paused when the page is hidden.
+        var keepAlive = null;
+        function silentWav() {
+            var n = 8000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+            function s(at, text) { for (var i = 0; i < text.length; i++) b[at + i] = text.charCodeAt(i); }
+            s(0, 'RIFF'); v.setUint32(4, 36 + n, true); s(8, 'WAVEfmt ');
+            v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+            v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+            s(36, 'data'); v.setUint32(40, n, true);
+            for (var i = 44; i < b.length; i++) b[i] = 128;  // 8-bit silence
+            return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+        }
+        function holdSession() {
+            if (navigator.audioSession || document.hidden) return;
+            try {
+                if (!keepAlive) {
+                    keepAlive = document.createElement('audio');
+                    keepAlive.setAttribute('playsinline', '');
+                    keepAlive.setAttribute('x-webkit-airplay', 'deny');
+                    keepAlive.loop = true;
+                    keepAlive.src = silentWav();
+                }
+                if (keepAlive.paused) {
+                    var p = keepAlive.play();
+                    if (p && p['catch']) p['catch'](function () {});
+                }
+            } catch (e) {}
+        }
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && keepAlive) keepAlive.pause();
+        });
+        // Say so when the browser has stopped the sound (it can't be turned back on without a
+        // tap), instead of a brew passing in silence; tapping it plays a beep to show it works
+        var soundBtn = document.getElementById('brew-sound');
+        function soundCheck() {
+            var off = audio ? audio.state !== 'running' : (startedAt !== null || !!countdown);
+            soundBtn.hidden = !off;
+        }
+        soundBtn.addEventListener('click', function () {
+            setTimeout(function () { beep('tick'); soundCheck(); }, 60);
+        });
+        setInterval(soundCheck, 1000);
         document.addEventListener('click', wakeAudio, true);
         document.addEventListener('touchend', wakeAudio, true);
 

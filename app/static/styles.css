@@ -1279,6 +1279,7 @@ textarea[hidden] {
 .brew-pill-on { border-style: solid; border-color: #e0c9b0; }
 .brew-pill-on i { width: 8px; height: 8px; border-radius: 50%; background: #2e7d4f; }
 .brew-pill[hidden] { display: none; }
+.brew-sound { min-height: 44px; border-style: solid; border-color: #e0a85a; background: #fff4e0; color: #7a4a00; font-weight: 600; }
 
 .brew-kicker { margin: 0 0 6px; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: #8c6a4f; }
 .brew-params { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0; }
