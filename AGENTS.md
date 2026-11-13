@@ -61,6 +61,35 @@ The app is used during actual brewing sessions, often by people who aren't its a
 
 **Form checks never lose work.** `static/forms.js` sets `novalidate` and shows its own messages under fields (`data-label`, `data-unit` for wording; `data-taken` for names already used), warns without blocking (an odd ratio), keeps `textarea[data-draft]` on the device, and disables a form's buttons once it's sent. A refused POST (400, or 422 for a missing or non-numeric field) renders `error.html` with the message and Go back, where the browser still has what was typed; requests that don't accept HTML get the plain JSON error. Read a form's method with `getAttribute('method')`: a field named "method" (the brewer form) shadows `form.method`.
 
+## Invariants
+
+The rules that shape the experience and the design. Each is asserted in `tests/test_invariants.py` (most on a "busy" account built through every way of making versions, cups and plans, and the data rules also on the reference database). If one fails, the code is wrong or the design changed: change the test and this list together, on purpose.
+
+**Data**
+1. **One change per version.** Every version with a parent stays in its parent's named recipe, differs from it in exactly one value, and has one delta naming that value with its real amount. Two changes at once are refused. (`test_every_version_is_exactly_one_change_from_its_parent`, `test_real_data_keeps_the_one_change_rule`, `test_two_changes_at_once_are_always_refused`)
+2. **Forward only.** There's no way to make an older version current; undo is itself one change. (`test_there_is_no_way_to_jump_back_to_an_older_version`)
+3. **Saving a version is not brewing.** No version-making path logs a cup unless the person says they brewed it. (`test_saving_a_version_never_logs_a_cup_by_itself`)
+4. **A bag holds what was bought minus every cup.** Quantity is always derived, never stored. (`test_a_bag_holds_what_was_bought_minus_every_cup`)
+5. **A change to try belongs to the recipe, never to a plan** (core invariant, see "Design philosophy"). Planning, replacing or cancelling Up next never adds or drops one; only the recipe's next version clears it; a cup's own Next time note wins. (`test_plans_never_carry_or_drop_a_change`, `test_only_the_recipes_next_version_clears_its_change`, `test_a_cups_own_note_wins_over_the_planned_change`)
+6. **One Up next per person.** (`test_there_is_at_most_one_plan_per_person`)
+
+**Safety**
+7. **Nobody sees or changes anyone else's things.** Every route that takes an id is attacked as a second user in `tests/test_accounts.py`; a new one must join that list. (`test_every_route_that_takes_an_id_is_attacked_as_someone_else`)
+8. **Looking never changes anything.** Every page, including brew mode with a change being tried, the builder and Try a change, leaves the database as it was. (`test_looking_never_changes_anything`)
+9. **Nothing is lost by accident.** Deletes ask first (a cup has Undo instead); refused forms come back with what was typed (`tests/test_form_checks.py`). (`test_every_form_posts_to_a_real_route_and_deletes_are_guarded`)
+
+**Pages**
+10. **Words, not field names.** No `temp_c` or "15.0 g" on any page: settings and numbers go through `app/words.py`. (`test_pages_speak_in_words_not_field_names`)
+11. **Every page is well formed:** unique ids, every sheet a page opens is on that page, every form posts to a real route. (`test_every_id_on_a_page_is_unique`, `test_every_sheet_a_page_opens_is_on_that_page`)
+12. **Navigation:** every page has the tab bar except brew mode, which is the whole screen; "‹ Back" goes back. (`test_every_page_but_brew_mode_has_the_tab_bar`, `test_brew_mode_is_the_screen_and_nothing_else`, `test_back_links_go_back`)
+13. **Touch first:** controls are at least 44 px, and small round buttons keep a 44 px hit area. (`test_touch_targets_are_at_least_44px`)
+14. **Every "?" has words.** (`test_every_tip_in_a_template_has_words`)
+15. **No stale scripts:** every static file is linked through `static()`, with its content hash. (`test_static_files_always_carry_their_content_hash`)
+
+Checked by hand, not in pytest: nothing wider than a 375 px phone (`document.documentElement.scrollWidth`), the layout at 1180×820, and anything on a real iPhone, iPad or scale.
+
+---
+
 ---
 
 ## Data model
@@ -309,6 +338,7 @@ Brew mode can connect a Bookoo Themis (Mini or Ultra; the protocol was tried on 
 | `tests/test_plan_suggestion.py` | A change to try on a scheduled brew: offered only without a recommendation, shown as "Planned change", a brew's recommendation winning, validation, export/import. |
 | `tests/test_welcome.py` | The first-run checklist: who gets it, coffee and bag in one go, gear by tapping, starting recipes. |
 | `tests/test_words.py`, `test_help.py`, `test_edit_cups.py`, `test_try_a_change.py`, `test_log_sheet.py`, `test_up_next.py`, `test_versions.py`, `test_form_checks.py`, `test_gear_archive.py` | The simplification pass (2026-11-12): wording, tips, fixing cups and Undo, Try a change, logging chips and real timings, Up next and copy, versions, form checks, putting gear away. |
+| `tests/test_invariants.py` | The invariants listed under "Invariants", each as a test. |
 | `tests/test_step_editor.py` | The step format, suggestions from real recipes, tidy flow, and free text staying exactly as it was. |
 | `tests/test_ratings.py` | Star ratings: logging, validation, display, and staying out of shared recipes. |
 | `tests/test_bean_art.py` | Bag photo upload/serve/replace/remove and validation, per-bean colours and their contrast. Colour picking itself runs in the browser and is checked by hand. |
