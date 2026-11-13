@@ -98,6 +98,17 @@
         });
         form.addEventListener('submit', function (e) {
             if (e.defaultPrevented) return;
+            // Making something Up next replaces what's planned: say so first (its change stays with its recipe)
+            var upNext = document.querySelector('meta[name="up-next"]');
+            if (upNext && /\/plan$/.test(form.getAttribute('action') || '')) {
+                var bag = (form.querySelector('[name="bag_id"]') || {}).value || '';
+                var line = (form.querySelector('[name="line_id"]') || {}).value || '';
+                var same = bag === upNext.getAttribute('data-bag') && line === upNext.getAttribute('data-line');
+                if (!same && !window.confirm('This replaces ' + upNext.getAttribute('content') + ' as Up next. Any change planned for it stays with that recipe.')) {
+                    e.preventDefault();
+                    return;
+                }
+            }
             var bad = Array.prototype.filter.call(form.elements, function (el) {
                 return el.willValidate && !el.closest('[hidden]') && !check(el);
             });

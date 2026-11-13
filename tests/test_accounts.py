@@ -320,6 +320,7 @@ POST_ATTACKS = [
     ("/lines/1/copy", {"bean_id": 2, "brewer_id": 2, "grinder_id": 3}),
     ("/lines/1/copy", {"bean_id": 1, "brewer_id": 1, "grinder_id": 1}),
     ("/lines/1/undo", {}),
+    ("/lines/1/next", {"suggested_param": "temp_c", "suggested_delta": "3"}),
     ("/four-six", {"bag_id": 1, "brewer_id": 2, "grinder_id": 3, "coffee": "15", "ratio": "16", "temp_c": "93", "grind_size": "1"}),
     ("/brewers/1/archive", {}),
     ("/grinders/1/archive", {}),

@@ -226,6 +226,9 @@ def import_all(engine: Engine, src: Path) -> None:
                 grinder_id=_int(r["grinder_id"]),
                 name=r["name"],
                 created_at=_datetime(r["created_at"]) or datetime.now(timezone.utc),
+                next_param=_str(r.get("next_param")),
+                next_delta=_float(r.get("next_delta")),
+                next_rationale=_str(r.get("next_rationale")),
             ))
         session.commit()
         print(f"  lines:    {len(rows)}")

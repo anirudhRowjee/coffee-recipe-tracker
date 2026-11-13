@@ -14,7 +14,9 @@ SUGGEST = {"suggested_param": "grind_size", "suggested_delta": "-1", "suggested_
 
 
 def plan_row(app):
-    return app.rows("select suggested_param, suggested_delta, suggested_rationale from plannedbrew")
+    """The planned change, as kept on the recipe (named recipe 1)."""
+    return [{"suggested_param": r["next_param"], "suggested_delta": r["next_delta"], "suggested_rationale": r["next_rationale"]}
+            for r in app.rows("select next_param, next_delta, next_rationale from recipeline order by id limit 1")]
 
 
 def test_offered_on_the_panel_when_there_is_no_recommendation(app):
@@ -86,12 +88,34 @@ def test_bad_values_are_refused(app):
     assert app.scalar("select count(*) from plannedbrew") == 0
 
 
-def test_using_the_plan_clears_it(app):
+def test_the_change_outlasts_the_plan_until_a_new_version(app):
     post(app, "/recipes", BASELINE)
     post(app, "/plan", {**COMBO, **SUGGEST})
     plan_id = app.scalar("select id from plannedbrew")
+    post(app, f"/plan/{plan_id}/cancel", {})
+    assert 'data-rec="plan"' in latest(app)  # cancelling Up next keeps the recipe's change
+    post(app, "/plan", COMBO)
+    plan_id = app.scalar("select id from plannedbrew")
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "planned_brew_id": plan_id})
-    assert 'data-rec="plan"' not in latest(app)
+    assert 'data-rec="plan"' in latest(app)  # a cup brewed without trying it: still to try
+    post(app, "/recipes", {**BASELINE, "previous_recipe_id": 1, "grind_size": "12"})
+    assert 'data-rec="plan"' not in latest(app)  # a new version acts on it
+
+
+def test_planning_another_coffee_keeps_this_ones_change(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/plan", {**COMBO, **SUGGEST})
+    post(app, "/beans", {"name": "Other", "initial_quantity_g": "250"})
+    post(app, "/recipes", {**BASELINE, "bean_id": 2})
+    post(app, "/plan", {"bag_id": 2, "line_id": 2})
+    assert plan_row(app)[0]["suggested_param"] == "grind_size"
+
+
+def test_a_planned_change_can_be_dropped(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/plan", {**COMBO, **SUGGEST})
+    post(app, "/lines/1/next", {"next": "/?bag_id=1"})
+    assert plan_row(app) == [{"suggested_param": None, "suggested_delta": None, "suggested_rationale": None}]
 
 
 def test_browse_marks_recipes_that_already_have_a_recommendation(app):
@@ -120,7 +144,7 @@ def test_round_trips_and_older_snapshots_import(app, tmp_path: Path):
     import_script.import_all(restored, snapshot)
     with restored.connect() as conn:
         assert conn.exec_driver_sql(
-            "select suggested_param, suggested_delta, suggested_rationale from plannedbrew"
+            "select next_param, next_delta, next_rationale from recipeline"
         ).all() == [("grind_size", -1.0, "a bit sour, try finer")]
 
     plans = snapshot / "planned_brews.csv"
@@ -134,3 +158,22 @@ def test_round_trips_and_older_snapshots_import(app, tmp_path: Path):
     import_script.import_all(older, snapshot)
     with older.connect() as conn:
         assert conn.exec_driver_sql("select suggested_param from plannedbrew").all() == [(None,)]
+
+
+def test_an_older_plans_change_moves_onto_its_recipe(app):
+    from app import db
+    post(app, "/recipes", BASELINE)
+    post(app, "/plan", {**COMBO, "line_id": 1})
+    app.execute("update plannedbrew set suggested_param = 'temp_c', suggested_delta = 3, suggested_rationale = 'Extract more'")
+    with app.engine.begin() as conn:
+        db._migrate_line_next_change(conn)
+        db._migrate_line_next_change(conn)  # idempotent
+    assert plan_row(app) == [{"suggested_param": "temp_c", "suggested_delta": 3.0, "suggested_rationale": "Extract more"}]
+    assert app.rows("select suggested_param from plannedbrew") == [{"suggested_param": None}]
+
+
+def test_pages_say_what_is_up_next_for_the_replace_warning(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/plan", {**COMBO, "line_id": 1})
+    for page in ("/", "/browse"):
+        assert '<meta name="up-next" content="Blue Tokai Baarbara Estate" data-bag="1" data-line="1"' in app.client.get(page).text

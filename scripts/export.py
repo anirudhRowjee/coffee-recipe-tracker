@@ -85,9 +85,9 @@ def export_all(engine: Engine, out: Path) -> None:
         # Named recipes
         with open(out / "recipe_lines.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["id", "bean_id", "brewer_id", "grinder_id", "name", "created_at"])
+            w.writerow(["id", "bean_id", "brewer_id", "grinder_id", "name", "created_at", "next_param", "next_delta", "next_rationale"])
             for ln in session.exec(select(RecipeLine).order_by(RecipeLine.id)).all():
-                w.writerow([ln.id, ln.bean_id, ln.brewer_id, ln.grinder_id, ln.name, ln.created_at])
+                w.writerow([ln.id, ln.bean_id, ln.brewer_id, ln.grinder_id, ln.name, ln.created_at, ln.next_param, ln.next_delta, ln.next_rationale])
 
         # Recipes (versions of a named recipe)
         with open(out / "recipes.csv", "w", newline="") as f:

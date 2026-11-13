@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#faf6f0" />
+    {% if up_next is defined and up_next %}<meta name="up-next" content="{{ up_next.label }}" data-bag="{{ up_next.bag_id }}" data-line="{{ up_next.line_id }}" />{% endif %}
     <title>Coffee Recipe Tracker</title>
     <link rel="stylesheet" href="{{ static('styles.css') }}" />
     <script src="{{ static('htmx.min.js') }}"></script>

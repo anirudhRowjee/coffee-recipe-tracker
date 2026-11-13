@@ -439,6 +439,18 @@ def _is_pre_ground(grinder: Optional[models.Grinder]) -> bool:
     return "pre-ground" in name or "preground" in name or name in ("no grinder", "none")
 
 
+def _up_next(session: Session, plan: Optional[models.PlannedBrew]) -> Optional[dict]:
+    """What's planned, in words, for the "this replaces ..." warning on every Make-Up-next form."""
+    if not plan:
+        return None
+    bag = session.get(models.BeanBag, plan.bag_id)
+    line = session.get(models.RecipeLine, plan.line_id) if plan.line_id else None
+    name = bag.bean.name if bag and bag.bean else "your planned coffee"
+    if line and line.name != "Default":
+        name += f" · {line.name}"
+    return {"label": name, "bag_id": plan.bag_id, "line_id": plan.line_id or ""}
+
+
 def _recipe_choices(session: Session, bean_id: int) -> list:
     """A coffee's named recipes as choices for "Another coffee", most recently used first:
     which gear each is on, how many versions, so the gear follows the recipe picked."""
@@ -517,8 +529,8 @@ def _latest_recipe_context(session: Session, bag_id_int: Optional[int], brewer_i
     rec = None
     if recent_brews and recent_brews[0].recommended_param:
         rec = _Rec(recent_brews[0].recommended_param, recent_brews[0].recommended_delta, recent_brews[0].recommended_rationale, False)
-    elif is_current_plan and pending_plan.suggested_param:  # type: ignore[union-attr]
-        rec = _Rec(pending_plan.suggested_param, pending_plan.suggested_delta, pending_plan.suggested_rationale, True)  # type: ignore[union-attr,arg-type]
+    elif line and line.next_param:  # the recipe's planned change, whether or not it's Up next
+        rec = _Rec(line.next_param, line.next_delta, line.next_rationale, True)
     # For an hour after a cup is logged, offer to add how it tastes once cooled
     cooling_brew, cooling_minutes = None, 0
     if recent_brews:
@@ -578,6 +590,7 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
             "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
             "current_user": user,
             "pending_plan": pending_plan,
+            "up_next": _up_next(session, pending_plan),
             "pixel_art_svg": _generate_pixel_art_svg(cell=4),
             "morning_quote": random.choice(QUOTES),
             "picking": bool(pick),
@@ -745,6 +758,7 @@ def browse(request: Request, bean: Optional[int] = None):
         return templates.TemplateResponse("browse.html", {
             "request": request, "current_user": user, "active": active, "finished": finished, "selected": selected,
             "picked": bool(bean), "brewers": crud.get_brewers(session, user.id), "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
+            "up_next": _up_next(session, crud.get_pending_plan(session, user.id)),  # type: ignore[arg-type]
             **detail,
         })
 
@@ -1023,11 +1037,25 @@ def create_plan(
             raise HTTPException(status_code=400, detail="Choose a brewer and grinder")
         if line and (line.brewer_id, line.grinder_id) != (brewer_id, grinder_id):
             line = None  # different gear: fall back to that combination's default recipe
-        # Only when the recipe has no recommendation yet: its own always wins
-        if line and crud.line_recommendation(session, line.id):  # type: ignore[arg-type]
-            suggestion = {}
-        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line.id if line else None, **suggestion)  # type: ignore[arg-type,union-attr]
+        # The change to try is kept on the recipe (the one planned, or the gear's default), so it
+        # outlasts the plan. Only when the recipe has no Next time note of its own: that always wins.
+        target = line or next(iter(crud.get_lines_for_combo(session, bag.bean_id, brewer_id, grinder_id)), None)
+        if suggestion and target and not crud.line_recommendation(session, target.id):  # type: ignore[arg-type]
+            crud.set_next_change(session, target, suggestion["suggested_param"], suggestion["suggested_delta"], suggestion["suggested_rationale"])
+        crud.create_plan(session, user_id=user.id, bag_id=bag_id, brewer_id=brewer_id, grinder_id=grinder_id, notes=notes or None, line_id=line.id if line else None)  # type: ignore[arg-type,union-attr]
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/lines/{line_id}/next")
+def set_next_change(request: Request, line_id: int, suggested_param: str = Form(None), suggested_delta: str = Form(None),
+                    suggested_rationale: str = Form(None), next: str = Form(None)):
+    """Set (or, with no setting, clear) a named recipe's planned change."""
+    suggestion = _plan_suggestion(suggested_param, suggested_delta, suggested_rationale)
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        line = _owned(session, user, models.RecipeLine, line_id)
+        crud.set_next_change(session, line, suggestion.get("suggested_param"), suggestion.get("suggested_delta"), suggestion.get("suggested_rationale"))
+    return RedirectResponse(url=_back_to(next, "/"), status_code=303)
 
 
 SUGGESTABLE_PARAMS = ("dose_g", "water_ml", "temp_c", "grind_size", "recipe_text")
@@ -1122,7 +1150,7 @@ def brew_mode(line_id: int, request: Request, bag_id: Optional[int] = None, plan
         if try_change and not older_version:
             rec_brew = crud.line_recommendation(session, line_id)
             rec = (_Rec(rec_brew.recommended_param, rec_brew.recommended_delta, rec_brew.recommended_rationale, False) if rec_brew  # type: ignore[arg-type]
-                   else _Rec(plan.suggested_param, plan.suggested_delta, plan.suggested_rationale, True) if plan and plan.suggested_param else None)  # type: ignore[arg-type]
+                   else _Rec(line.next_param, line.next_delta, line.next_rationale, True) if line.next_param else None)  # type: ignore[arg-type]
             trial = _applied_change(latest, rec)
             if trial:
                 trial["version"] = crud.version_number(session, latest) + 1
@@ -1195,8 +1223,8 @@ def change_recipe_page(request: Request, line_id: int, bag_id: Optional[int] = N
         rec_brew = crud.line_recommendation(session, line_id)
         if rec_brew:
             rec = _Rec(rec_brew.recommended_param, rec_brew.recommended_delta, rec_brew.recommended_rationale, False)  # type: ignore[arg-type]
-        elif plan and plan.suggested_param:
-            rec = _Rec(plan.suggested_param, plan.suggested_delta, plan.suggested_rationale, True)
+        elif line.next_param:
+            rec = _Rec(line.next_param, line.next_delta, line.next_rationale, True)
         return templates.TemplateResponse("change_recipe.html", {
             "request": request, "current_user": user, "line": line, "latest": latest, "bag": bag, "plan": plan,
             "rec": rec, "version": crud.version_number(session, latest),
@@ -1434,6 +1462,7 @@ def save_tidied_line(line_id: int, request: Request, recipe_text: str = Form("")
                 session, bean_id=latest.bean_id, brewer_id=latest.brewer_id, grinder_id=latest.grinder_id,
                 line_id=line_id, dose_g=latest.dose_g, water_ml=latest.water_ml, temp_c=latest.temp_c,
                 grind_size=latest.grind_size, recipe_text=text, previous_recipe_id=latest.id,
+                keeps_next_change=True,  # tidying only reformats: the planned change is still to come
             )
             crud.create_delta(session, from_recipe_id=latest.id, to_recipe_id=tidied.id, changed_param="recipe_text",  # type: ignore[arg-type]
                               delta_amount=0.0, rationale=brew.TIDY_RATIONALE)

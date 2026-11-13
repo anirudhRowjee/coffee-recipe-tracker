@@ -64,6 +64,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_brew_settings(conn)
         _migrate_plan_suggestion(conn)
         _migrate_gear_archive(conn)
+        _migrate_line_next_change(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -123,6 +124,24 @@ def _migrate_gear_archive(conn) -> None:
     for table in ("brewer", "grinder"):
         if "archived" not in _columns(conn, table):
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
+
+
+def _migrate_line_next_change(conn) -> None:
+    """A planned change moves from the plan to its named recipe, so it survives the plan
+    being cancelled or replaced. Copied once: the plan's copy is cleared as it moves."""
+    columns = _columns(conn, "recipeline")
+    for name, kind in (("next_param", "VARCHAR"), ("next_delta", "FLOAT"), ("next_rationale", "VARCHAR")):
+        if name not in columns:
+            conn.execute(text(f"ALTER TABLE recipeline ADD COLUMN {name} {kind}"))
+    moving = conn.execute(text(
+        "SELECT id, line_id, suggested_param, suggested_delta, suggested_rationale FROM plannedbrew "
+        "WHERE suggested_param IS NOT NULL AND line_id IS NOT NULL")).fetchall()
+    for plan_id, line_id, param, delta, rationale in moving:
+        conn.execute(text("UPDATE recipeline SET next_param = :p, next_delta = :d, next_rationale = :r "
+                          "WHERE id = :line AND next_param IS NULL"),
+                     {"p": param, "d": delta, "r": rationale, "line": line_id})
+        conn.execute(text("UPDATE plannedbrew SET suggested_param = NULL, suggested_delta = NULL, suggested_rationale = NULL "
+                          "WHERE id = :id"), {"id": plan_id})
 
 
 DEFAULT_LINE_NAME = "Default"

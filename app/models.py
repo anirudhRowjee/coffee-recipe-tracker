@@ -106,6 +106,11 @@ class RecipeLine(SQLModel, table=True):
     grinder_id: int = Field(foreign_key="grinder.id")
     name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # A change to try next ("Planned change"), set when planning or by hand. It belongs to the
+    # recipe, not to a plan, so cancelling or replacing Up next keeps it; the next version clears it.
+    next_param: Optional[str] = None
+    next_delta: Optional[float] = None
+    next_rationale: Optional[str] = None
 
     recipes: List["Recipe"] = Relationship(back_populates="line")
 

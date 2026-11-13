@@ -1956,3 +1956,4 @@ nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; bo
 @media (max-width: 520px) { .fs-row { grid-template-columns: minmax(0, 1fr); } }
 .fs-row .stepper input { min-width: 64px; }
 .stepper-label { font-size: 0.85rem; color: var(--text-2); margin-right: 2px; }
+.rec-clear { display: inline-flex; margin: 0 0 0 4px; }

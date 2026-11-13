@@ -87,6 +87,12 @@
         <span class="rec-label" data-tour="3" data-tour-text="{{ TIPS.next_time }}">{% if rec.from_plan %}Planned change{% else %}Next time{% endif %}</span>
         <span class="rec-body"><strong>{{ change_label(rec.recommended_param, rec.recommended_delta) }}</strong>{% if rec.recommended_rationale %} — {{ rec.recommended_rationale }}{% endif %}</span>
         <a class="btn-action" href="/lines/{{ line.id }}/change?{{ query }}">Try it</a>
+        {% if rec.from_plan %}
+        <form method="post" action="/lines/{{ line.id }}/next" class="rec-clear">
+            <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}" />
+            <button type="submit" class="plan-x" aria-label="Drop this planned change" title="Drop this planned change">×</button>
+        </form>
+        {% endif %}
     </div>
     {% endif %}
 

@@ -932,7 +932,14 @@ def validate_one_parameter_delta(base: models.Recipe, new_values: Dict) -> Tuple
     return (len(changed) == 1, changed)
 
 
-def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, line_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, previous_recipe_id: Optional[int] = None) -> models.Recipe:
+def set_next_change(session: Session, line: models.RecipeLine, param: Optional[str], delta: Optional[float], rationale: Optional[str]) -> None:
+    """A named recipe's change to try next (param None clears it)."""
+    line.next_param, line.next_delta, line.next_rationale = (param, delta, rationale) if param else (None, None, None)
+    session.add(line)
+    session.commit()
+
+
+def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: int, line_id: int, dose_g: float, water_ml: float, temp_c: float, grind_size: str, recipe_text: Optional[str] = None, previous_recipe_id: Optional[int] = None, keeps_next_change: bool = False) -> models.Recipe:
     recipe = models.Recipe(
         bean_id=bean_id,
         brewer_id=brewer_id,
@@ -946,6 +953,11 @@ def create_recipe(session: Session, bean_id: int, brewer_id: int, grinder_id: in
         previous_recipe_id=previous_recipe_id,
     )
     session.add(recipe)
+    if previous_recipe_id and not keeps_next_change:  # a new version acts on the planned change: it's done
+        line = session.get(models.RecipeLine, line_id)
+        if line and line.next_param:
+            line.next_param = line.next_delta = line.next_rationale = None
+            session.add(line)
     session.commit()
     session.refresh(recipe)
     return recipe
