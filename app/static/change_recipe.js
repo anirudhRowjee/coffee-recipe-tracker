@@ -85,8 +85,11 @@
         refresh();
     });
     // the step editor's own buttons (+ Add a step, ✕, − / +) change it without an input event
+    // (but not Edit steps / Done editing, which only shows or hides the controls, nor ⠿: a
+    // drag that moves a step says so with an input event of its own)
     methodBox.addEventListener('click', function (e) {
-        if (e.target.closest('button')) setTimeout(function () { methodTouched = true; refresh(); }, 0);
+        var b = e.target.closest('button');
+        if (b && !b.classList.contains('step-edit-toggle') && !b.classList.contains('step-drag')) setTimeout(function () { methodTouched = true; refresh(); }, 0);
     });
 
     form.addEventListener('click', function (e) {
