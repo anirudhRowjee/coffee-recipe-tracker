@@ -1265,7 +1265,9 @@ textarea[hidden] {
    Readable from across the counter; everything down to Start fits one phone screen. */
 .brew-mode { overflow: clip; padding-bottom: 0; }
 .brew-mode[style*="--mesh-strip"] { overflow: clip; }
-.brew-top { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.brew-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px; }
+/* "Sound off · tap" gets a row of its own under the title, so it never squeezes it */
+.brew-top .brew-sound { order: 10; flex: 1 1 100%; justify-content: center; }
 .brew-back { flex: none; font-size: 1.3rem; line-height: 1; color: #6b3d2e; text-decoration: none; padding: 4px 2px; }
 .brew-heading { flex: 1; min-width: 0; }
 .brew-title { margin: 0; font-size: 1.2rem; line-height: 1.25; }
