@@ -212,10 +212,21 @@ def test_startup_keeps_existing_rows_intact(app_on, reference_db, original):
     app = app_on(reference_db)
     migrated = sqlite3.connect(app.path)
     try:
+        # The one intended change: a plan's planned change moves onto its recipe (db._migrate_line_next_change)
+        moved = ("suggested_param", "suggested_delta", "suggested_rationale")
         for table in ORIGINAL_TABLES:
             cols = [r[1] for r in original.execute(f'PRAGMA table_info("{table}")')]
+            if table == "plannedbrew":
+                cols = [c for c in cols if c not in moved]
             select = f'SELECT {", ".join(cols)} FROM "{table}" ORDER BY id'
             assert migrated.execute(select).fetchall() == [tuple(r) for r in original.execute(select)], table
+        plan_cols = [r[1] for r in original.execute('PRAGMA table_info("plannedbrew")')]
+        if "suggested_param" in plan_cols:
+            for line_id, param, delta, why in original.execute(
+                    "SELECT line_id, suggested_param, suggested_delta, suggested_rationale FROM plannedbrew "
+                    "WHERE suggested_param IS NOT NULL AND line_id IS NOT NULL"):
+                assert migrated.execute("SELECT next_param, next_delta, next_rationale FROM recipeline WHERE id = ?",
+                                        (line_id,)).fetchone() == (param, delta, why)
         assert migrated.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert migrated.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:

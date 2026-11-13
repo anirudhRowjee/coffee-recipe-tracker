@@ -29,6 +29,8 @@ problems = []
 # every row that existed before the deploy is still there, unchanged
 for table in ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", "plannedbrew", "delta"]:
     cols = [r[1] for r in b.execute(f'PRAGMA table_info("{table}")')]
+    if table == "plannedbrew":  # a plan's planned change moves onto its recipe (db._migrate_line_next_change)
+        cols = [c for c in cols if c not in ("suggested_param", "suggested_delta", "suggested_rationale")]
     q = f'SELECT {", ".join(cols)} FROM "{table}" ORDER BY id'
     before, after = b.execute(q).fetchall(), {r[0]: r for r in l.execute(q)}
     changed = [r[0] for r in before if after.get(r[0]) != r]
