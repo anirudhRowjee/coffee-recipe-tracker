@@ -210,7 +210,7 @@
         if (grams === null) return;
         var w = weight(), fixed = w.toFixed(1);
         // the decimal smaller, so the number fits its tile at a size readable from the counter
-        weightBox.innerHTML = fixed.slice(0, -2) + '<span class="dec">' + fixed.slice(-2) + '</span>';
+        var reading = fixed.slice(0, -2) + '<span class="dec">' + fixed.slice(-2) + '</span>';
         var li = targetStep(), t = li ? parseFloat(li.getAttribute('data-grams')) : null;
         // Reaching the weight ticks the step off; the clock still decides when the next
         // one starts, since the method's times are part of the recipe. Only while the
@@ -223,15 +223,23 @@
         }
         var reached = li && li.hasAttribute('data-reached');
         var stopped = !running() && startBtn.textContent === 'Resume';
-        var tg = t ? (t % 1 ? t.toFixed(1) : String(t)) + ' g' : '';
-        label.textContent = stopped ? 'In the cup' : 'Weight';
         tareBtn.hidden = stopped;  // after a brew the bar is Reset, Resume and Log
-        // Past the target is still reached: the tick stays, so a glance says "no need to
-        // pour more", and the overshoot is shown beside it for anyone aiming to be exact.
-        var over = running() && reached && w > t + CLOSE_G ? Math.round(w - t) : 0;
-        targetBox.innerHTML = stopped ? 'g' : !running() ? 'g on the scale'
-            : !t ? 'g' : reached ? 'g · ' + tg + ' reached' + (over ? ' <span class="brew-over">+' + over + ' g</span>' : '')
-            : 'g → ' + tg;
+        if (stopped || !t) {
+            // after the brew, or a method with no weights: the reading is the number
+            label.textContent = stopped ? 'In the cup' : 'Weight';
+            weightBox.innerHTML = reading + '<span class="u">g</span>';
+            targetBox.innerHTML = stopped ? '' : 'on the scale';
+        } else {
+            // "Pour to": the target is the big number, since the scale shows the reading
+            // too; the reading goes underneath, and the bar fills toward the target
+            label.textContent = running() && reached ? 'Poured to' : 'Pour to';
+            weightBox.innerHTML = (t % 1 ? t.toFixed(1) : String(t)) + '<span class="u">g</span>';
+            // Past the target is still reached: the tick stays, so a glance says "no need to
+            // pour more", and the overshoot is shown beside it for anyone aiming to be exact.
+            var over = running() && reached && w > t + CLOSE_G ? Math.round(w - t) : 0;
+            targetBox.innerHTML = '<b class="brew-now">' + fixed + ' g</b> ' + (running() ? 'now' : 'on the scale')
+                + (over ? ' <span class="brew-over">+' + over + ' g</span>' : '');
+        }
         fill.style.width = (stopped ? 100 : running() && t ? Math.max(0, Math.min(1, w / t)) * 100 : 0).toFixed(1) + '%';
         panel.className = 'brew-tile brew-scale' + (running() && reached ? ' at-target' : '');
     }

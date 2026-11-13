@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scale Tile Mock-ups</title>
+<style>
+  :root {
+    --bg: #f3ece3; --card: #fffdf9; --tile: #faf6f0; --line: #e0c9b0; --ink: #2c1810; --soft: #8c6a4f;
+    --brown: #6b3d2e; --accent: #b4632f; --accent-soft: #f2e2d2; --ok: #2e7d4f; --ok-bg: #e3efe5; --ok-line: #9cc5a6;
+    --amber: #9a5b00; --amber-bg: #fff1dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c;
+      --brown: #d9a27f; --accent: #e08b52; --accent-soft: #4a3526; --ok: #6cc28a; --ok-bg: #1f3526; --ok-line: #3c6b4a; --amber: #f0b45a; --amber-bg: #3b2c15; }
+  }
+  :root[data-theme="dark"] { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c;
+      --brown: #d9a27f; --accent: #e08b52; --accent-soft: #4a3526; --ok: #6cc28a; --ok-bg: #1f3526; --ok-line: #3c6b4a; --amber: #f0b45a; --amber-bg: #3b2c15; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 0 0 6px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 4px; }
+  p.lead, p.why { color: var(--soft); margin: 0 0 14px; max-width: 70ch; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); margin-left: 6px; vertical-align: middle; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; }
+  .state { flex: 0 1 340px; min-width: 0; }
+  .state h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--soft); margin: 0 0 6px; }
+  .phone { width: 100%; max-width: 340px; background: var(--card); border: 1px solid var(--line); border-radius: 26px; padding: 14px 12px; }
+
+  /* the tiles, as in brew mode */
+  .tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .tile { position: relative; display: grid; gap: 2px; align-content: start; min-width: 0; padding: 9px 11px 10px;
+          border: 1px solid var(--line); border-radius: 12px; background: var(--tile); container-type: inline-size; }
+  .tile small { font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--soft); }
+  .tile strong { font-size: min(3.6rem, 34cqi); font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tile strong .u { font-size: 0.45em; font-weight: 600; margin-left: 2px; }
+  .tile strong .dec { font-size: 0.55em; }
+  .tile > span { font-size: 0.9rem; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .bar { height: 7px; margin-top: 5px; border-radius: 4px; background: var(--accent-soft); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .tile.ok { background: var(--ok-bg); border-color: var(--ok-line); }
+  .tile.ok strong, .tile.ok > span { color: var(--ok); }
+  .tile.ok .bar i { background: var(--ok); }
+  .tick { position: absolute; top: 8px; right: 9px; width: 30px; height: 30px; border-radius: 50%; background: var(--ok); color: #fff;
+          font-style: normal; font-weight: 800; line-height: 30px; text-align: center; }
+  .over { color: var(--amber) !important; font-weight: 700; }
+  .step { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); }
+  .step small { font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--soft); }
+  .step b { display: block; font-size: 1.15rem; }
+  .step.ok { background: var(--ok-bg); }
+  .now { font-size: 1.25rem !important; color: var(--ink) !important; font-weight: 600; }
+  .now em { font-style: normal; color: var(--soft); font-weight: 400; font-size: 0.85rem; }
+  .tile.ok .now { color: var(--ok) !important; }
+
+  /* B: left to pour */
+  .tile .next { font-size: 0.85rem; }
+
+  /* C: a full-width pour bar */
+  .pour { margin-top: 8px; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--tile); }
+  .pour-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .pour-top small { font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--soft); }
+  .pour-top strong { font-size: 2.6rem; line-height: 1; font-variant-numeric: tabular-nums; }
+  .pour-top strong .u { font-size: 0.45em; }
+  .tube { position: relative; height: 40px; margin-top: 8px; border-radius: 10px; background: var(--accent-soft); overflow: hidden; }
+  .tube i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 10px 0 0 10px; }
+  .tube b { position: absolute; top: 50%; transform: translateY(-50%); left: 10px; color: #fff; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+  .tube .mark { position: absolute; top: 0; bottom: 0; right: 0; width: 4px; background: var(--ink); }
+  .pour.ok { background: var(--ok-bg); border-color: var(--ok-line); }
+  .pour.ok .tube i { background: var(--ok); }
+  .pour.ok strong { color: var(--ok); }
+  .pour .then { font-size: 0.85rem; color: var(--soft); margin-top: 6px; }
+
+  /* iPad */
+  .ipad { max-width: 900px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px;
+          display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+  .ipad .tiles { gap: 14px; }
+  .ipad .tile strong { font-size: min(6rem, 34cqi); }
+  .ipad .tile small { font-size: 0.85rem; }
+  .ipad .tile > span { font-size: 1.05rem; }
+  .ipad .now { font-size: 1.6rem !important; }
+  .ipad ol { margin: 0; padding: 0; list-style: none; font-size: 1rem; }
+  .ipad li { padding: 8px 10px; border-radius: 8px; display: flex; justify-content: space-between; gap: 8px; }
+  .ipad li.cur { background: var(--accent-soft); font-weight: 700; }
+  .ipad li.done { color: var(--ok); }
+  @media (max-width: 720px) { .ipad { grid-template-columns: minmax(0, 1fr); } }
+
+  .pick { margin-top: 36px; padding: 16px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); max-width: 70ch; }
+  .pick h2 { margin-top: 0; }
+  .pick li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Brewing with the scale: the target first</h1>
+  <p class="lead">At the moment the weight is the big number and the target is a small grey line under it ("g → 96 g"), so the one number only the app knows is the hardest to read. Each option below shows the same moment of a brew three ways: pouring the second pour (0:45, to 96 g, at 58.3 g), at the target, and 6 g past it. The clock tile stays as it is.</p>
+
+  <h2>A · "Pour to", big <span class="tag">Recommended</span></h2>
+  <p class="why">The tiles swap roles: the target is the big number, and what the scale reads goes underneath at about twice today's size. It's the same tile as without a scale ("Pour to"), so brewing with and without a scale looks alike. The bar still fills as you pour.</p>
+  <div class="row">
+    <div class="state"><h3>Pouring</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>0:58</strong><span>next step in 0:32</span><div class="bar"><i style="width:38%;background:var(--brown)"></i></div></div>
+          <div class="tile"><small>Pour to</small><strong>96<span class="u">g</span></strong><span class="now">58.3 g <em>now</em></span><div class="bar"><i style="width:61%"></i></div></div>
+        </div>
+        <div class="step"><small>Now · 0:45</small><b>Pour, taste · to 96 g</b></div>
+      </div></div>
+    <div class="state"><h3>Reached</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:04</strong><span>next step in 0:26</span><div class="bar"><i style="width:42%;background:var(--brown)"></i></div></div>
+          <div class="tile ok"><i class="tick">✓</i><small>Poured to</small><strong>96<span class="u">g</span></strong><span class="now">95.4 g <em>now</em></span><div class="bar"><i style="width:100%"></i></div></div>
+        </div>
+        <div class="step ok"><small>Now · 0:45</small><b>Pour, taste · to 96 g ✓</b></div>
+      </div></div>
+    <div class="state"><h3>Past it</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:06</strong><span>next step in 0:24</span><div class="bar"><i style="width:44%;background:var(--brown)"></i></div></div>
+          <div class="tile ok"><i class="tick">✓</i><small>Poured to</small><strong>96<span class="u">g</span></strong><span class="now">102.1 g <em>now</em> <span class="over">+6</span></span><div class="bar"><i style="width:100%"></i></div></div>
+        </div>
+        <div class="step ok"><small>Now · 0:45</small><b>Pour, taste · to 96 g ✓</b></div>
+      </div></div>
+  </div>
+
+  <h2>B · "Left to pour"</h2>
+  <p class="why">The big number counts down to zero as you pour, like the clock counts to the next step: "38 g to go" is the one thing you act on. The target and the reading sit underneath. Once reached, the tile says where the next pour goes, so you can get ready.</p>
+  <div class="row">
+    <div class="state"><h3>Pouring</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>0:58</strong><span>next step in 0:32</span><div class="bar"><i style="width:38%;background:var(--brown)"></i></div></div>
+          <div class="tile"><small>Still to pour</small><strong>38<span class="u">g</span></strong><span class="now">to 96 g <em>· 58.3 now</em></span><div class="bar"><i style="width:61%"></i></div></div>
+        </div>
+        <div class="step"><small>Now · 0:45</small><b>Pour, taste · to 96 g</b></div>
+      </div></div>
+    <div class="state"><h3>Reached</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:04</strong><span>next step in 0:26</span><div class="bar"><i style="width:42%;background:var(--brown)"></i></div></div>
+          <div class="tile ok"><i class="tick">✓</i><small>At 96 g</small><strong>0<span class="u">g</span></strong><span class="next">next: to 168 g at 1:30</span><div class="bar"><i style="width:100%"></i></div></div>
+        </div>
+        <div class="step ok"><small>Now · 0:45</small><b>Pour, taste · to 96 g ✓</b></div>
+      </div></div>
+    <div class="state"><h3>Past it</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:06</strong><span>next step in 0:24</span><div class="bar"><i style="width:44%;background:var(--brown)"></i></div></div>
+          <div class="tile ok"><i class="tick">✓</i><small>At 96 g</small><strong class="over">+6<span class="u">g</span></strong><span class="next">over · next: to 168 g at 1:30</span><div class="bar"><i style="width:100%"></i></div></div>
+        </div>
+        <div class="step ok"><small>Now · 0:45</small><b>Pour, taste · to 96 g ✓</b></div>
+      </div></div>
+  </div>
+
+  <h2>C · A full-width pour bar</h2>
+  <p class="why">The weight leaves the tiles altogether: a thick bar across the whole width fills as you pour, with the target big at its end and the reading inside the fill. The step card goes under it. A glance tells you how far there is to go without reading any number; the right-hand tile goes back to "Step ends in".</p>
+  <div class="row">
+    <div class="state"><h3>Pouring</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>0:58</strong><span>next step in 0:32</span></div>
+          <div class="tile"><small>Step ends in</small><strong>0:32</strong><span>then to 168 g</span></div>
+        </div>
+        <div class="pour"><div class="pour-top"><small>Pour to</small><strong>96<span class="u">g</span></strong></div>
+          <div class="tube"><i style="width:61%"></i><b>58.3</b><span class="mark"></span></div></div>
+      </div></div>
+    <div class="state"><h3>Reached</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:04</strong><span>next step in 0:26</span></div>
+          <div class="tile"><small>Step ends in</small><strong>0:26</strong><span>then to 168 g</span></div>
+        </div>
+        <div class="pour ok"><div class="pour-top"><small>Poured to ✓</small><strong>96<span class="u">g</span></strong></div>
+          <div class="tube"><i style="width:100%;border-radius:10px"></i><b>95.4</b></div></div>
+      </div></div>
+    <div class="state"><h3>Past it</h3>
+      <div class="phone">
+        <div class="tiles">
+          <div class="tile"><small>Time</small><strong>1:06</strong><span>next step in 0:24</span></div>
+          <div class="tile"><small>Step ends in</small><strong>0:24</strong><span>then to 168 g</span></div>
+        </div>
+        <div class="pour ok"><div class="pour-top"><small>Poured to ✓</small><strong>96<span class="u">g</span></strong></div>
+          <div class="tube"><i style="width:100%;border-radius:10px"></i><b>102.1 · <span style="color:var(--amber-bg)">+6</span></b></div></div>
+      </div></div>
+  </div>
+
+  <h2>A on a landscape iPad</h2>
+  <p class="why">The same two tiles at iPad size, with every step open beside them. The target is as big as the clock; the reading underneath is readable from the counter without being the thing you look at.</p>
+  <div class="ipad">
+    <div>
+      <div class="tiles">
+        <div class="tile"><small>Time</small><strong>0:58</strong><span>next step in 0:32</span><div class="bar"><i style="width:38%;background:var(--brown)"></i></div></div>
+        <div class="tile"><small>Pour to</small><strong>96<span class="u">g</span></strong><span class="now">58.3 g <em>now</em></span><div class="bar"><i style="width:61%"></i></div></div>
+      </div>
+      <div class="step"><small>Now · 0:45</small><b>Pour, taste · to 96 g</b></div>
+    </div>
+    <ol>
+      <li class="done"><span>0:00 · Bloom</span><span>to 48 g ✓</span></li>
+      <li class="cur"><span>0:45 · Pour, taste</span><span>to 96 g</span></li>
+      <li><span>1:30 · Pour, strength</span><span>to 168 g</span></li>
+      <li><span>2:15 · Pour, strength</span><span>to 240 g</span></li>
+      <li><span>3:15 · Done</span><span></span></li>
+    </ol>
+  </div>
+
+  <div class="pick">
+    <h2>To decide</h2>
+    <ul>
+      <li><b>A</b> is the smallest change and fixes exactly what's wrong: the target is the big number, and the reading is still there, larger than today's grey line.</li>
+      <li><b>B</b> is the most "do this now", but a number that counts down to 0 is one more thing to learn, and the target itself is smaller than in A.</li>
+      <li><b>C</b> reads best from across the room, and costs the most height, which matters on a phone where the step card and animation already compete for space.</li>
+      <li>They mix: A's tile with C's thicker bar is an easy addition.</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>
