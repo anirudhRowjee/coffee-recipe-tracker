@@ -83,3 +83,12 @@ def test_brew_mode_has_room_for_the_next_pour_and_the_summary(app):
     assert re.search(r'<span class="brew-scale-next" id="brew-scale-next" hidden>', html)
     assert re.search(r'<div class="brew-summary" id="brew-summary" hidden>', html)
     assert "data-auto-stop" not in html
+
+
+def test_read_aloud_switch_waits_for_the_script(app):
+    """Spoken steps are switched on per device, so the button is hidden until the script
+    knows the browser can speak; starting on the first pour lives in scale.js."""
+    post(app, "/recipes", {**BASELINE, "recipe_text": METHOD})
+    assert re.search(r'<button type="button" class="chip brew-voice" id="brew-voice" aria-pressed="false" hidden>', brew_page(app))
+    script = app.client.get("/static/scale.js").text
+    assert "window.brewScaleArm" in script and "POUR_G" in script

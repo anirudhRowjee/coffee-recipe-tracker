@@ -43,6 +43,8 @@
             <div{% if trial and trial.param == 'temp_c' %} class="brew-tried"{% endif %}><dt>Temperature</dt><dd>{{ '%g'|format(latest.temp_c) }}<small>°C</small></dd><dd class="brew-use">kettle set to</dd></div>
         </dl>
         {% if prep %}<p class="brew-prep-note">{{ prep }}</p>{% endif %}
+        {# read each step aloud as it starts; remembered on this device, shown where the browser can speak #}
+        <button type="button" class="chip brew-voice" id="brew-voice" aria-pressed="false" hidden>🔈 Read the steps aloud</button>
     </div>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
@@ -257,6 +259,44 @@
             } catch (e) { /* no sound is fine */ }
         }
         window.brewBeep = beep;
+
+        // Spoken steps: each step read out as it starts, after its beep. Per device (a phone
+        // and the iPad may want different), so localStorage; off until switched on.
+        var canSpeak = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
+        var voiceOn = false, voiceBtn = $('brew-voice'), speechReady = false;
+        try { voiceOn = canSpeak && window.localStorage.getItem('brew-voice') === '1'; } catch (e) {}
+        function speak(text) {
+            if (!voiceOn || !text) return;
+            try {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(new window.SpeechSynthesisUtterance(text));
+            } catch (e) { /* no voice is fine */ }
+        }
+        // the step as you'd say it: "Pour, taste, to 96 grams"
+        function spoken(li) {
+            return stepText(li).replace(/\s*·\s*/g, ', ')
+                .replace(/(\d+):(\d\d)/g, function (m, mm, ss) {
+                    var min = parseInt(mm, 10), sec = parseInt(ss, 10);
+                    if (!min && !sec) return 'the start';
+                    return (min ? min + (min === 1 ? ' minute' : ' minutes') : '') + (sec ? (min ? ' ' : '') + sec + ' seconds' : '');
+                })
+                .replace(/(\d)\s*g\b/g, '$1 grams').replace(/(\d)\s*ml\b/gi, '$1 millilitres').replace(/\s*°\s*C\b/g, ' degrees');
+        }
+        function showVoice() {
+            voiceBtn.setAttribute('aria-pressed', voiceOn ? 'true' : 'false');
+            voiceBtn.className = 'chip brew-voice' + (voiceOn ? ' on' : '');
+        }
+        if (voiceBtn && canSpeak) {
+            voiceBtn.hidden = false;
+            showVoice();
+            voiceBtn.addEventListener('click', function () {
+                voiceOn = !voiceOn;
+                try { window.localStorage.setItem('brew-voice', voiceOn ? '1' : '0'); } catch (e) {}
+                showVoice();
+                speak('Steps will be read aloud');  // in the tap, which also lets later speech through on iOS
+                speechReady = true;
+            });
+        }
         // Browsers only allow sound after a tap, so wake it on any tap (Start, or Scale:
         // a brew the scale starts has no tap of its own).
         var unlocked = false;
@@ -273,6 +313,15 @@
             // iOS only lets a page make sound later if it played something during a tap:
             // a silent blip, and again on any tap after the sound was suspended (a lock, a
             // call, the scale's picker sheet)
+            // iOS also only speaks later if the page spoke during a tap: a silent word, once
+            if (voiceOn && !speechReady) {
+                try {
+                    var hush = new window.SpeechSynthesisUtterance(' ');
+                    hush.volume = 0;
+                    window.speechSynthesis.speak(hush);
+                    speechReady = true;
+                } catch (e) {}
+            }
             if (!unlocked || audio.state !== 'running') {
                 try {
                     var blip = audio.createBufferSource();
@@ -387,8 +436,13 @@
             for (var k = 0; k < events.length; k++) {
                 if (events[k].t <= s) { current = k; } else { upcoming = events[k]; break; }
             }
-            if (running && current > lastEvent && events[current].t > 0) beep();
-            lastEvent = current;
+            if (running && current > lastEvent) {
+                if (events[current].t > 0) beep();
+                // then the step read out, once the beep (or the start's "go") has sounded
+                var said = steps[events[current].i];
+                setTimeout(function () { speak(spoken(said)); }, events[current].t > 0 ? 450 : 650);
+            }
+            if (running) lastEvent = current;  // so the first step counts as new once the clock starts
             // a soft tick each of the three seconds before a step, to pick up the kettle
             if (running && upcoming && upcoming.t > 0 && upcoming.t - s >= 1 && upcoming.t - s <= 3 && warned !== upcoming.t + ':' + (upcoming.t - s)) {
                 warned = upcoming.t + ':' + (upcoming.t - s);
@@ -407,7 +461,7 @@
             // the clock's tile, and its bar through the current step
             var stopped = !running && !fresh() && !countdown;
             timeLabel.textContent = stopped ? 'Brewed' : 'Time';
-            if (countdown) timeSub.textContent = 'pick up the kettle';
+            if (countdown) timeSub.textContent = countdown.armed ? 'starts as you pour' : 'pick up the kettle';
             else if (fresh()) timeSub.textContent = lastAt ? 'about ' + fmt(lastAt) : '';
             else if (stopped) timeSub.textContent = current >= 0 ? (current + 1) + ' of ' + events.length + ' steps' : '';
             else if (upcoming || !events.length) timeSub.textContent = upcoming ? 'next step in ' + fmt(upcoming.t - s) : '';
@@ -523,6 +577,16 @@
         function beginCountdown() {
             wakeAudio();
             keepAwake();
+            // with a scale: no countdown, the clock starts as you pour (static/scale.js)
+            startBtn.textContent = 'Cancel';
+            if (window.brewScaleArm && window.brewScaleArm()) {
+                countdown = { armed: true, interval: null };
+                timer.className = 'brew-timer brew-counting';
+                render();
+                clock.textContent = 'Pour';
+                speak('Pour when ready');
+                return;
+            }
             countdown = { end: Date.now() + COUNTDOWN * 1000, shown: null, interval: setInterval(countdownTick, 100) };
             startBtn.textContent = 'Cancel';
             timer.className = 'brew-timer brew-counting';

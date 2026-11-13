@@ -105,6 +105,30 @@
     // (it also starts a ready automatic-mode brew).
     window.brewScaleGo = function () { send('tareAndStart'); };
 
+    // Start when you pour: with a scale, Start tares it and waits instead of counting down.
+    // The clock starts the moment the reading climbs POUR_G above its lowest since then (the
+    // tare brings it to about 0) on two readings in a row, so a knock on the counter doesn't
+    // count. The scale's timer is started to match. Cancel (any label but Cancel) stops waiting.
+    var POUR_G = 3, armed = null;  // {low, hits}
+    window.brewScaleArm = function () {
+        if (grams === null) return false;
+        armed = { low: Infinity, hits: 0 };
+        clearLift();
+        send('tare');
+        return true;
+    };
+    function watchForPour() {
+        if (!armed) return;
+        if (startBtn.textContent !== 'Cancel') { armed = null; return; }
+        if (grams < armed.low) armed.low = grams;
+        armed.hits = grams - armed.low >= POUR_G ? armed.hits + 1 : 0;
+        if (armed.hits < 2) return;
+        armed = null;
+        if (window.brewBeep) window.brewBeep('go');
+        startNow();
+        send('start');
+    }
+
     var recent = [], top = null, dropAt = null, lifted = null;  // lifted: the weight kept
     function median(list) {
         var v = list.map(function (r) { return r[1]; }).sort(function (a, b) { return a - b; });
@@ -340,6 +364,7 @@
                 var b = bytes(e.target.value), g = decode(b);
                 if (g === null) { onEvent(b); return; }
                 grams = g.grams;
+                watchForPour();
                 followScaleTimer(g.ms);
                 track();
                 if (running() && !liftedNow(g.grams)) samples.push([Math.round(brewSeconds() * 10) / 10, g.grams, g.flow]);
