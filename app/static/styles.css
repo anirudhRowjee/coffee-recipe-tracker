@@ -1326,9 +1326,22 @@ textarea[hidden] {
 .brew-tiles .brew-tile { display: flex; flex-direction: column; gap: 2px; }
 .brew-tile .brew-bar { flex: none; height: 16px; margin-top: auto; border-radius: 8px; background: #ead9c6;
     box-shadow: inset 0 0 0 1px rgba(107, 61, 46, 0.12); }
-.brew-tile > span:has(+ .brew-bar) { margin-bottom: 8px; }
+/* room above the bar, under whichever line is last (the next pour comes and goes) */
+.brew-tile > span:not([hidden]):not(:has(~ span:not([hidden]))) { margin-bottom: 8px; }
 .brew-tile .brew-bar span { border-radius: 8px; }
 .brew-scale.at-target .brew-scale-bar { background: #c9e0cf; }
+.brew-scale-next { font-size: 0.95rem; font-weight: 600; color: #5c3520; }
+.brew-scale-next[hidden] { display: none; }
+/* after Stop: how the brew went against the recipe */
+.brew-summary { margin-top: 10px; padding: 12px 14px; border: 1px solid #e0c9b0; border-radius: 12px; background: #faf6f0; }
+.brew-summary[hidden] { display: none; }
+.brew-summary h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.brew-summary p { margin: 6px 0 0; }
+.brew-summary-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.brew-summary-table th { text-align: left; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: #8c6a4f; font-weight: 600; padding: 0 6px 4px 0; }
+.brew-summary-table td { padding: 5px 6px 5px 0; border-top: 1px solid #eadccb; vertical-align: top; }
+.brew-summary-table td:last-child, .brew-summary-table th:last-child { text-align: right; white-space: nowrap; padding-right: 0; }
+.brew-summary-table .t { color: #8c6a4f; margin-right: 4px; }
 
 .brew-card { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, #f5ebe0); transition: background 0.3s; }
 .brew-card.reached { background: #e3efe5; }

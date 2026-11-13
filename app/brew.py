@@ -93,12 +93,6 @@ def prep_text(text: Optional[str]) -> str:
     return parts[0] if parts else ""
 
 
-def ends_timer(text: Optional[str]) -> bool:
-    """A last step called "Done" stops the timer by itself. Only then: drawdowns vary."""
-    parts = _standard_parts(text)
-    return bool(parts and re.search(r"\bdone\b", parts[1][-1][1], re.IGNORECASE))
-
-
 def _times_in(text: str) -> List[int]:
     return sorted({
         int(m.group(1)) * 60 + int(m.group(2))

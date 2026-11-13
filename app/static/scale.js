@@ -34,6 +34,7 @@
     var weightBox = document.getElementById('brew-scale-weight');
     var targetBox = document.getElementById('brew-scale-target');
     var fill = document.getElementById('brew-scale-fill');
+    var nextBox = document.getElementById('brew-scale-next');
     var connectBtn = document.getElementById('brew-scale-connect');
     var tareBtn = document.getElementById('brew-scale-tare');
     var startBtn = document.getElementById('brew-start');
@@ -206,6 +207,21 @@
 
     function running() { return startBtn.textContent === 'Stop'; }
 
+    // the target before this step's (where this pour starts from), and the next pour after it
+    function previousTarget(li) {
+        for (var p = li.previousElementSibling; p; p = p.previousElementSibling) {
+            if (p.getAttribute('data-grams')) return parseFloat(p.getAttribute('data-grams'));
+        }
+        return 0;
+    }
+    function nextPour(li) {
+        for (var n = li.nextElementSibling; n; n = n.nextElementSibling) {
+            if (n.getAttribute('data-grams')) return n;
+        }
+        return null;
+    }
+    function clock(sec) { return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2); }
+
     function show() {
         if (grams === null) return;
         var w = weight(), fixed = w.toFixed(1);
@@ -217,7 +233,8 @@
         // timer runs: before Start the scale may still be weighing beans or the brewer.
         // (An attribute, not a class: the timer script resets classes four times a second.)
         if (li && running() && w >= t - CLOSE_G && !li.hasAttribute('data-reached')) {
-            li.setAttribute('data-reached', '');
+            // when, on the brew's clock, for the summary after Stop
+            li.setAttribute('data-reached', String(window.brewElapsed ? window.brewElapsed() : Math.round(brewSeconds())));
             if (window.brewBeep) window.brewBeep('reached');  // not the new-step beep
             if (window.brewRender) window.brewRender();      // the step card turns green too
         }
@@ -240,7 +257,15 @@
             targetBox.innerHTML = '<b class="brew-now">' + fixed + ' g</b> ' + (running() ? 'now' : 'on the scale')
                 + (over ? ' <span class="brew-over">+' + over + ' g</span>' : '');
         }
-        fill.style.width = (stopped ? 100 : running() && t ? Math.max(0, Math.min(1, w / t)) * 100 : 0).toFixed(1) + '%';
+        // Each pour fills the bar from empty: from the last target to this one
+        var from = li ? previousTarget(li) : 0, share = 0;
+        if (stopped) share = 1;
+        else if (running() && t) share = t > from ? (w - from) / (t - from) : w / t;
+        fill.style.width = (Math.max(0, Math.min(1, share)) * 100).toFixed(1) + '%';
+        // Once this pour is in, say where the next one goes, to get ready for it
+        var after = li && running() && reached ? nextPour(li) : null;
+        nextBox.textContent = after ? 'Next: to ' + parseFloat(after.getAttribute('data-grams')) + ' g at ' + clock(parseInt(after.getAttribute('data-times'), 10)) : '';
+        nextBox.hidden = !after;
         panel.className = 'brew-tile brew-scale' + (running() && reached ? ' at-target' : '');
     }
 

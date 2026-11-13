@@ -46,7 +46,7 @@
     </div>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
-    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}" data-auto-stop="{{ '1' if auto_stop else '0' }}"
+    <div class="brew-timer" id="brew-timer" data-prep="{{ prep }}"
          data-water="{{ '%g'|format(latest.water_ml) }}" data-live-graph="{{ '1' if live_graph else '0' }}"{% if animation %} data-animation="{{ animation }}"{% endif %} hidden>
         <div class="brew-tiles">
             <div class="brew-tile">
@@ -61,6 +61,7 @@
                 <small id="brew-weight-label">Weight</small>
                 <strong id="brew-scale-weight">0<span class="dec">.0</span><span class="u">g</span></strong>
                 <span id="brew-scale-target">on the scale</span>
+                <span class="brew-scale-next" id="brew-scale-next" hidden></span>
                 <div class="brew-bar brew-scale-bar"><span id="brew-scale-fill"></span></div>
             </div>
             {# without: the weight to pour to (any kitchen scale), or the time left in the step #}
@@ -80,6 +81,8 @@
             </div>
         </div>
         <p class="brew-next" id="brew-next"></p>
+        {# after Stop: when each pour reached its weight against the recipe's times, the drawdown and the total #}
+        <div class="brew-summary" id="brew-summary" hidden></div>
     </div>
     <p class="brew-labels" id="brew-labels" hidden>
         <span>Coffee <b>{{ '%g'|format(latest.dose_g) }} g</b></span>
@@ -165,7 +168,6 @@
         var next = $('brew-next'), prepBox = $('brew-prep'), labels = $('brew-labels');
         var allSteps = $('brew-all-steps'), dots = $('brew-dots');
         var startBtn = $('brew-start'), resetBtn = $('brew-reset'), logBtn = $('brew-log'), logCard = $('brew-log-card');
-        var autoStop = timer.getAttribute('data-auto-stop') === '1';
         var water = timer.getAttribute('data-water');
         var steps = Array.prototype.slice.call(document.querySelectorAll('.brew-steps li'));
 
@@ -190,7 +192,7 @@
 
         var startedAt = null;   // Date.now() at start, so backgrounding can't drift it
         var stoppedAt = 0;      // elapsed seconds while stopped
-        var tick = null, lastEvent = -1, audio = null, wakeLock = null;
+        var tick = null, lastEvent = -1, audio = null, wakeLock = null, warned = '';
         var animation = window.BrewAnimation ? window.BrewAnimation(timer) : null;
 
         function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
@@ -198,6 +200,22 @@
         function grams(li) { var g = li && li.getAttribute('data-grams'); return g ? parseFloat(g) : null; }
         function g(v) { return v % 1 ? v.toFixed(1) : String(v); }
         function firstTime(li) { return parseInt(li.getAttribute('data-times'), 10); }
+        // when the scale saw a step's weight reached (seconds into the brew), or null
+        function reachedAt(li) {
+            var v = li && li.getAttribute('data-reached');
+            return v ? parseFloat(v) : null;
+        }
+        // The drawdown starts when the last pour is in: when the scale saw its weight, or, with
+        // no scale, at a last step that isn't a pour (Done, Release); else at the last pour's start.
+        function drawdownFrom() {
+            if (!events.length) return null;
+            var pour = null;
+            steps.forEach(function (li) { if (grams(li) !== null) pour = li; });
+            var last = steps[events[events.length - 1].i];
+            if (pour && reachedAt(pour) !== null) return { t: reachedAt(pour), how: 'from reaching ' + g(grams(pour)) + ' g' };
+            if (last !== pour) return { t: events[events.length - 1].t, how: 'from ' + fmt(events[events.length - 1].t) };
+            return { t: firstTime(pour), how: 'since the last pour began', loose: true };
+        }
         function fresh() { return startedAt === null && stoppedAt === 0 && !countdown; }
 
         // the step without the bullet, number or time ("1:10 — ") the method may start it
@@ -206,10 +224,12 @@
             return li.textContent.replace(/^\s*(?:[•*-]|\d+[.)])\s+/, '').replace(/^\d+:\d\d\s*[—–-]\s*/, '');
         }
 
-        // [frequency, delay, length]: a new step is one beep, the countdown ticks low and
-        // ends high, and reaching a step's weight (static/scale.js) is a rising double chirp
+        // [frequency, delay, length, loudness]: a new step is one beep, the countdown ticks low
+        // and ends high, the three seconds before a step tick softly, and reaching a step's
+        // weight (static/scale.js) is a rising double chirp
         var SOUNDS = {
             step: [[880, 0, 0.3]],
+            soon: [[740, 0, 0.08, 0.3]],
             tick: [[523, 0, 0.12]],
             go: [[1047, 0, 0.5]],
             reached: [[1319, 0, 0.08], [1760, 0.11, 0.14]]
@@ -221,12 +241,13 @@
             try {
                 (SOUNDS[kind] || SOUNDS.step).forEach(function (tone) {
                     var osc = audio.createOscillator(), gain = audio.createGain(), at = audio.currentTime + 0.02 + tone[1];
+                    var loud = tone[3] || 0.6;
                     osc.frequency.value = tone[0];
                     // loud enough for a phone speaker across the counter, with a quick fade in
                     // and out so it doesn't click
                     gain.gain.setValueAtTime(0.0001, at);
-                    gain.gain.exponentialRampToValueAtTime(0.6, at + 0.01);
-                    gain.gain.setValueAtTime(0.6, at + tone[2] - 0.04);
+                    gain.gain.exponentialRampToValueAtTime(loud, at + 0.01);
+                    gain.gain.setValueAtTime(loud, at + tone[2] - 0.04);
                     gain.gain.exponentialRampToValueAtTime(0.0001, at + tone[2]);
                     osc.connect(gain);
                     gain.connect(audio.destination);
@@ -368,6 +389,11 @@
             }
             if (running && current > lastEvent && events[current].t > 0) beep();
             lastEvent = current;
+            // a soft tick each of the three seconds before a step, to pick up the kettle
+            if (running && upcoming && upcoming.t > 0 && upcoming.t - s >= 1 && upcoming.t - s <= 3 && warned !== upcoming.t + ':' + (upcoming.t - s)) {
+                warned = upcoming.t + ':' + (upcoming.t - s);
+                beep('soon');
+            }
             if (animation) animation.update(current, s, running);
             var li = current >= 0 ? steps[events[current].i] : null;
             steps.forEach(function (step) { step.className = ''; });
@@ -384,7 +410,12 @@
             if (countdown) timeSub.textContent = 'pick up the kettle';
             else if (fresh()) timeSub.textContent = lastAt ? 'about ' + fmt(lastAt) : '';
             else if (stopped) timeSub.textContent = current >= 0 ? (current + 1) + ' of ' + events.length + ' steps' : '';
-            else timeSub.textContent = upcoming ? 'next step in ' + fmt(upcoming.t - s) : (events.length ? 'last step' : '');
+            else if (upcoming || !events.length) timeSub.textContent = upcoming ? 'next step in ' + fmt(upcoming.t - s) : '';
+            else {
+                // the last step: the clock keeps going until you stop it, timing the drawdown
+                var dd = drawdownFrom();
+                timeSub.textContent = dd && s >= dd.t ? (dd.loose ? 'since last pour ' : 'drawdown ') + fmt(Math.floor(s - dd.t)) : 'last step';
+            }
             var share = 0;
             if (stopped) share = 1;
             else if (current >= 0) share = upcoming ? (s - events[current].t) / (upcoming.t - events[current].t) : 1;
@@ -406,6 +437,8 @@
                     meta = '';  // the tiles already say what's next
                 } else if (t !== null && w !== null && !shown.hasAttribute('data-reached') && w < t) {
                     meta = Math.ceil(t - w) + ' g to go';
+                } else if (running && !upcoming) {
+                    meta = 'Tap Stop once it has drained through';
                 }
                 cardMeta.textContent = meta;
                 cardMeta.hidden = !meta;
@@ -415,7 +448,6 @@
             next.textContent = running && upcoming ? 'At ' + fmt(upcoming.t) + ' · ' + stepText(steps[upcoming.i]) : '';
             next.hidden = !next.textContent;
             renderDots(li ? events[current].i : -1, stopped);
-            if (autoStop && running && current === events.length - 1 && events[current].t > 0) stop();
         }
 
         function stop() {
@@ -427,6 +459,7 @@
             resetBtn.hidden = false;
             if (logBtn) { logBtn.hidden = stoppedAt === 0; startBtn.className = 'btn-secondary'; }
             render();
+            summarise();
             var notes = $('log-notes');
             if (notes && stoppedAt > 0) {
                 // the scale's reading too, when one is connected (static/scale.js)
@@ -437,6 +470,36 @@
                     ? notes.value.replace(brewed, line)
                     : (notes.value ? line + '\n' + notes.value : line);
             }
+        }
+
+        // After Stop: each pour against the recipe's times (when the scale saw it reached),
+        // the drawdown and the total
+        function signed(sec) { return sec === 0 ? 'on time' : (sec > 0 ? '+' : '−') + fmt(Math.abs(sec)); }
+        function summarise() {
+            var box = $('brew-summary');
+            if (!box) return;
+            if (!stoppedAt) { box.hidden = true; return; }
+            var scaled = !!(window.brewScaleWeight && window.brewScaleWeight() !== null);
+            var pours = steps.filter(function (li) { return grams(li) !== null && li.getAttribute('data-times'); });
+            var html = '<h3>How it went</h3>';
+            if (pours.length && scaled) {
+                html += '<table class="brew-summary-table"><thead><tr><th>Pour</th><th>Weight in</th></tr></thead><tbody>';
+                pours.forEach(function (li) {
+                    var at = reachedAt(li), start = firstTime(li);
+                    html += '<tr><td><span class="t">' + fmt(start) + '</span> ' + stepText(li).replace(/</g, '&lt;') + '</td><td>'
+                        + (at === null ? '<span class="muted">not reached</span>'
+                                       : '<b>' + fmt(Math.round(at)) + '</b> <span class="muted">' + Math.max(0, Math.round(at - start)) + ' s</span>')
+                        + '</td></tr>';
+                });
+                html += '</tbody></table>';
+            }
+            var dd = drawdownFrom();
+            if (dd && stoppedAt > dd.t) {
+                html += '<p>' + (dd.loose ? 'Since the last pour began' : 'Drawdown') + ' <b>' + fmt(Math.floor(stoppedAt - dd.t)) + '</b> <span class="muted">' + (dd.loose ? '' : dd.how) + '</span></p>';
+            }
+            html += '<p>Brewed in <b>' + fmt(stoppedAt) + '</b>' + (lastAt ? ' <span class="muted">· the last step is at ' + fmt(lastAt) + ' (' + signed(stoppedAt - lastAt) + ')</span>' : '') + '</p>';
+            box.innerHTML = html;
+            box.hidden = false;
         }
 
         // Start from zero counts down first, so there's time to pick up the kettle:
@@ -486,6 +549,7 @@
             startBtn.className = '';
             resetBtn.hidden = true;
             if (logBtn) logBtn.hidden = true;
+            if ($('brew-summary')) $('brew-summary').hidden = true;
             render();
         }
 
@@ -498,6 +562,8 @@
         resetBtn.addEventListener('click', function () {
             stoppedAt = 0;
             lastEvent = -1;
+            warned = '';
+            if ($('brew-summary')) $('brew-summary').hidden = true;
             startBtn.textContent = 'Start';
             startBtn.className = '';
             resetBtn.hidden = true;
@@ -514,6 +580,7 @@
             if (document.visibilityState === 'visible' && startedAt !== null) keepAwake();
         });
         window.brewRender = render;  // scale.js redraws when a weight is reached
+        window.brewElapsed = elapsed;  // and notes when, for the summary after Stop
         render();
     })();
 </script>

@@ -10,7 +10,7 @@ import re
 import pytest
 
 from app import crud, models
-from app.brew import ends_timer, is_standard, needs_tidy, parse_steps, prep_text, step_editor_data, suggest_steps
+from app.brew import is_standard, needs_tidy, parse_steps, prep_text, step_editor_data, suggest_steps
 from test_flows import BASELINE, COMBO, app, latest, post, variation  # noqa: F401 — app is a fixture
 
 STANDARD = "Prep: Add the grounds\n0:00 — Bloom (to 90g)\n0:40 — Pour (to 200g)\n2:30 — Open valve, drain\n3:30 — Done"
@@ -54,14 +54,7 @@ def test_free_text_steps_are_unchanged():
     assert [(s.text, s.times, s.is_prep) for s in parse_steps(FREE_TEXT)] == [
         ("Close the switch", [], False), ("Add all the water", [], False), ("Release at 3:00", [180], False),
     ]
-    assert prep_text(FREE_TEXT) == "" and not ends_timer(FREE_TEXT)
-
-
-@pytest.mark.parametrize("text, expected", [
-    (STANDARD, True), ("0:00 — Pour\n3:00 — Drawdown done (target 3:30)", True), ("0:00 — Pour\n3:00 — Drain", False),
-])
-def test_only_a_step_called_done_ends_the_timer(text, expected):
-    assert ends_timer(text) is expected
+    assert prep_text(FREE_TEXT) == ""
 
 
 def test_editor_data():
@@ -124,17 +117,18 @@ def test_standard_recipe_is_not_offered_tidying(app):
     assert app.client.get("/lines/1/tidy", follow_redirects=False).status_code == 303
 
 
-def test_brew_mode_uses_prep_and_auto_stop(app):
+def test_brew_mode_uses_prep_and_never_stops_by_itself(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": STANDARD})
     html = app.client.get("/lines/1/brew", params={"bag_id": 1}).text
-    assert 'data-prep="Add the grounds"' in html and 'data-auto-stop="1"' in html
+    # a last step called "Done" no longer stops the clock: you stop it when the drawdown ends
+    assert 'data-prep="Add the grounds"' in html and 'data-auto-stop' not in html
     assert "0:40 — Pour · to 200 g" in html
 
 
 def test_brew_mode_for_free_text_is_as_before(app):
     post(app, "/recipes", {**BASELINE, "recipe_text": FREE_TEXT})
     html = app.client.get("/lines/1/brew", params={"bag_id": 1}).text
-    assert 'data-prep=""' in html and 'data-auto-stop="0"' in html
+    assert 'data-prep=""' in html
     assert re.search(r'<li data-times="180">Release at 3:00</li>', html)
 
 

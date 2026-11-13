@@ -73,3 +73,13 @@ def test_graphs_section_waits_for_a_brew(app):
     assert page.index('/static/brew_graphs.js') < page.index('/static/scale.js')  # scale.js hands it the readings
     section = page[page.index('id="brew-graphs"'):]
     assert section[:section.index(">")].endswith("hidden")
+
+
+def test_brew_mode_has_room_for_the_next_pour_and_the_summary(app):
+    """The next pour once one is in, and how the brew went after Stop: drawn by the scripts,
+    hidden until then. A last step called "Done" no longer stops the clock (drawdown)."""
+    post(app, "/recipes", {**BASELINE, "recipe_text": METHOD})
+    html = app.client.get("/lines/1/brew", params={"bag_id": 1}).text
+    assert re.search(r'<span class="brew-scale-next" id="brew-scale-next" hidden>', html)
+    assert re.search(r'<div class="brew-summary" id="brew-summary" hidden>', html)
+    assert "data-auto-stop" not in html
