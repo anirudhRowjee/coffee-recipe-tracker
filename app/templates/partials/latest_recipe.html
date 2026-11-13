@@ -208,10 +208,69 @@
 </dialog>
 {% endif %}
 
+{#
+  The recipe's change to try next (it belongs to the recipe, not to Up next: see AGENTS.md).
+  Saved with POST /lines/{id}/next; "Drop it" sends no setting, which clears it.
+#}
+<dialog class="sheet" id="next-sheet" aria-label="Change to try next">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Change to try next</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    {% if rec and not rec.from_plan %}
+    <p class="muted">Your last cup's Next time note ({{ change_label(rec.recommended_param, rec.recommended_delta) }}) shows first; this one waits behind it.</p>
+    {% else %}
+    <p class="muted">It stays with this recipe, Up next or not, until you save its next version.</p>
+    {% endif %}
+    <form method="post" action="/lines/{{ line.id }}/next" class="stacked-form next-change-form">
+        <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}" />
+        <p class="eyebrow">What to change</p>
+        <div class="seg" role="radiogroup" aria-label="What to change">
+            {% for value, text in [('dose_g', 'Coffee'), ('grind_size', 'Grind'), ('water_ml', 'Water'), ('temp_c', 'Temp'), ('recipe_text', 'Method')] %}
+            <label><input type="radio" name="suggested_param" value="{{ value }}" {% if line.next_param == value or (not line.next_param and value == 'temp_c') %}checked{% endif %} /><span>{{ text }}</span></label>
+            {% endfor %}
+        </div>
+        <div class="next-amount-row">
+            <p class="eyebrow">By how much</p>
+            <div class="stepper">
+                <button type="button" class="stepper-btn" data-step="-1" aria-label="Less">−</button>
+                <input name="suggested_delta" type="number" inputmode="decimal" step="any"
+                    value="{{ line.next_delta|num if line.next_delta is not none else '1' }}" data-label="Amount" />
+                <button type="button" class="stepper-btn" data-step="1" aria-label="More">+</button>
+            </div>
+        </div>
+        <label>Why <span class="muted">(optional)</span>
+            <input name="suggested_rationale" value="{{ line.next_rationale or '' }}" placeholder="e.g. a bit sour, try hotter" />
+        </label>
+        <button type="submit">Save</button>
+    </form>
+    {% if line.next_param %}
+    <form method="post" action="/lines/{{ line.id }}/next" style="margin-top:8px">
+        <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}" />
+        <button type="submit" class="btn-secondary">Drop it</button>
+    </form>
+    {% endif %}
+    <script>
+        // − and + move by a sensible step for the setting picked; the method has no amount
+        (function () {
+            var form = document.currentScript.parentNode.querySelector('.next-change-form');
+            var STEP = { dose_g: 0.5, grind_size: 1, water_ml: 10, temp_c: 1 };
+            function sync() {
+                var param = form.querySelector('[name="suggested_param"]:checked').value;
+                form.querySelector('.next-amount-row').hidden = param === 'recipe_text';
+                form.querySelectorAll('.stepper-btn').forEach(function (b) {
+                    b.setAttribute('data-step', (b.getAttribute('aria-label') === 'Less' ? -1 : 1) * (STEP[param] || 1));
+                });
+            }
+            form.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+</dialog>
+
 <dialog class="sheet" id="more-sheet" aria-label="More">
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>{{ line.name if line.name != 'Default' else 'This recipe' }}</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
     <nav class="action-list" style="margin-bottom:10px">
+        <button type="button" data-sheet="next-sheet">{% if line.next_param %}Change to try next<span class="muted">{{ change_label(line.next_param, line.next_delta) }}</span>{% else %}+ Change to try next<span class="chev">›</span>{% endif %}</button>
         <button type="button" data-sheet="share-sheet">Share recipe<span class="chev">›</span></button>
         {% if shape in ('cone', 'switch', 'flat') %}<a href="/four-six?bag_id={{ bag_id }}&amp;brewer_id={{ brewer_id }}&amp;grinder_id={{ grinder_id }}">New 4:6 recipe for this gear<span class="chev">›</span></a>{% endif %}
         {% if not is_current_plan %}<button type="button" data-sheet="plan-sheet">Make this Up next<span class="chev">›</span></button>{% endif %}

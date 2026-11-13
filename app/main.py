@@ -1051,6 +1051,8 @@ def set_next_change(request: Request, line_id: int, suggested_param: str = Form(
                     suggested_rationale: str = Form(None), next: str = Form(None)):
     """Set (or, with no setting, clear) a named recipe's planned change."""
     suggestion = _plan_suggestion(suggested_param, suggested_delta, suggested_rationale)
+    if suggestion and suggestion["suggested_param"] != "recipe_text" and not suggestion["suggested_delta"]:
+        raise HTTPException(status_code=400, detail="Set how much to change it by: an amount other than 0")
     with Session(db.engine) as session:
         user = _require_user(request, session)
         line = _owned(session, user, models.RecipeLine, line_id)

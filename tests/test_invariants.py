@@ -177,7 +177,10 @@ def test_a_cups_own_note_wins_over_the_planned_change(busy):
     post(busy, "/lines/1/next", {"suggested_param": "water_ml", "suggested_delta": "10"})
     post(busy, "/brews", {"recipe_id": 4, "bag_id": 1, "recommended_param": "temp_c", "recommended_delta": "1"})
     html = busy.client.get("/recipes/latest", params={**COMBO, "line_id": 1}).text
-    assert 'data-rec="brew"' in html and "Temp +1 °C" in html and "Water +10 ml" not in html
+    banner = re.search(r'<div class="recommendation-banner".*?</div>', html, re.S).group(0)
+    assert 'data-rec="brew"' in banner and "Temp +1 °C" in banner and "Water +10 ml" not in banner
+    # the recipe's own change still waits behind it, where it's set
+    assert "Water +10 ml" in html.split('id="more-sheet"')[1]
 
 
 def test_there_is_at_most_one_plan_per_person(busy):

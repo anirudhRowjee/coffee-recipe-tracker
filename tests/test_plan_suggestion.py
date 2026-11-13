@@ -21,10 +21,10 @@ def plan_row(app):
 
 def test_offered_on_the_panel_when_there_is_no_recommendation(app):
     post(app, "/recipes", BASELINE)
-    assert 'name="suggested_param"' in latest(app)
+    assert '<select name="suggested_param">' in latest(app)
     post(app, "/brews", {"recipe_id": 1, "bag_id": 1, "recommended_param": "dose_g", "recommended_delta": "1"})
     panel = latest(app)
-    assert 'data-rec="brew"' in panel and 'name="suggested_param"' not in panel
+    assert 'data-rec="brew"' in panel and '<select name="suggested_param">' not in panel  # the plan sheet's fields
 
 
 def test_scheduling_with_a_suggestion_shows_it_as_the_next_change(app):
@@ -177,3 +177,24 @@ def test_pages_say_what_is_up_next_for_the_replace_warning(app):
     post(app, "/plan", {**COMBO, "line_id": 1})
     for page in ("/", "/browse"):
         assert '<meta name="up-next" content="Blue Tokai Baarbara Estate" data-bag="1" data-line="1"' in app.client.get(page).text
+
+
+def test_a_change_can_be_set_from_the_card_even_when_up_next(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/plan", {**COMBO, "line_id": 1})
+    html = app.client.get("/").text
+    assert 'id="next-sheet"' in html and "+ Change to try next" in html and 'action="/lines/1/next"' in html
+    post(app, "/lines/1/next", {"suggested_param": "temp_c", "suggested_delta": "3", "suggested_rationale": "Extract more",
+                                "next": "/"})
+    assert plan_row(app) == [{"suggested_param": "temp_c", "suggested_delta": 3.0, "suggested_rationale": "Extract more"}]
+    home = app.client.get("/").text
+    assert 'data-rec="plan"' in home and "Temp +3 °C" in home and "Drop it" in home
+    assert 'value="3"' in home.split('id="next-sheet"')[1]  # the sheet opens on what's set
+
+
+def test_a_change_needs_an_amount_unless_its_the_method(app):
+    post(app, "/recipes", BASELINE)
+    post(app, "/lines/1/next", {"suggested_param": "temp_c", "suggested_delta": "0"}, status=400)
+    post(app, "/lines/1/next", {"suggested_param": "temp_c"}, status=400)
+    post(app, "/lines/1/next", {"suggested_param": "recipe_text", "suggested_rationale": "longer bloom"})
+    assert plan_row(app)[0]["suggested_param"] == "recipe_text"
