@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>What's New This Week</title>
+<style>
+  :root {
+    --bg: #f6f0e8; --card: #fffdf9; --ink: #2c1810; --soft: #7a5a44; --line: #e6d4c0; --accent: #6b3d2e; --tag: #f0e4d4; --step: #6b3d2e; --step-ink: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1b1511; --card: #241d17; --ink: #f3e9de; --soft: #c2a68c; --line: #3e3128; --accent: #e0a07a; --tag: #3a2b20; --step: #e0a07a; --step-ink: #1b1511; }
+  }
+  :root[data-theme="dark"] { --bg: #1b1511; --card: #241d17; --ink: #f3e9de; --soft: #c2a68c; --line: #3e3128; --accent: #e0a07a; --tag: #3a2b20; --step: #e0a07a; --step-ink: #1b1511; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 4px; }
+  .sub { color: var(--soft); margin: 0 0 20px; }
+  h2.part { font-size: 1.25rem; margin: 34px 4px 12px; }
+  .note { background: var(--tag); border-radius: 14px; padding: 14px 18px; margin-bottom: 8px; }
+  .note p { margin: 4px 0; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+  .toc a { display: inline-block; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); text-decoration: none; font-size: 0.92rem; }
+
+  .feature { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  @media (min-width: 720px) { .feature { grid-template-columns: minmax(0, 1fr) 280px; align-items: start; } }
+  .feature h3 { font-size: 1.2rem; margin: 0 0 4px; color: var(--accent); }
+  .feature .what { margin: 0 0 12px; }
+  .how { margin: 0; padding: 0; list-style: none; counter-reset: how; }
+  .how li { position: relative; padding-left: 36px; margin: 10px 0; counter-increment: how; }
+  .how li::before { content: counter(how); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--step); color: var(--step-ink); font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; }
+  .tip { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--tag); font-size: 0.93rem; }
+  .shots { display: grid; gap: 10px; justify-items: center; }
+  .shots img { display: block; width: 100%; max-width: 280px; height: auto; border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(44, 24, 16, 0.12); }
+  .shots figcaption { font-size: 0.82rem; color: var(--soft); text-align: center; margin-top: -2px; }
+  figure { margin: 0; }
+
+  section.more { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+  section.more h3 { font-size: 1.05rem; margin: 0 0 6px; color: var(--accent); }
+  section.more ul { margin: 0; padding-left: 20px; }
+  section.more li { margin: 6px 0; }
+  .end { font-size: 0.95rem; color: var(--soft); margin: 22px 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>What's new in the coffee tracker</h1>
+  <p class="sub">Everything that changed from Monday 9 to Friday 13 November.</p>
+
+  <div class="note">
+    <p><b>Two things first:</b></p>
+    <p>1. <b>You have your own login now.</b> Ask Anirudh for a temporary password, and you'll choose your own when you first sign in.</p>
+    <p>2. <b>The app has a new look</b>, made for phones and iPads. Three tabs along the bottom: <b>Brew</b>, <b>Coffees</b>, <b>Settings</b>.</p>
+    <ul class="toc">
+      <li><a href="#home">Brew page</a></li>
+      <li><a href="#brew-mode">Brewing</a></li>
+      <li><a href="#scale">Scale</a></li>
+      <li><a href="#log">Logging a cup</a></li>
+      <li><a href="#change">Changing a recipe</a></li>
+      <li><a href="#steps">Writing steps</a></li>
+      <li><a href="#more">Everything else</a></li>
+    </ul>
+  </div>
+
+  <h2 class="part">The big changes</h2>
+
+  <article class="feature" id="home">
+    <div>
+      <h3>The Brew page knows what's next</h3>
+      <p class="what">Open the app and your next coffee is ready, with its recipe in big numbers.</p>
+      <ol class="how">
+        <li>It shows the coffee you planned ("📅 Planned"). If you haven't planned one, it shows the coffee you brewed last.</li>
+        <li>Tap <b>Another coffee</b> to switch: pick the coffee, then one of its recipes.</li>
+        <li>Tap <b>Change gear</b> to use a different brewer or grinder.</li>
+        <li>Tap <b>▶ Brew</b> to start. If there's a change waiting to try, <b>Brew with change</b> tries it for this cup only.</li>
+      </ol>
+      <p class="tip">Plan tomorrow's coffee: tap 📅 next to any recipe and it becomes "Up next".</p>
+    </div>
+    <div class="shots"><figure><img src="changelog-img/01-up-next.jpg" alt="The Brew page: the planned coffee with its recipe as four tiles and Brew buttons" /></figure></div>
+  </article>
+
+  <article class="feature" id="brew-mode">
+    <div>
+      <h3>Brewing: a timer that walks you through</h3>
+      <p class="what">Brew mode shows the recipe in big tiles you can read from the counter, then each step as it happens.</p>
+      <ol class="how">
+        <li>Before you start, check the four tiles: coffee, grind, water and temperature.</li>
+        <li>Want it to talk? Turn on <b>🔈 Read the steps aloud</b>.</li>
+        <li>Tap <b>Start</b>. It beeps at every step, with three soft ticks just before each one.</li>
+        <li>The timer keeps going after the last step. <b>Tap Stop when the water has drained</b>, so you know your drawdown time.</li>
+      </ol>
+      <p class="tip">No beeps? If you see "🔇 Sound off · tap", tap it once. Beeps work even with the phone on silent.</p>
+    </div>
+    <div class="shots"><figure><img src="changelog-img/02-brew-mode.jpg" alt="Brew mode before Start: four recipe tiles, Read the steps aloud, the first step and Start" /></figure></div>
+  </article>
+
+  <article class="feature" id="scale">
+    <div>
+      <h3>With a Bookoo scale: just pour</h3>
+      <p class="what">Connect the scale and the app tells you how far to pour and when you got there. Works in Bluefy (iPhone and iPad) and Chrome.</p>
+      <ol class="how">
+        <li>In brew mode, tap <b>+ Scale</b> and pick your scale.</li>
+        <li>Tap <b>Start</b>. There's no countdown: <b>start pouring and the timer starts by itself.</b></li>
+        <li>The big number is where to pour to (<b>"Pour to 96 g"</b>), with what's on the scale under it. The bar fills up for each pour.</li>
+        <li>When you reach it, the tile turns green with a ✓ and a chirp, and shows where the next pour goes.</li>
+      </ol>
+      <p class="tip">After Stop, <b>How it went</b> shows when each pour hit its weight, your drawdown time and the total. You also get weight and flow graphs.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="changelog-img/03-pour-to.jpg" alt="Brew mode while pouring: Time 0:53, Pour to 96 g with 70.2 g now" /></figure>
+      <figure><img src="changelog-img/03b-reached.jpg" alt="Target reached: Poured to 96 g with a green tick and the next pour" /><figcaption>Reached: green, with the next pour</figcaption></figure>
+      <figure><img src="changelog-img/04-how-it-went.jpg" alt="How it went: each pour, when its weight was in, drawdown and total time" /><figcaption>After Stop</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="feature" id="log">
+    <div>
+      <h3>Logging a cup: tap, don't type</h3>
+      <p class="what">After Stop, tap <b>Log this brew</b>.</p>
+      <ol class="how">
+        <li>Give it <b>stars</b>.</li>
+        <li>Tap the words that fit the taste (Sour, Sweet, Bitter…), or write your own.</li>
+        <li>Under <b>Next time</b>, tap what you'd change (Finer, Hotter, More coffee…) and set by how much.</li>
+        <li>Tap <b>Log brew</b>.</li>
+      </ol>
+      <p class="tip">Tastes different once it's cooled? For an hour the card asks <b>"How is it now it's cooled?"</b> so you can add to your notes. You can fix any cup later, and a deleted cup can be brought back with Undo for two minutes.</p>
+    </div>
+    <div class="shots"><figure><img src="changelog-img/05-log-cup.jpg" alt="The log form: stars, taste words, Next time choices and Log brew" /></figure></div>
+  </article>
+
+  <article class="feature" id="change">
+    <div>
+      <h3>Changing a recipe: one thing at a time</h3>
+      <p class="what">Each new version changes exactly one thing, so you always know what made the difference.</p>
+      <ol class="how">
+        <li>On the Brew page, tap <b>Try it</b> next to your Next time note (or More → Try a change).</li>
+        <li>Tap the <b>one tile</b> you want to change. The others lock.</li>
+        <li>Set it with <b>−</b> and <b>+</b>, say why, and save.</li>
+      </ol>
+      <p class="tip">Not sure yet? Use <b>Brew with change</b> on the Brew page. It saves the new version only if you log the cup. Every recipe also has a <b>Versions</b> page showing what each change did and how it was rated.</p>
+    </div>
+    <div class="shots"><figure><img src="changelog-img/06-try-a-change.jpg" alt="Try a change: Temp selected and set from 93 to 96 °C, other tiles locked" /></figure></div>
+  </article>
+
+  <article class="feature" id="steps">
+    <div>
+      <h3>Writing the steps of a recipe</h3>
+      <p class="what">A recipe's method is a list of timed steps. <b>Each time is when that step begins, counted from when you press Start</b>, not how long it lasts. "0:00 Bloom, 0:45 Pour" means you pour at 45 seconds.</p>
+      <ol class="how">
+        <li>Tap <b>✎ Edit steps</b> to change them. (This stops stray taps from changing anything.)</li>
+        <li>Use <b>−</b> / <b>+</b> to move a time by 1 second or a weight by 1 g, or type it.</li>
+        <li>Drag <b>⠿</b> to move a step up or down. It takes the time of the place you drop it.</li>
+        <li>Tap <b>Done editing</b> when you're finished.</li>
+      </ol>
+      <p class="tip">Making a recipe from scratch on a cone or the Switch? Try the <b>4:6 builder</b>: set roast, taste and strength with sliders and it writes the steps for you.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="changelog-img/07-steps-reading.jpg" alt="The steps as a list: 0:00 Bloom to 44 g, 0:45 Pour to 96 g, and so on" /><figcaption>Reading</figcaption></figure>
+      <figure><img src="changelog-img/08-steps-editing.jpg" alt="Editing steps: minus and plus buttons, drag handles and Add step" /><figcaption>After tapping ✎ Edit steps</figcaption></figure>
+    </div>
+  </article>
+
+  <h2 class="part" id="more">Everything else</h2>
+
+  <section class="more">
+    <h3>Finding your way</h3>
+    <ul>
+      <li>Tap any <b>?</b> for a short explanation. Brew has a quick tour the first time, and Settings has a <b>How this works</b> page.</li>
+      <li>Less important options open in a panel that slides up, and close with a tap outside.</li>
+      <li>"‹ Back" takes you back to where you were.</li>
+      <li>If you make a mistake in a form, it says what's wrong under the field and keeps what you typed.</li>
+    </ul>
+  </section>
+
+  <section class="more">
+    <h3>Coffees</h3>
+    <ul>
+      <li>Add a coffee and its bag in one go: bag size, roast date, tasting notes, and frozen or not.</li>
+      <li>Take a photo of the bag and the app picks colours from it for that coffee.</li>
+      <li>Each coffee has its own page with its bags, recipes and recent cups.</li>
+    </ul>
+  </section>
+
+  <section class="more">
+    <h3>Recipes</h3>
+    <ul>
+      <li>Starting a new coffee? Copy one of your recipes, pick a starting recipe for your brewer, or use the 4:6 builder.</li>
+      <li><b>Change to try next</b>: note what to try next time on any recipe (More → Change to try next). It stays until you make the next version.</li>
+      <li>Versions page: compare versions, brew an older one once, or undo the last change.</li>
+    </ul>
+  </section>
+
+  <section class="more">
+    <h3>Sharing and Settings</h3>
+    <ul>
+      <li><b>Share as image</b>: a recipe card sized for Instagram. You can add a tasting note or the brew graph, or make it story-sized; nothing private appears unless you turn it on.</li>
+      <li>Settings shows how much you've <b>saved</b> compared with café coffee, and your <b>brewing streak</b>.</li>
+      <li>Gear you've stopped using can be <b>put away</b> instead of deleted.</li>
+      <li>Turn the brewing animation or the live graph on or off.</li>
+    </ul>
+  </section>
+
+  <p class="end">Stuck, or something looks off? Send Anirudh a screenshot and say what you tapped.</p>
+</main>
+</body>
+</html>
