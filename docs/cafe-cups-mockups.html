@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Café Cups Mock-ups</title>
+<style>
+  :root { --bg: #f3ece3; --card: #fffdf9; --tile: #faf6f0; --line: #e0c9b0; --ink: #2c1810; --soft: #8c6a4f; --brown: #6b3d2e; --chip: #fffcf7; --gold: #d4a24c; --accent: #b4632f; --accent-soft: #f2e2d2; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c; --brown: #d9a27f; --chip: #2e2620; --gold: #e0b45a; --accent: #e08b52; --accent-soft: #4a3526; }
+  }
+  :root[data-theme="dark"] { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c; --brown: #d9a27f; --chip: #2e2620; --gold: #e0b45a; --accent: #e08b52; --accent-soft: #4a3526; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 0 0 6px; }
+  h2 { font-size: 1.25rem; margin: 38px 0 4px; }
+  p.lead, p.why { color: var(--soft); margin: 0 0 14px; max-width: 72ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .state { flex: 0 1 330px; min-width: 0; }
+  .state h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--soft); margin: 0 0 6px; }
+  .phone { width: 100%; max-width: 330px; background: var(--card); border: 1px solid var(--line); border-radius: 28px; padding: 14px 14px 0; overflow: hidden; }
+  .phone .tabs { display: flex; justify-content: space-around; border-top: 1px solid var(--line); margin: 12px -14px 0; padding: 8px 0 10px; font-size: 0.72rem; color: var(--soft); }
+  .phone .tabs b { color: var(--brown); }
+  .serif { font-family: Georgia, "Palatino Linotype", serif; }
+  .muted { color: var(--soft); }
+  .eyebrow { font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--soft); margin: 12px 0 6px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 4px 0 12px; }
+  .seg span { flex: 1; text-align: center; padding: 9px 0; font-weight: 600; font-size: 0.9rem; }
+  .seg .on { background: var(--brown); color: #fff; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); font-size: 0.85rem; }
+  .chip.on { background: var(--brown); border-color: var(--brown); color: #fff; }
+  .field { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--chip); min-height: 42px; }
+  .field.ph { color: var(--soft); }
+  .btn { display: block; text-align: center; padding: 12px; border-radius: 12px; background: var(--brown); color: #fff; font-weight: 700; margin: 12px 0 0; }
+  .btn.sec { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .stars { color: var(--gold); font-size: 1.9rem; letter-spacing: 4px; }
+  .stars.sm { display: block; font-size: 0.95rem; letter-spacing: 1px; }
+  .photo { position: relative; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); aspect-ratio: 4 / 3; display: grid; place-items: center; }
+  .photo svg { width: 45%; opacity: 0.95; }
+  .photo .add { position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,0.92); color: #2c1810; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+  .photo.empty { background: var(--tile); border: 2px dashed var(--line); aspect-ratio: 16 / 9; color: var(--soft); font-weight: 600; text-align: center; }
+  .list-card { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--tile); margin-bottom: 8px; }
+  .thumb { width: 64px; height: 64px; border-radius: 10px; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); }
+  .thumb.b { background: radial-gradient(circle at 60% 40%, #f1e3c8, #b98b5e 70%, #6b4428); }
+  .thumb.c { background: radial-gradient(circle at 40% 60%, #3a2418, #1d120c); }
+  .list-card b { display: block; }
+  .list-card small { color: var(--soft); }
+  .fold { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-weight: 600; }
+  .fold small { font-weight: 400; color: var(--soft); }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+  .toggle { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .sw { width: 42px; height: 24px; border-radius: 999px; background: var(--line); position: relative; flex: none; }
+  .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  .sw.on { background: var(--brown); }
+  .sw.on::after { left: 21px; }
+  .handle { display: flex; align-items: center; gap: 6px; }
+  .handle .at { font-weight: 700; color: var(--soft); }
+
+  /* the share card itself, at mock size */
+  .card-out { width: 300px; aspect-ratio: 4 / 5; border-radius: 6px; overflow: hidden; background: #6b3d2e; padding: 9px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .card-out.story { aspect-ratio: 9 / 16; width: 240px; }
+  .card-in { height: 100%; background: #faf6f0; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; color: #2c1810; }
+  .card-in .ph { flex: 1 1 55%; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); display: grid; place-items: center; }
+  .card-in .ph svg { width: 40%; }
+  .card-in .txt { padding: 11px 13px 9px; display: flex; flex-direction: column; gap: 3px; }
+  .card-in .cafe { font-family: Georgia, serif; font-size: 1.15rem; line-height: 1.15; }
+  .card-in .where { font-size: 0.68rem; color: #7a5a44; }
+  .card-in .drink { font-size: 0.78rem; font-weight: 700; color: #3b1f0e; margin-top: 3px; }
+  .card-in .note { font-family: Georgia, serif; font-style: italic; font-size: 0.75rem; background: #f3ebdf; border-left: 3px solid #b4632f; padding: 4px 7px; margin-top: 4px; }
+  .card-in .foot { display: flex; justify-content: space-between; font-size: 0.6rem; color: #7a5a44; margin-top: 5px; padding-top: 5px; border-top: 1px solid #e3d5c3; }
+  .card-in .foot b { color: #2c1810; }
+  .card-in .s { color: #d4a24c; font-size: 0.9rem; letter-spacing: 1px; }
+  .card-in .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .card-in .tags span { font-size: 0.6rem; padding: 2px 6px; border-radius: 999px; background: #f0e4d4; }
+
+  .ipad { max-width: 920px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 720px) { .ipad { grid-template-columns: minmax(0,1fr); } }
+  .decide { margin-top: 36px; padding: 16px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); max-width: 78ch; }
+  .decide h2 { margin-top: 0; }
+  .decide li { margin-bottom: 8px; }
+  table.data { border-collapse: collapse; width: 100%; max-width: 760px; font-size: 0.92rem; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  table.data th, table.data td { text-align: left; padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  table.data th { background: var(--tile); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--soft); border-top: 0; }
+  .scroll { overflow-x: auto; }
+  .feed { border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: var(--tile); margin-bottom: 10px; }
+  .feed-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 0.88rem; line-height: 1.2; }
+  .av { width: 30px; height: 30px; border-radius: 50%; background: var(--brown); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+  .feed-body { padding: 8px 2px 0; }
+  .seg span { font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<main>
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="cup" viewBox="0 0 100 80"><ellipse cx="45" cy="30" rx="38" ry="14" fill="#f4e6d2"/><ellipse cx="45" cy="30" rx="30" ry="9" fill="#c98a52"/><path d="M28 29c8-6 26-6 34 0-8 5-26 5-34 0z" fill="#f7ead9"/><path d="M7 30c0 22 17 38 38 38s38-16 38-38" fill="#fff" opacity=".9"/><path d="M83 36c10 0 14 5 12 11s-9 9-15 7" fill="none" stroke="#fff" stroke-width="5" opacity=".9"/></symbol>
+  </svg>
+
+  <h1>Café cups: log and share coffee you drink out</h1>
+  <p class="lead">A café cup is separate from your recipes. Nothing here is a version, a bag or a dial-in step: it's a diary of what you drank, where, how good it was, and a photo, with a card you can post. It lives with your coffees, takes about 20 seconds to log, and only the café, the kind of drink and a star rating are needed.</p>
+
+  <h2>1 · Where it lives</h2>
+  <p class="why">A fourth tab, <b>Cafés</b>, between Coffees and Settings, with <b>Mine | Friends</b> at the top. Coffees stays as it is. On Brew there's also a quiet "☕ Had one out? Log a café cup" link at the bottom.</p>
+  <div class="row">
+    <div class="state"><h3>Cafés → Mine</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.35rem">Cafés</div>
+        <div class="seg"><span class="on">Mine</span><span>Friends</span></div>
+        <div class="btn" style="margin:0 0 12px">+ Log a café cup</div>
+        <div class="list-card"><div class="thumb"></div><div><b>Subko · Bandra</b><span class="stars sm">★★★★☆</span><small>V60 · Kenya Kiambu · Today · 👥 in the feed</small></div></div>
+        <div class="list-card"><div class="thumb b"></div><div><b>Third Wave · Indiranagar</b><span class="stars sm">★★★☆☆</span><small>Flat white · Thu 12 Nov</small></div></div>
+        <div class="list-card"><div class="thumb c"></div><div><b>Dyu Art Café</b><span class="stars sm">★★★★★</span><small>Cold brew · Sun 8 Nov</small></div></div>
+        <p class="muted" style="font-size:.8rem;margin:6px 2px 0">23 café cups · 9 cafés · best: Dyu Art Café</p>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+
+    <div class="state"><h3>Log a café cup (top)</h3>
+      <div class="phone">
+        <div class="muted">‹ Back</div>
+        <div class="serif" style="font-size:1.3rem;margin:4px 0 10px">A café cup</div>
+        <div class="photo empty">📷<br>Add a photo of the cup<br><small style="font-weight:400">camera or library</small></div>
+        <div class="eyebrow">Café</div>
+        <div class="field">Subko</div>
+        <div class="chips" style="margin-top:6px"><span class="chip">Third Wave</span><span class="chip">Dyu Art Café</span><span class="chip">Blue Tokai</span></div>
+        <div class="eyebrow">Where <span style="text-transform:none;letter-spacing:0">(optional)</span></div>
+        <div class="field">Bandra, Mumbai</div>
+        <div class="eyebrow">What you had</div>
+        <div class="chips"><span class="chip on">Pour over</span><span class="chip">Espresso</span><span class="chip">Milk drink</span><span class="chip">Cold brew</span><span class="chip">Batch filter</span><span class="chip">Other</span></div>
+        <div class="field" style="margin-top:8px">V60</div>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+
+    <div class="state"><h3>Log a café cup (scrolled)</h3>
+      <div class="phone">
+        <div class="eyebrow" style="margin-top:0">How good was it?</div>
+        <div class="stars">★★★★☆</div>
+        <div class="eyebrow">How it tasted <span style="text-transform:none;letter-spacing:0">tap any, or write</span></div>
+        <div class="chips"><span class="chip on">Juicy</span><span class="chip">Sweet</span><span class="chip on">Bright</span><span class="chip">Bitter</span><span class="chip">Balanced</span><span class="chip">Weak</span></div>
+        <div class="field" style="margin-top:8px;min-height:56px">Juicy, bright. Blackcurrant and a long sweet finish.</div>
+        <div class="fold">▸ About the coffee <small>· roaster, origin, process</small></div>
+        <div class="fold">▸ Price, and would you order it again <small>· optional</small></div>
+        <div class="eyebrow">Your handle on the card</div>
+        <div class="field handle"><span class="at">@</span>anirudh.brews</div>
+        <p class="muted" style="font-size:.78rem;margin:4px 2px 0">Remembered for next time. Leave empty to post without a name.</p>
+        <div class="toggle"><span><b>Show in the friends' feed</b><br><small class="muted">Signed-in friends can see it. Off by default.</small></span><span class="sw on"></span></div>
+        <div class="btn">Save café cup</div>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+  </div>
+
+  <h2>2 · The details you can add</h2>
+  <p class="why">Only three are needed. Everything else is a tap or folded away, so logging stays quick at the café table.</p>
+  <div class="scroll"><table class="data">
+    <tr><th>Field</th><th>How you fill it</th><th>Needed?</th></tr>
+    <tr><td>Photo of the cup</td><td>Camera or library; shrunk on the phone, colours picked from it (like bag photos)</td><td>Optional (recommended)</td></tr>
+    <tr><td>Café</td><td>Type it; cafés you've been to before come up as chips</td><td><b>Yes</b></td></tr>
+    <tr><td>Where</td><td>Area or city, remembered per café</td><td>Optional</td></tr>
+    <tr><td>Drink</td><td>Kind as a chip (Pour over, Espresso, Milk drink, Cold brew, Batch filter, Other) plus a name ("V60", "Cortado")</td><td><b>Yes</b> (the kind)</td></tr>
+    <tr><td>Rating</td><td>1–5 stars</td><td><b>Yes</b></td></tr>
+    <tr><td>Tasting notes</td><td>Taste words to tap, plus text</td><td>Optional</td></tr>
+    <tr><td>The coffee</td><td>Roaster, bean/origin, process (folded)</td><td>Optional</td></tr>
+    <tr><td>Price</td><td>₹, folded</td><td>Optional</td></tr>
+    <tr><td>Order again?</td><td>Yes / No</td><td>Optional</td></tr>
+    <tr><td>When</td><td>Now, changeable</td><td>Automatic</td></tr>
+    <tr><td>Your handle</td><td>@name for the card; remembered on your account, editable per cup</td><td>Optional</td></tr>
+  </table></div>
+
+  <h2>3 · The share card</h2>
+  <p class="why">Like Share as image for recipes: drawn in the browser, then the phone's share sheet (Instagram, WhatsApp, anything) or a download. The photo takes the top, the words sit on a plain card below it (never on the photo, so they stay readable), and the border takes the photo's colours. You choose what goes on it: rating, tasting note, the coffee, price. Your handle goes in the corner.</p>
+  <div class="row" style="align-items:center">
+    <div class="state" style="flex-basis:300px"><h3>Post (4:5)</h3>
+      <div class="card-out"><div class="card-in">
+        <div class="ph"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+        <div class="txt">
+          <div class="cafe">Subko</div>
+          <div class="where">Bandra, Mumbai · Sun 15 Nov</div>
+          <div class="drink">V60 · Kenya Kiambu, washed · Subko roasters</div>
+          <div class="s">★★★★☆</div>
+          <div class="note">"Juicy, bright. Blackcurrant and a long sweet finish."</div>
+          <div class="foot"><span><b>@anirudh.brews</b></span><span>Coffee Recipe Tracker</span></div>
+        </div>
+      </div></div></div>
+    <div class="state" style="flex-basis:240px"><h3>Story (9:16)</h3>
+      <div class="card-out story"><div class="card-in">
+        <div class="ph" style="flex-basis:62%"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+        <div class="txt">
+          <div class="cafe">Subko</div>
+          <div class="where">Bandra, Mumbai</div>
+          <div class="drink">V60 · Kenya Kiambu</div>
+          <div class="s">★★★★☆</div>
+          <div class="tags"><span>Juicy</span><span>Bright</span></div>
+          <div class="foot"><span><b>@anirudh.brews</b></span><span>Sun 15 Nov</span></div>
+        </div>
+      </div></div></div>
+    <div class="state"><h3>The share page</h3>
+      <div class="phone">
+        <div class="muted">‹ Back</div>
+        <div class="serif" style="font-size:1.2rem;margin:4px 0 8px">Share this café cup</div>
+        <div class="seg"><span class="on">Post</span><span>Story</span></div>
+        <div class="toggle"><span>Rating</span><span class="sw on"></span></div>
+        <div class="toggle"><span>Tasting note</span><span class="sw on"></span></div>
+        <div class="toggle"><span>The coffee (roaster, origin)</span><span class="sw on"></span></div>
+        <div class="toggle"><span>Price</span><span class="sw"></span></div>
+        <div class="toggle"><span>Date</span><span class="sw on"></span></div>
+        <div class="eyebrow">Handle</div>
+        <div class="field handle"><span class="at">@</span>anirudh.brews</div>
+        <div class="btn">Share…</div>
+        <div class="btn sec">Save image</div>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+  </div>
+
+  <h2>4 · A café cup, and on a landscape iPad</h2>
+  <p class="why">Tapping a café cup opens its page: the photo, everything you logged, Share, Edit and Delete (with Undo, like a cup). On an iPad the list sits beside the selected cup.</p>
+  <div class="ipad">
+    <div>
+      <div class="seg"><span class="on">Mine</span><span>Friends</span></div>
+      <div class="list-card" style="outline:2px solid var(--brown)"><div class="thumb"></div><div><b>Subko · Bandra</b><span class="stars sm">★★★★☆</span><small>V60 · Kenya Kiambu · Today</small></div></div>
+      <div class="list-card"><div class="thumb b"></div><div><b>Third Wave · Indiranagar</b><span class="stars sm">★★★☆☆</span><small>Flat white · Thu 12 Nov</small></div></div>
+      <div class="list-card"><div class="thumb c"></div><div><b>Dyu Art Café</b><span class="stars sm">★★★★★</span><small>Cold brew · Sun 8 Nov</small></div></div>
+    </div>
+    <div>
+      <div class="photo"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+      <div class="serif" style="font-size:1.4rem;margin:10px 0 0">Subko</div>
+      <div class="muted">Bandra, Mumbai · Sun 15 Nov, 10:40</div>
+      <div class="stars" style="font-size:1.4rem">★★★★☆</div>
+      <p style="margin:4px 0"><b>V60</b> · Kenya Kiambu, washed · Subko roasters · ₹350 · Would order again</p>
+      <p style="margin:4px 0;font-style:italic">"Juicy, bright. Blackcurrant and a long sweet finish."</p>
+      <div class="grid2"><div class="btn">Share as image</div><div class="btn sec">Edit</div></div>
+      <div class="toggle"><span>👥 In the friends' feed</span><span class="sw on"></span></div>
+      <div class="fold" style="display:flex;justify-content:space-between"><span>🛍 Bought the beans? <small>Add them as a coffee</small></span><span>›</span></div>
+    </div>
+  </div>
+
+
+  <h2>5 · Friends: café cups people chose to share</h2>
+  <p class="why">The second switch on Cafés. Only people signed in to the app see it (past the site password <i>and</i> their own account); there's no public link. It shows cups whose owner turned on "Show in the friends' feed", newest first. It's look-only: nobody can change someone else's cup, and turning the switch off takes a cup out of the feed at once. No likes, comments or follows for now.</p>
+  <div class="row">
+    <div class="state"><h3>Cafés → Friends</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.35rem">Cafés</div>
+        <div class="seg"><span>Mine</span><span class="on">Friends</span></div>
+        <div class="feed">
+          <div class="feed-head"><span class="av">M</span><span><b>@meera.k</b><br><small class="muted">2 hours ago</small></span></div>
+          <div class="photo" style="aspect-ratio:4/3;border-radius:12px"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+          <div class="feed-body"><b class="serif" style="font-size:1.1rem">Dyu Art Café</b> <small class="muted">· Koramangala</small>
+            <div class="stars sm">★★★★★</div>
+            <div><b>Cold brew</b> · Ethiopia Guji, natural</div>
+            <p style="margin:4px 0 0;font-style:italic">"Blueberry jam. Ridiculously smooth."</p>
+          </div>
+        </div>
+        <div class="feed">
+          <div class="feed-head"><span class="av" style="background:#4f6b3d">R</span><span><b>@rhea</b><br><small class="muted">Yesterday</small></span></div>
+          <div class="photo" style="aspect-ratio:4/3;border-radius:12px;background:radial-gradient(circle at 60% 40%, #f1e3c8, #b98b5e 70%, #6b4428)"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+        </div>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+
+    <div class="state"><h3>A friend's cup</h3>
+      <div class="phone">
+        <div class="muted">‹ Back</div>
+        <div class="feed-head" style="margin-top:6px"><span class="av">M</span><span><b>@meera.k</b> <small class="muted">· Sun 15 Nov, 2 hours ago</small></span></div>
+        <div class="photo"><svg viewBox="0 0 100 80"><use href="#cup"/></svg></div>
+        <div class="serif" style="font-size:1.35rem;margin:10px 0 0">Dyu Art Café</div>
+        <div class="muted">Koramangala, Bengaluru</div>
+        <div class="stars" style="font-size:1.3rem">★★★★★</div>
+        <p style="margin:4px 0"><b>Cold brew</b> · Ethiopia Guji, natural · Corridor Seven</p>
+        <div class="chips"><span class="chip">Fruity</span><span class="chip">Sweet</span></div>
+        <p style="margin:8px 0;font-style:italic">"Blueberry jam. Ridiculously smooth."</p>
+        <div class="btn">🛍 Add these beans to my coffees</div>
+        <div class="btn sec">☕ Log my own cup here</div>
+        <p class="muted" style="font-size:.78rem;margin:8px 2px 0">Only Meera can change or delete this.</p>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+
+    <div class="state"><h3>"Add these beans" opens Add coffee, filled in</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.2rem;margin:0 0 6px">Add a coffee</div>
+        <p class="muted" style="font-size:.8rem;margin:0 0 6px">From @meera.k's cup at Dyu Art Café</p>
+        <div class="eyebrow">Name</div><div class="field">Corridor Seven · Ethiopia Guji</div>
+        <div class="grid2"><div><div class="eyebrow">Origin</div><div class="field">Ethiopia</div></div><div><div class="eyebrow">Process</div><div class="field">Natural</div></div></div>
+        <div class="eyebrow">Flavour notes</div><div class="field">Blueberry jam, smooth</div>
+        <div class="eyebrow">Bag size</div>
+        <div class="chips"><span class="chip">200 g</span><span class="chip on">250 g</span><span class="chip">1 kg</span><span class="chip">Other</span></div>
+        <div class="eyebrow">Roast date</div><div class="field ph">Pick a date</div>
+        <div class="btn">Add coffee</div>
+        <div class="tabs"><span>☕ Brew</span><span>▦ Coffees</span><b>🏠 Cafés</b><span>⚙ Settings</span></div>
+      </div></div>
+  </div>
+  <div class="decide">
+    <h2>To decide</h2>
+    <ol>
+      <li><b>Where it lives:</b> a fourth tab, Cafés (decided).</li>
+      <li><b>Your handle:</b> remembered on your account and editable on each cup (as drawn), or typed fresh each time?</li>
+      <li><b>Private by default:</b> a café cup is yours unless you turn on "Show in the friends' feed" (off by default). The share card shows only what you switch on; price is off by default.</li>
+      <li><b>The one rule change:</b> "nobody sees anyone else's things" gets one written, tested exception: café cups their owner put in the feed are readable, never changeable, by other signed-in people. Everything else, and every edit and delete, stays locked to its owner.</li>
+      <li><b>"Bought the beans?"</b> only fills in the Add coffee form (from your cup or a friend's). No lasting link between the coffee and the café cup for now.</li>
+      <li><b>Later, not now:</b> likes, comments and follows; a café map; café stats on Settings; a lasting "first had at" link.</li>
+    </ol>
+  </div>
+</main>
+</body>
+</html>
