@@ -1,12 +1,15 @@
 {% from 'partials/tip.html' import tip %}
 {# Add a coffee and the bag you bought, in one sheet. Taps first: bag sizes, tasting-note
    chips; origin and roast are optional, behind "More details". Expects add_next (where to go after). #}
-<dialog class="sheet" id="add-coffee-sheet" aria-label="Add a coffee">
+{% set pf = prefill if prefill is defined and prefill else {} %}
+{# With `prefill` (from a café cup: "Bought the beans?" / "Add these beans") it opens at once, filled in #}
+<dialog class="sheet" id="add-coffee-sheet" aria-label="Add a coffee"{% if pf %} data-open-now{% endif %}>
     <div class="sheet-grab"></div>
     <div class="sheet-head"><h3>Add your coffee</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
     <form method="post" action="/beans" class="stacked-form">
         {% if add_next is defined and add_next %}<input type="hidden" name="next" value="{{ add_next }}" />{% endif %}
-        <label>Name <input name="name" required placeholder="e.g. Blue Tokai Attikan" autocomplete="off" /></label>
+        {% if pf %}<p class="muted add-from">{{ pf.from }}</p><input type="hidden" name="notes" value="{{ pf.notes }}" />{% endif %}
+        <label>Name <input name="name" required placeholder="e.g. Blue Tokai Attikan" autocomplete="off" value="{{ pf.name or '' }}" /></label>
         {% with size_name='initial_quantity_g' %}{% include 'partials/bag_size_field.html' %}{% endwith %}
         <label for="add-flavour">Tasting notes on the bag <span class="muted">(optional)</span> {{ tip('flavour') }}</label>
         <div class="chips word-chips" data-for="add-flavour">
@@ -14,7 +17,7 @@
             <button type="button" class="chip" data-word="{{ w }}" aria-pressed="false">{{ w }}</button>
             {% endfor %}
         </div>
-        <input id="add-flavour" name="flavor_notes" placeholder="Tap above, or type your own" />
+        <input id="add-flavour" name="flavor_notes" placeholder="Tap above, or type your own" value="{{ pf.flavor_notes or '' }}" />
         <label>Roast date <span class="muted">(optional)</span> {{ tip('roast_date') }} <input name="roast_date" type="date" /></label>
         <details class="more-details">
             <summary class="muted">More details: origin, roast</summary>
@@ -25,3 +28,4 @@
         <p class="muted" style="margin-top:6px">You can add a photo of the bag from the coffee's page afterwards.</p>
     </form>
 </dialog>
+{% if pf %}<script>document.addEventListener('DOMContentLoaded', function () { var d = document.getElementById('add-coffee-sheet'); if (d && d.showModal) d.showModal(); });</script>{% endif %}

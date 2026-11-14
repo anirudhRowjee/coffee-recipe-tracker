@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
+
+{% block content %}
+{#
+  Log (or correct) a café cup. Only the café, what you had and the stars are needed;
+  the photo is shrunk and its colours picked on the phone (static/cafe_cup.js), and
+  the details about the beans, price and "again" are folded away.
+#}
+{% set c = cup %}
+<form method="post" action="{{ '/cafes/%d/edit' % c.id if c else '/cafes' }}" class="stacked-form card cafe-form" id="cafe-form" enctype="multipart/form-data">
+    <p class="muted"><a href="{{ '/cafes/%d' % c.id if c else '/cafes' }}" data-back>‹ Back</a></p>
+    <h2>{{ 'Edit café cup' if c else 'A café cup' }}</h2>
+
+    <div class="cafe-photo-pick">
+        <img class="cafe-photo-preview" id="cafe-photo-preview" alt="Your photo of the cup"{% if view and view.photo %} src="{{ view.photo }}"{% else %} hidden{% endif %} />
+        <label class="cafe-photo-btn{% if view and view.photo %} has-photo{% endif %}" id="cafe-photo-label">
+            <span id="cafe-photo-text">{{ '📷 Change the photo' if view and view.photo else '📷 Add a photo of the cup' }}</span>
+            <input type="file" name="photo" id="cafe-photo" accept="image/*" />
+        </label>
+        <p class="muted cafe-photo-status" id="cafe-photo-status" hidden></p>
+        {% if view and view.photo %}
+        <label class="check-row"><input type="checkbox" name="remove_photo" value="1" id="cafe-remove-photo" /> Remove the photo</label>
+        {% endif %}
+    </div>
+
+    <label for="cafe-name">Café</label>
+    <input id="cafe-name" name="cafe" required data-label="Café" value="{{ start.cafe }}" placeholder="e.g. Subko" autocomplete="off" />
+    {% if visited and not c %}
+    <div class="chips cafe-visited" aria-label="Cafés you've been to">
+        {% for name, area in visited %}
+        <button type="button" class="chip" data-cafe="{{ name }}" data-area="{{ area or '' }}">{{ name }}</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <label for="cafe-area">Where <span class="muted">(optional)</span></label>
+    <input id="cafe-area" name="area" value="{{ start.area }}" placeholder="e.g. Bandra, Mumbai" />
+
+    <p class="field-title">What you had</p>
+    <div class="chips radio-chips" role="radiogroup" aria-label="What you had">
+        {% for value, label in CAFE_DRINKS %}
+        <label class="chip"><input type="radio" name="drink_kind" value="{{ value }}" required data-label="What you had"{% if (c and c.drink_kind == value) or (not c and loop.first) %} checked{% endif %} /> {{ label }}</label>
+        {% endfor %}
+    </div>
+    <input name="drink" value="{{ c.drink if c and c.drink else '' }}" placeholder="Its name, if it has one: V60, Cortado…" aria-label="The drink's name" />
+
+    <p class="field-title">How good was it? {{ tip('cafe_rating') }}</p>
+    <div class="star-input-big">{% with star_name='rating', star_value=(c.rating if c else none) %}{% include 'partials/star_input.html' %}{% endwith %}</div>
+    <p class="field-error" id="cafe-rating-error" hidden>Give it a rating: tap a star.</p>
+
+    <label for="cafe-notes">How it tasted <span class="muted">tap any, or write</span></label>
+    <div class="chips word-chips" data-for="cafe-notes">
+        {% for w in CAFE_TASTES %}<button type="button" class="chip" data-word="{{ w }}" aria-pressed="false">{{ w }}</button>{% endfor %}
+    </div>
+    <textarea id="cafe-notes" name="notes" rows="3" placeholder="What stood out?">{{ c.notes if c and c.notes else '' }}</textarea>
+
+    <details class="more-details"{% if c and (c.roaster or c.coffee or c.process) %} open{% endif %}>
+        <summary>About the coffee <span class="muted">· roaster, beans, process</span></summary>
+        <label>Roaster <input name="roaster" value="{{ c.roaster if c and c.roaster else '' }}" placeholder="e.g. Corridor Seven" /></label>
+        <label>The beans <input name="coffee" value="{{ c.coffee if c and c.coffee else '' }}" placeholder="e.g. Ethiopia Guji" /></label>
+        <label>Process <input name="process" value="{{ c.process if c and c.process else '' }}" placeholder="e.g. Natural, Washed" /></label>
+    </details>
+    <details class="more-details"{% if c and (c.price is not none or c.again is not none) %} open{% endif %}>
+        <summary>Price, and would you order it again <span class="muted">· optional</span></summary>
+        <label>Price (₹) <input name="price" inputmode="decimal" data-label="Price" value="{{ c.price|num if c and c.price is not none else '' }}" placeholder="e.g. 320" /></label>
+        <p class="field-title">Order it again?</p>
+        <div class="chips radio-chips">
+            {% for value, label in [('yes', 'Yes'), ('no', 'No'), ('', 'Not sure')] %}
+            <label class="chip"><input type="radio" name="again" value="{{ value }}"{% if (c and ((c.again and value == 'yes') or (c.again == false and value == 'no') or (c.again is none and value == ''))) or (not c and value == '') %} checked{% endif %} /> {{ label }}</label>
+            {% endfor %}
+        </div>
+    </details>
+    <label>When <input type="datetime-local" name="had_at" value="{{ start.when }}" /></label>
+
+    <label for="cafe-handle">Your handle on the share card <span class="muted">(optional)</span></label>
+    <span class="handle-input"><span aria-hidden="true">@</span><input id="cafe-handle" name="handle" autocapitalize="none" autocorrect="off" spellcheck="false"
+        pattern="@?[A-Za-z0-9._]{0,30}" data-label="Handle" value="{{ (c.handle if c else current_user.cafe_handle) or '' }}" placeholder="yourname" /></span>
+    <p class="muted field-help">Remembered for next time.</p>
+
+    <label class="switch-row"><input type="checkbox" name="shared" value="1"{% if c and c.shared %} checked{% endif %} />
+        <span><b>Show in the friends' feed</b><br /><small class="muted">Everyone signed in to the app can see it, but only you can change it. Off unless you switch it on.</small></span></label>
+
+    <div class="dock"><button type="submit">{{ 'Save changes' if c else 'Save café cup' }}</button></div>
+    <p class="field-error" id="cafe-save-error" hidden></p>
+</form>
+{% if c %}
+<form method="post" action="/cafes/{{ c.id }}/delete" class="cafe-delete" onsubmit="return confirm('Delete this café cup and its photo? This can\'t be undone.')">
+    <button type="submit" class="btn-secondary btn-danger">Delete this café cup</button>
+</form>
+{% endif %}
+{# deferred, so forms.js (in the head, also deferred) checks the fields before cafe_cup.js sends them #}
+<script src="{{ static('bean_art.js') }}" defer></script>
+<script src="{{ static('cafe_cup.js') }}" defer></script>
+{% endblock %}

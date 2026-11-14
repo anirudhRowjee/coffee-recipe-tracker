@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DB = Path(os.environ.get("COFFEE_REFERENCE_DB", ROOT / "data" / "coffee.db")).expanduser()
 LEGACY_SNAPSHOT = ROOT / "export"
 
-TABLES = ["user", "bean", "beanimage", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "brewcurve", "plannedbrew", "delta"]
+TABLES = ["user", "bean", "beanimage", "beanbag", "brewer", "grinder", "recipeline", "recipe", "brew", "brewcurve", "plannedbrew", "delta",
+          "cafecup", "cafecupimage"]
 
 
 def _load_script(name: str):
@@ -222,3 +223,17 @@ def test_round_trip_keeps_photos_and_colours(app_on, tmp_path: Path):
     actual = _round_trip(app, tmp_path)
     assert actual["beanimage"][0]["data"] == photo
     assert (actual["bean"][0]["accent_color"], actual["bean"][0]["image_version"]) == ("#d9541e", 3)
+
+
+def test_round_trip_keeps_cafe_cups_their_photos_and_the_handle(app_on, tmp_path: Path):
+    app = app_on()
+    _seed_one_brew(app)
+    photo = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 400
+    app.client.post("/cafes", data={"cafe": "Subko", "drink_kind": "milk", "rating": "5", "notes": "Silky\n",
+                                    "price": "320", "again": "no", "handle": "me.too", "shared": "1"},
+                    files={"photo": ("c.jpg", photo, "image/jpeg")})
+    actual = _round_trip(app, tmp_path)
+    cup = actual["cafecup"][0]
+    assert (cup["cafe"], cup["rating"], cup["notes"], cup["price"], cup["again"], cup["shared"]) == ("Subko", 5, "Silky", 320.0, 0, 1)
+    assert actual["cafecupimage"][0]["data"] == photo
+    assert actual["user"][0]["cafe_handle"] == "me.too"

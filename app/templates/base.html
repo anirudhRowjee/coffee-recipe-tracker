@@ -46,6 +46,7 @@
         <nav class="tabbar" aria-label="Main">
             <a href="/" class="{{ 'on' if here == '/' }}" {% if here == '/' %}aria-current="page"{% endif %}><span class="tab-icon" aria-hidden="true">☕</span>Brew</a>
             <a href="/browse" class="{{ 'on' if here.startswith('/browse') }}" {% if here.startswith('/browse') %}aria-current="page"{% endif %}><span class="tab-icon" aria-hidden="true">▦</span>Coffees</a>
+            <a href="/cafes" class="{{ 'on' if here.startswith('/cafes') }}" {% if here.startswith('/cafes') %}aria-current="page"{% endif %}><span class="tab-icon" aria-hidden="true">♨</span>Cafés</a>
             <a href="/manage" class="{{ 'on' if here.startswith('/manage') or here.startswith('/account') }}" {% if here.startswith('/manage') %}aria-current="page"{% endif %}><span class="tab-icon" aria-hidden="true">⚙</span>Settings</a>
         </nav>
         {% endblock %}

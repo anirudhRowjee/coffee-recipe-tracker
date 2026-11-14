@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% from 'partials/tip.html' import tip %}
+
+{% block content %}
+{#
+  Cafés: your café cups (a diary of coffee had out), or Friends: the cups people chose
+  to put in the feed. Kept apart from recipes, bags and versions.
+#}
+<section class="card cafes-page">
+    <div class="cafes-head">
+        <h2>Cafés {{ tip('cafes') }}</h2>
+        <div class="seg seg-links" role="group" aria-label="Whose cups">
+            {% if friends %}<a href="/cafes">Mine</a><b aria-current="true">Friends</b>
+            {% else %}<b aria-current="true">Mine</b><a href="/cafes?view=friends">Friends</a>{% endif %}
+        </div>
+    </div>
+
+    {% if not friends %}
+    <a class="btn-brew cafe-log-btn" href="/cafes/new">+ Log a café cup</a>
+    {% endif %}
+
+    {% if entries %}
+    <ul class="cafe-list">
+        {% for e in entries %}
+        <li>
+            <a class="cafe-row" href="/cafes/{{ e.cup.id }}" style="{{ e.cup|bean_theme }}">
+                {% if e.photo %}<img class="cafe-thumb" src="{{ e.photo }}" alt="" loading="lazy" />
+                {% else %}<span class="cafe-thumb cafe-thumb-empty" aria-hidden="true">♨</span>{% endif %}
+                <span class="cafe-row-text">
+                    {% if friends %}<small class="cafe-who">{{ e.who }}</small>{% endif %}
+                    <b>{{ e.cup.cafe }}{% if e.cup.area %} <span class="muted">· {{ e.cup.area }}</span>{% endif %}</b>
+                    <span class="cafe-stars" aria-label="{{ e.cup.rating }} out of 5">{{ e.cup.rating|stars }}</span>
+                    <small class="muted">{{ e.drink }}{% if e.cup.coffee %} · {{ e.cup.coffee }}{% endif %} · {{ e.cup.had_at|ist('%a %d %b') }}{% if not friends and e.cup.shared %} · 👥 in the feed{% endif %}</small>
+                </span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if stats and stats.cups %}
+    <p class="muted cafe-stats">{{ stats.cups }} café cup{{ 's' if stats.cups != 1 }} · {{ stats.cafes }} café{{ 's' if stats.cafes != 1 }}{% if stats.best %} · best: {{ stats.best }}{% endif %}</p>
+    {% endif %}
+    {% elif friends %}
+    <p class="muted cafe-empty">Nothing in the feed yet. When someone logs a café cup with "Show in the friends' feed" on, it shows up here.</p>
+    {% else %}
+    <p class="muted cafe-empty">Had a good coffee out? Log it here with a photo and a rating, and share it as an image or with friends in the app.</p>
+    {% endif %}
+</section>
+{% endblock %}

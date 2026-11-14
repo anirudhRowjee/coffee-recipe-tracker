@@ -715,7 +715,7 @@ def help_page(request: Request):
 
 
 @app.get("/browse", response_class=HTMLResponse)
-def browse(request: Request, bean: Optional[int] = None):
+def browse(request: Request, bean: Optional[int] = None, from_cafe: Optional[int] = None):
     """Coffees: a list (most recently brewed first) and one coffee's page: its bags,
     recipes, cups, photo and details. Side by side on a landscape iPad."""
     with Session(db.engine) as session:
@@ -755,8 +755,23 @@ def browse(request: Request, bean: Optional[int] = None):
             brews = crud.get_brews_for_bean(session, sb.id)[:20]  # type: ignore[arg-type]
             detail = {"lines": line_rows, "brews": brews, "bag_to_use": crud.pick_bag(session, sb.id),  # type: ignore[arg-type]
                       "curve_ids": crud.brews_with_curves(session, [b.id for b in brews])}  # type: ignore[misc]
+        # "Bought the beans?" / "Add these beans": Add coffee opens filled in from a café cup
+        # (yours, or a friend's shared one); nothing links the two afterwards
+        prefill = None
+        if from_cafe:
+            cup = crud.visible_cafe_cup(session, user.id, from_cafe)  # type: ignore[arg-type]
+            if not cup:
+                raise HTTPException(status_code=404, detail="Not found")
+            owner = session.get(models.User, cup.user_id)
+            name = " · ".join(p for p in (cup.roaster, cup.coffee) if p) or f"{cup.cafe} beans"
+            tasted = (cup.notes or "").split("\n")[0][:80]
+            whose = "" if cup.user_id == user.id else f" ({_cafe_view(cup, owner)['who']}'s cup)"
+            prefill = {"name": name, "flavor_notes": tasted,
+                       "notes": "; ".join(p for p in (f"Process: {cup.process}" if cup.process else None,
+                                                     f"First had at {cup.cafe}{whose}") if p),
+                       "from": f"From {'your' if not whose else _cafe_view(cup, owner)['who'] + chr(39) + 's'} cup at {cup.cafe}"}
         return templates.TemplateResponse("browse.html", {
-            "request": request, "current_user": user, "active": active, "finished": finished, "selected": selected,
+            "request": request, "current_user": user, "active": active, "finished": finished, "selected": selected, "prefill": prefill,
             "picked": bool(bean), "brewers": crud.get_brewers(session, user.id), "grinders": crud.get_grinders(session, user.id),  # type: ignore[arg-type]
             "up_next": _up_next(session, crud.get_pending_plan(session, user.id)),  # type: ignore[arg-type]
             **detail,
@@ -1917,3 +1932,236 @@ def create_recipe(
     if previous_recipe_id and not bag_id:
         return RedirectResponse(url=f"/?saved={saved_id}", status_code=303)
     return RedirectResponse(url="/", status_code=303)
+
+
+# --- Cafés: coffee had out (models.CafeCup) ---------------------------------------------
+# A diary apart from recipes: never a version, a bag or a dial-in step. Private unless its
+# owner puts it in the friends' feed, which every signed-in person can read (never change).
+
+CAFE_DRINKS = [("pour_over", "Pour over"), ("espresso", "Espresso"), ("milk", "Milk drink"),
+               ("cold_brew", "Cold brew"), ("batch", "Batch filter"), ("other", "Other")]
+CAFE_DRINK_LABELS = dict(CAFE_DRINKS)
+CAFE_TASTES = ["Juicy", "Sweet", "Bright", "Fruity", "Chocolatey", "Nutty", "Balanced", "Bitter", "Sour", "Weak"]
+HANDLE_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789._"
+templates.env.globals["CAFE_DRINKS"] = CAFE_DRINKS
+templates.env.globals["CAFE_TASTES"] = CAFE_TASTES
+
+
+def _clean_handle(value: Optional[str]) -> str:
+    """"@Anirudh.Brews " → "anirudh.brews": Instagram-style letters, digits, dots and underscores."""
+    handle = (value or "").strip().lstrip("@").lower()
+    if any(ch not in HANDLE_CHARS for ch in handle) or len(handle) > 30:
+        raise HTTPException(status_code=400, detail="A handle is letters, numbers, dots and underscores, up to 30")
+    return handle
+
+
+def _cafe_fields(cafe, area, drink_kind, drink, rating, notes, roaster, coffee, process, price, again,
+                 handle, shared, had_at) -> dict:
+    """The form's values, checked; a refused form says why in words (error.html)."""
+    cafe = (cafe or "").strip()
+    if not cafe:
+        raise HTTPException(status_code=400, detail="Say which café")
+    if drink_kind not in CAFE_DRINK_LABELS:
+        raise HTTPException(status_code=400, detail="Pick what you had")
+    stars = _parse_rating(rating)
+    if stars is None:
+        raise HTTPException(status_code=400, detail="Give it a rating: one to five stars")
+    amount = _parse_amount(price)
+    if amount is not None and not 0 <= amount <= 100000:
+        raise HTTPException(status_code=400, detail="The price should be between ₹0 and ₹1,00,000")
+    when = None
+    if had_at:
+        try:  # the phone's local time, which is India time for everyone here
+            when = datetime.fromisoformat(had_at).replace(tzinfo=crud.IST).astimezone(timezone.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="That date and time doesn't look right")
+    fields = {
+        "cafe": cafe[:120], "area": (area or "").strip()[:120] or None, "drink_kind": drink_kind,
+        "drink": (drink or "").strip()[:80] or None, "rating": stars, "notes": (notes or "").strip() or None,
+        "roaster": (roaster or "").strip()[:120] or None, "coffee": (coffee or "").strip()[:120] or None,
+        "process": (process or "").strip()[:60] or None, "price": amount,
+        "again": True if again == "yes" else False if again == "no" else None,
+        "handle": _clean_handle(handle), "shared": shared == "1",
+    }
+    if when:
+        fields["had_at"] = when
+    return fields
+
+
+async def _cafe_photo(request: Request) -> Optional[tuple]:
+    """The photo the page prepared (static/cafe_cup.js shrinks it to a JPEG and picks its
+    colours), as (bytes, accent, mesh), or None when none was sent."""
+    form = await request.form()
+    photo = form.get("photo")
+    if photo is None or isinstance(photo, str):
+        return None
+    data = await photo.read(MAX_BEAN_IMAGE_BYTES + 1)
+    if not data:
+        return None
+    if len(data) > MAX_BEAN_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="That photo is too large")
+    if not data.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(status_code=400, detail="The photo must be a JPEG")
+    return data, theme.clean_accent(form.get("accent")), theme.clean_mesh(form.get("mesh"))  # type: ignore[arg-type]
+
+
+def _cafe_view(cup: models.CafeCup, owner: Optional[models.User] = None) -> dict:
+    """What a page shows for a cup, in words."""
+    who = cup.handle or (owner.cafe_handle if owner else None)
+    return {
+        "cup": cup,
+        "drink": " · ".join(p for p in (cup.drink, None if cup.drink else CAFE_DRINK_LABELS.get(cup.drink_kind)) if p)
+                 or CAFE_DRINK_LABELS.get(cup.drink_kind, ""),
+        "kind": CAFE_DRINK_LABELS.get(cup.drink_kind, ""),
+        "beans": " · ".join(p for p in (cup.coffee, (cup.process or "").lower() or None, cup.roaster) if p),
+        "photo": f"/cafes/{cup.id}/photo?v={cup.image_version}" if cup.image_version else None,
+        "who": f"@{who}" if who else (owner.name if owner else ""),
+        "owner": owner,
+    }
+
+
+def _cafe_page(request, session, user, template, **context):
+    return templates.TemplateResponse(template, {"request": request, "current_user": user, **context})
+
+
+@app.get("/cafes", response_class=HTMLResponse)
+def cafes(request: Request, view: str = "mine"):
+    """Cafés: your café cups, or the friends' feed (cups their owners shared)."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        friends = view == "friends"
+        if friends:
+            entries = [_cafe_view(cup, owner) for cup, owner in crud.feed_cups(session)]
+            stats = None
+        else:
+            mine = crud.cafe_cups_for_user(session, user.id)  # type: ignore[arg-type]
+            entries = [_cafe_view(cup, user) for cup in mine]
+            places = {c.cafe.strip().lower() for c in mine}
+            best = max(mine, key=lambda c: (c.rating, c.had_at), default=None)
+            stats = {"cups": len(mine), "cafes": len(places), "best": best.cafe if best else None}
+        return _cafe_page(request, session, user, "cafes.html", friends=friends, entries=entries, stats=stats)
+
+
+@app.get("/cafes/new", response_class=HTMLResponse)
+def new_cafe_cup(request: Request, cafe: Optional[str] = None, area: Optional[str] = None):
+    """Log a café cup. `cafe` and `area` start it at a café (from a friend's cup)."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        now = datetime.now(crud.IST).strftime("%Y-%m-%dT%H:%M")
+        return _cafe_page(request, session, user, "cafe_form.html", cup=None, view=None,
+                          start={"cafe": cafe or "", "area": area or "", "when": now},
+                          visited=crud.cafes_visited(session, user.id)[:8])  # type: ignore[arg-type]
+
+
+@app.post("/cafes")
+async def create_cafe_cup(
+    request: Request, cafe: str = Form(None), area: str = Form(None), drink_kind: str = Form(None), drink: str = Form(None),
+    rating: str = Form(None), notes: str = Form(None), roaster: str = Form(None), coffee: str = Form(None),
+    process: str = Form(None), price: str = Form(None), again: str = Form(None), handle: str = Form(None),
+    shared: str = Form(None), had_at: str = Form(None),
+):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)  # before any checks: signed out only ever gets the redirect
+        fields = _cafe_fields(cafe, area, drink_kind, drink, rating, notes, roaster, coffee, process, price, again, handle, shared, had_at)
+        photo = await _cafe_photo(request)
+        cup = crud.save_cafe_cup(session, user, None, **fields)
+        if photo:
+            crud.set_cafe_cup_image(session, cup, photo[0], "image/jpeg", photo[1], photo[2])
+        cup_id = cup.id
+    return RedirectResponse(url=f"/cafes/{cup_id}", status_code=303)
+
+
+@app.get("/cafes/{cup_id}", response_class=HTMLResponse)
+def cafe_cup(request: Request, cup_id: int):
+    """One café cup: yours (with Share, Edit, the feed switch), or a friend's shared one (look only)."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        cup = crud.visible_cafe_cup(session, user.id, cup_id)  # type: ignore[arg-type]
+        if not cup:
+            raise HTTPException(status_code=404, detail="Not found")
+        owner = session.get(models.User, cup.user_id)
+        return _cafe_page(request, session, user, "cafe_cup.html", view=_cafe_view(cup, owner), mine=cup.user_id == user.id)
+
+
+@app.get("/cafes/{cup_id}/photo")
+def cafe_cup_photo(request: Request, cup_id: int):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        if not crud.visible_cafe_cup(session, user.id, cup_id):  # type: ignore[arg-type]
+            raise HTTPException(status_code=404, detail="Not found")
+        image = session.get(models.CafeCupImage, cup_id)
+        if not image:
+            raise HTTPException(status_code=404, detail="No photo for this cup")
+        return Response(content=image.data, media_type=image.content_type,
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
+@app.get("/cafes/{cup_id}/edit", response_class=HTMLResponse)
+def edit_cafe_cup_page(request: Request, cup_id: int):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        cup = _owned(session, user, models.CafeCup, cup_id)
+        when = crud.local_time(cup.had_at).strftime("%Y-%m-%dT%H:%M")
+        return _cafe_page(request, session, user, "cafe_form.html", cup=cup, view=_cafe_view(cup, user),
+                          start={"cafe": cup.cafe, "area": cup.area or "", "when": when},
+                          visited=crud.cafes_visited(session, user.id)[:8])  # type: ignore[arg-type]
+
+
+@app.post("/cafes/{cup_id}/edit")
+async def edit_cafe_cup(
+    request: Request, cup_id: int, cafe: str = Form(None), area: str = Form(None), drink_kind: str = Form(None),
+    drink: str = Form(None), rating: str = Form(None), notes: str = Form(None), roaster: str = Form(None),
+    coffee: str = Form(None), process: str = Form(None), price: str = Form(None), again: str = Form(None),
+    handle: str = Form(None), shared: str = Form(None), had_at: str = Form(None), remove_photo: str = Form(None),
+):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        cup = _owned(session, user, models.CafeCup, cup_id)
+        fields = _cafe_fields(cafe, area, drink_kind, drink, rating, notes, roaster, coffee, process, price, again, handle, shared, had_at)
+        photo = await _cafe_photo(request)
+        crud.save_cafe_cup(session, user, cup, **fields)
+        if photo:
+            crud.set_cafe_cup_image(session, cup, photo[0], "image/jpeg", photo[1], photo[2])
+        elif remove_photo == "1":
+            crud.delete_cafe_cup_image(session, cup)
+    return RedirectResponse(url=f"/cafes/{cup_id}", status_code=303)
+
+
+@app.post("/cafes/{cup_id}/feed")
+def set_cafe_cup_feed(request: Request, cup_id: int, shared: str = Form(None)):
+    """In or out of the friends' feed; out takes it off everyone else's screen at once."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        cup = _owned(session, user, models.CafeCup, cup_id)
+        cup.shared = shared == "1"
+        session.add(cup)
+        session.commit()
+    return RedirectResponse(url=f"/cafes/{cup_id}", status_code=303)
+
+
+@app.post("/cafes/{cup_id}/delete")
+def delete_cafe_cup(request: Request, cup_id: int):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        crud.delete_cafe_cup(session, _owned(session, user, models.CafeCup, cup_id))
+    return RedirectResponse(url="/cafes", status_code=303)
+
+
+@app.get("/cafes/{cup_id}/share-image", response_class=HTMLResponse)
+def cafe_cup_share_image(request: Request, cup_id: int):
+    """Your café cup as an image for Instagram or anywhere: drawn in the browser
+    (static/cafe_card.js), with what goes on it chosen there; nothing chosen is saved."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        cup = _owned(session, user, models.CafeCup, cup_id)
+        view = _cafe_view(cup, user)
+        local = crud.local_time(cup.had_at)
+        card = {
+            "cafe": cup.cafe, "area": cup.area or "", "date": f"{local:%a} {local.day} {local:%b}",
+            "drink": view["drink"], "beans": view["beans"], "rating": cup.rating, "notes": cup.notes or "",
+            "price": f"₹{words.num(cup.price)}" if cup.price is not None else "",
+            "handle": (cup.handle or user.cafe_handle or ""), "photo": view["photo"],
+            "colors": {"accent": cup.accent_color or "#6b3d2e", "mesh": (cup.mesh_colors or "").split(",") if cup.mesh_colors else []},
+            "filename": "cafe-cup-" + "".join(ch if ch.isalnum() else "-" for ch in cup.cafe.lower()).strip("-") + ".png",
+        }
+        return _cafe_page(request, session, user, "cafe_share.html", view=view, card=json.dumps(card))

@@ -52,6 +52,8 @@ def busy(app_on):
     r = a.client.post("/brews/1/delete", follow_redirects=False)
     post(a, "/brews/undo", {"token": r.headers["location"].split("=", 1)[1]})
     post(a, f"/brews/{a.scalar('select max(id) from brew')}/edit", {"notes": "x\nCooled: sweet", "rating": "4"})
+    post(a, "/cafes", {"cafe": "Subko", "drink_kind": "pour_over", "rating": "4", "coffee": "Kenya Kiambu",
+                       "price": "350", "shared": "1"})                                                   # café cup 1, in the feed
     return a
 
 
@@ -209,6 +211,25 @@ def test_every_route_that_takes_an_id_is_attacked_as_someone_else():
     assert missing == []
 
 
+def test_the_friends_feed_is_the_one_written_exception(busy):
+    """Nobody sees anyone else's things, except café cups their owner put in the friends'
+    feed: readable by everyone signed in, never changeable. Nothing else is shared."""
+    from test_accounts import add_user
+    shared = busy.scalar("select id from cafecup where shared = 1")
+    private = busy.client.post("/cafes", data={"cafe": "Mine alone", "drink_kind": "espresso", "rating": "3"},
+                               follow_redirects=False).headers["location"].rsplit("/", 1)[1]
+    busy.sign_in(add_user(busy, name="Someone else"))
+    assert busy.client.get(f"/cafes/{shared}").status_code == 200
+    assert busy.client.get(f"/cafes/{private}").status_code == 404
+    readable = {r.path for r in main.app.routes if "GET" in getattr(r, "methods", set())}
+    # the only routes that ever show someone else's row are the café cup page, its photo, and Add coffee from it
+    exceptions = {"/cafes/{cup_id}", "/cafes/{cup_id}/photo", "/cafes", "/browse"}
+    assert exceptions <= readable
+    for url, data in [(f"/cafes/{shared}/edit", {"cafe": "x", "drink_kind": "espresso", "rating": "1"}),
+                      (f"/cafes/{shared}/feed", {"shared": "0"}), (f"/cafes/{shared}/delete", {})]:
+        assert busy.client.post(url, data=data, follow_redirects=False).status_code == 404
+
+
 def _dump(app):
     conn = _conn(app)
     try:
@@ -225,6 +246,8 @@ PAGES = [
     "/lines/1/brew?bag_id=1&recipe_id=1", "/lines/1/share-image", "/lines/1/export.md",
     "/four-six?bag_id=1&brewer_id=1&grinder_id=1", "/brews/2/edit", "/brews/2/edit?cooled=1",
     "/recipes/latest?bag_id=1&brewer_id=1&grinder_id=1",
+    "/cafes", "/cafes?view=friends", "/cafes/new", "/cafes/new?cafe=Subko", "/cafes/1", "/cafes/1/edit",
+    "/cafes/1/share-image", "/browse?from_cafe=1",
 ]
 
 

@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{#
+  A café cup as an image for Instagram or anywhere, drawn on the phone (static/cafe_card.js).
+  What goes on it is chosen here, for this image only: nothing is saved or sent.
+#}
+<div class="grid cafe-share">
+    <section class="card">
+        <p class="muted"><a href="/cafes/{{ view.cup.id }}" data-back>‹ Back</a></p>
+        <h2>Share this café cup</h2>
+        <div class="share-options stacked-form" id="cafe-share-options">
+            <div class="seg radio-seg" role="radiogroup" aria-label="Size">
+                <label><input type="radio" name="size" value="post" checked /> Post (4:5)</label>
+                <label><input type="radio" name="size" value="story" /> Story (9:16)</label>
+            </div>
+            <label class="switch-row"><input type="checkbox" data-show="rating" checked /> <span>Rating</span></label>
+            {% if view.cup.notes %}<label class="switch-row"><input type="checkbox" data-show="notes" checked /> <span>Tasting note</span></label>
+            <textarea id="cafe-share-note" rows="2" aria-label="The note on the card">{{ view.cup.notes }}</textarea>{% endif %}
+            {% if view.beans %}<label class="switch-row"><input type="checkbox" data-show="beans" checked /> <span>The coffee <small class="muted">({{ view.beans }})</small></span></label>{% endif %}
+            {% if view.cup.price is not none %}<label class="switch-row"><input type="checkbox" data-show="price" /> <span>Price</span></label>{% endif %}
+            <label class="switch-row"><input type="checkbox" data-show="date" checked /> <span>Date</span></label>
+            <label for="cafe-share-handle">Handle</label>
+            <span class="handle-input"><span aria-hidden="true">@</span><input id="cafe-share-handle" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="no handle" /></span>
+        </div>
+    </section>
+    <section class="card">
+        <div id="share-card" data-card="{{ card }}">
+            <p class="muted" id="share-status">Drawing the image…</p>
+            <img class="share-preview" id="share-preview" alt="Café cup card for {{ view.cup.cafe }}" hidden />
+            <div class="share-actions">
+                <button type="button" id="share-button" hidden>Share…</button>
+                <a class="btn-secondary" id="share-save" hidden>Save image</a>
+            </div>
+            <p class="muted" id="share-hint" hidden style="text-align:center">On a phone you can also press and hold the image to save it.</p>
+        </div>
+    </section>
+</div>
+<script src="{{ static('cafe_card.js') }}"></script>
+{% endblock %}

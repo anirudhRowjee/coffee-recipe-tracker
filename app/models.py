@@ -14,6 +14,8 @@ class User(SQLModel, table=True):
     # weight/flow graph drawn while brewing (otherwise only after Stop)
     show_brew_animation: bool = Field(default=True, sa_column_kwargs={"server_default": "1"})
     show_live_graph: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
+    # Café cups: the @handle put on their share cards, remembered from the last one
+    cafe_handle: Optional[str] = None
 
     beans: List["Bean"] = Relationship(back_populates="user")
     brewers: List["Brewer"] = Relationship(back_populates="user")
@@ -200,3 +202,37 @@ class Delta(SQLModel, table=True):
     def change_label(self) -> str:
         from . import words
         return words.before_after(self.changed_param, self.from_recipe, self.to_recipe)
+
+
+class CafeCup(SQLModel, table=True):
+    """A coffee had out, at a café: a diary entry with a photo and a rating, kept apart
+    from recipes, bags and versions (it is never part of dialling in). Private to its
+    owner unless `shared`, which puts it in the friends' feed: readable, never changeable,
+    by everyone signed in to the app."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    cafe: str
+    area: Optional[str] = None
+    drink_kind: str                  # one of main.CAFE_DRINKS
+    drink: Optional[str] = None      # "V60", "Cortado"
+    rating: int                      # 1-5
+    notes: Optional[str] = None
+    roaster: Optional[str] = None
+    coffee: Optional[str] = None     # the beans: "Ethiopia Guji"
+    process: Optional[str] = None
+    price: Optional[float] = None    # ₹
+    again: Optional[bool] = None     # would order it again
+    handle: Optional[str] = None     # @name on its share card
+    shared: bool = Field(default=False, sa_column_kwargs={"server_default": "0"})
+    had_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # the photo, as for bags: a timestamp version (cache-busting), and colours picked in the browser
+    image_version: Optional[int] = None
+    accent_color: Optional[str] = None
+    mesh_colors: Optional[str] = None
+
+
+class CafeCupImage(SQLModel, table=True):
+    """A café cup's photo; its own table so listing cups never loads the bytes."""
+    cup_id: int = Field(primary_key=True, foreign_key="cafecup.id")
+    data: bytes
+    content_type: str = "image/jpeg"

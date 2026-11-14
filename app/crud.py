@@ -75,6 +75,8 @@ def delete_user(session: Session, user_id: int) -> None:
         delete_brewer(session, brewer.id)  # type: ignore[arg-type]
     for grinder in session.exec(select(models.Grinder).where(models.Grinder.user_id == user_id)).all():
         delete_grinder(session, grinder.id)  # type: ignore[arg-type]
+    for cup in session.exec(select(models.CafeCup).where(models.CafeCup.user_id == user_id)).all():
+        delete_cafe_cup(session, cup)
     delete_sessions_for_user(session, user_id)
     for plan in session.exec(select(models.PlannedBrew).where(models.PlannedBrew.user_id == user_id)).all():
         session.delete(plan)
@@ -1050,3 +1052,94 @@ def get_latest_recipe_per_bean(session: Session, user_id: int):
         deltas = get_deltas_for_bean(session, bean.id)  # type: ignore[arg-type]
         result.append((bean, latest, bags_with_remaining, brews, deltas))
     return result
+
+
+# --- Café cups: coffee had out, with a photo; a diary apart from recipes -----------------
+
+CAFE_CUP_FIELDS = ("cafe", "area", "drink_kind", "drink", "rating", "notes", "roaster", "coffee",
+                   "process", "price", "again", "handle", "shared", "had_at")
+
+
+def cafe_cups_for_user(session: Session, user_id: int) -> List[models.CafeCup]:
+    return list(session.exec(select(models.CafeCup).where(models.CafeCup.user_id == user_id)
+                             .order_by(models.CafeCup.had_at.desc(), models.CafeCup.id.desc())).all())  # type: ignore[union-attr]
+
+
+def feed_cups(session: Session, limit: int = 60) -> List[Tuple[models.CafeCup, models.User]]:
+    """The friends' feed: every cup its owner chose to share, newest first, with its owner."""
+    rows = session.exec(select(models.CafeCup, models.User).join(models.User, models.User.id == models.CafeCup.user_id)  # type: ignore[arg-type]
+                        .where(models.CafeCup.shared == True)  # noqa: E712
+                        .order_by(models.CafeCup.had_at.desc(), models.CafeCup.id.desc()).limit(limit)).all()  # type: ignore[union-attr]
+    return [(cup, user) for cup, user in rows]
+
+
+def visible_cafe_cup(session: Session, user_id: int, cup_id: int) -> Optional[models.CafeCup]:
+    """A cup someone may look at: their own, or one its owner put in the feed. Changing
+    one is only ever for its owner (main checks that with _owned)."""
+    cup = session.get(models.CafeCup, cup_id)
+    if cup and (cup.user_id == user_id or cup.shared):
+        return cup
+    return None
+
+
+def cafes_visited(session: Session, user_id: int) -> List[Tuple[str, Optional[str]]]:
+    """Cafés this person has logged, most recent first, each with the area last given."""
+    seen: Dict[str, Tuple[str, Optional[str]]] = {}
+    for cup in cafe_cups_for_user(session, user_id):
+        key = cup.cafe.strip().lower()
+        if key not in seen:
+            seen[key] = (cup.cafe, cup.area)
+        elif not seen[key][1] and cup.area:
+            seen[key] = (seen[key][0], cup.area)
+    return list(seen.values())
+
+
+def save_cafe_cup(session: Session, user: models.User, cup: Optional[models.CafeCup], **fields) -> models.CafeCup:
+    """Create (cup None) or update a café cup. The handle is remembered on the account."""
+    if cup is None:
+        cup = models.CafeCup(user_id=user.id, **fields)  # type: ignore[arg-type]
+        session.add(cup)
+    else:
+        for name, value in fields.items():
+            setattr(cup, name, value)
+    if fields.get("handle") is not None:
+        user.cafe_handle = fields["handle"] or None
+        session.add(user)
+    session.commit()
+    session.refresh(cup)
+    return cup
+
+
+def set_cafe_cup_image(session: Session, cup: models.CafeCup, data: bytes, content_type: str,
+                       accent_color: Optional[str], mesh_colors: Optional[str]) -> None:
+    image = session.get(models.CafeCupImage, cup.id)
+    if image:
+        image.data = data
+        image.content_type = content_type
+    else:
+        session.add(models.CafeCupImage(cup_id=cup.id, data=data, content_type=content_type))  # type: ignore[arg-type]
+    cup.accent_color = accent_color
+    cup.mesh_colors = mesh_colors
+    # a timestamp, as for bag photos: cached forever, so a version must never repeat
+    cup.image_version = max(int(time.time()), (cup.image_version or 0) + 1)
+    session.add(cup)
+    session.commit()
+
+
+def delete_cafe_cup_image(session: Session, cup: models.CafeCup) -> None:
+    image = session.get(models.CafeCupImage, cup.id)
+    if image:
+        session.delete(image)
+    cup.image_version = None
+    cup.accent_color = None
+    cup.mesh_colors = None
+    session.add(cup)
+    session.commit()
+
+
+def delete_cafe_cup(session: Session, cup: models.CafeCup) -> None:
+    image = session.get(models.CafeCupImage, cup.id)
+    if image:
+        session.delete(image)
+    session.delete(cup)
+    session.commit()

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta, CafeCup, CafeCupImage
 from app import crud
 
 
@@ -35,10 +35,10 @@ def export_all(engine: Engine, out: Path) -> None:
             w = csv.writer(f)
             # password hashes included so a restore keeps accounts working; signed-in sessions are not
             w.writerow(["id", "name", "password_hash", "is_admin", "must_change_password",
-                        "show_brew_animation", "show_live_graph"])
+                        "show_brew_animation", "show_live_graph", "cafe_handle"])
             for u in session.exec(select(User).order_by(User.id)).all():
                 w.writerow([u.id, u.name, u.password_hash, u.is_admin, u.must_change_password,
-                            u.show_brew_animation, u.show_live_graph])
+                            u.show_brew_animation, u.show_live_graph, u.cafe_handle])
 
         # Beans
         with open(out / "beans.csv", "w", newline="") as f:
@@ -117,6 +117,20 @@ def export_all(engine: Engine, out: Path) -> None:
             w.writerow(["brew_id", "samples"])
             for c in session.exec(select(BrewCurve).order_by(BrewCurve.brew_id)).all():
                 w.writerow([c.brew_id, c.samples])
+
+        # Café cups (coffee had out) and their photos
+        with open(out / "cafe_cups.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["id", "user_id", "cafe", "area", "drink_kind", "drink", "rating", "notes", "roaster", "coffee",
+                        "process", "price", "again", "handle", "shared", "had_at", "image_version", "accent_color", "mesh_colors"])
+            for c in session.exec(select(CafeCup).order_by(CafeCup.id)).all():
+                w.writerow([c.id, c.user_id, c.cafe, c.area, c.drink_kind, c.drink, c.rating, c.notes, c.roaster, c.coffee,
+                            c.process, c.price, c.again, c.handle, c.shared, c.had_at, c.image_version, c.accent_color, c.mesh_colors])
+        with open(out / "cafe_cup_images.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["cup_id", "content_type", "data_base64"])
+            for image in session.exec(select(CafeCupImage).order_by(CafeCupImage.cup_id)).all():
+                w.writerow([image.cup_id, image.content_type, base64.b64encode(image.data).decode("ascii")])
 
         # Planned (scheduled) brews
         with open(out / "planned_brews.csv", "w", newline="") as f:

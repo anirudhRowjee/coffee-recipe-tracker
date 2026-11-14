@@ -30,4 +30,6 @@ TIPS = {
     "roast_date": "Coffee is usually best one to four weeks after roasting. With the date, you can see each bag's age.",
     "brewer_type": "Picking a type tells brew mode which brewer to draw. You can still name it anything.",
     "cooled": "Coffee tastes different as it cools. Add how it tastes now; your first impression stays.",
+    "cafes": "Coffee you had out: a photo, the café, how good it was. Kept apart from your recipes. Share one as an image, or put it in the friends' feed, which only people signed in to this app can see.",
+    "cafe_rating": "How much you enjoyed it, from one star to five. It's on the share card unless you switch it off.",
 }

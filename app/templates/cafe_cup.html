@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{#
+  One café cup. Yours: Share as image, Edit, the feed switch and "Bought the beans?".
+  A friend's (only ever one they put in the feed): look only, plus "Add these beans"
+  and "Log my own cup here".
+#}
+{% set c = view.cup %}
+<section class="card cafe-cup" style="{{ c|bean_theme }}">
+    <p class="muted"><a href="/cafes{{ '' if mine else '?view=friends' }}" data-back>‹ Back</a></p>
+    {% if not mine %}<p class="cafe-who-line"><b>{{ view.who }}</b> <span class="muted">had this</span></p>{% endif %}
+    <div class="cafe-cup-grid">
+        <div>
+            {% if view.photo %}<img class="cafe-photo" src="{{ view.photo }}" alt="Photo of the cup at {{ c.cafe }}" />
+            {% elif mine %}<a class="cafe-photo cafe-photo-empty" href="/cafes/{{ c.id }}/edit">📷 Add a photo</a>{% endif %}
+        </div>
+        <div>
+            <h2 class="cafe-name">{{ c.cafe }}</h2>
+            <p class="muted">{% if c.area %}{{ c.area }} · {% endif %}{{ c.had_at|ist('%a %d %b, %H:%M') }}</p>
+            <p class="cafe-stars-big" aria-label="{{ c.rating }} out of 5">{{ c.rating|stars }}</p>
+            <p class="cafe-drink"><b>{{ view.drink }}</b>{% if c.drink %} <span class="muted">· {{ view.kind }}</span>{% endif %}</p>
+            {% if view.beans %}<p>{{ view.beans }}</p>{% endif %}
+            {% if c.notes %}<blockquote class="cafe-notes">{{ c.notes }}</blockquote>{% endif %}
+            {% if mine and (c.price is not none or c.again is not none) %}
+            <p class="muted">{% if c.price is not none %}₹{{ c.price|num }}{% endif %}{% if c.price is not none and c.again is not none %} · {% endif %}{% if c.again %}Would order it again{% elif c.again == false %}Wouldn't order it again{% endif %}</p>
+            {% endif %}
+
+            {% if mine %}
+            <div class="btn-row cafe-actions">
+                <a class="btn-brew" href="/cafes/{{ c.id }}/share-image">Share as image</a>
+                <a class="btn-brew btn-quiet" href="/cafes/{{ c.id }}/edit">Edit</a>
+            </div>
+            <form method="post" action="/cafes/{{ c.id }}/feed" class="cafe-feed-form">
+                <input type="hidden" name="shared" value="{{ '0' if c.shared else '1' }}" />
+                <button type="submit" class="switch-link switch-button{{ ' on' if c.shared }}">
+                    <span>👥 {{ 'In the friends\' feed' if c.shared else 'Not in the friends\' feed' }}<br /><small class="muted">{{ 'Everyone signed in can see it. Tap to take it out.' if c.shared else 'Only you can see it. Tap to share it with friends in the app.' }}</small></span>
+                    <span class="switch-ui" aria-hidden="true"></span>
+                </button>
+            </form>
+            <nav class="action-list">
+                <a href="/browse?from_cafe={{ c.id }}"><span class="row-text">🛍 Bought the beans? <span class="muted">Add them as a coffee</span></span><span class="chev">›</span></a>
+            </nav>
+            {% else %}
+            <div class="cafe-actions cafe-actions-stack">
+                <a class="btn-brew" href="/browse?from_cafe={{ c.id }}">🛍 Add these beans to my coffees</a>
+                <a class="btn-brew btn-quiet" href="/cafes/new?cafe={{ c.cafe|urlencode }}&amp;area={{ (c.area or '')|urlencode }}">☕ Log my own cup here</a>
+            </div>
+            <p class="muted cafe-only">Only {{ view.owner.name if view.owner else 'its owner' }} can change or delete this.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

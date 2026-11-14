@@ -40,7 +40,7 @@ from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 from app import db
-from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta
+from app.models import User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta, CafeCup, CafeCupImage
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def read_csv(path: Path, required: bool = True) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def check_empty(session: Session) -> None:
-    for model in [User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta]:
+    for model in [User, Bean, BeanImage, BeanBag, Brewer, Grinder, RecipeLine, Recipe, Brew, BrewCurve, PlannedBrew, Delta, CafeCup, CafeCupImage]:
         count = session.exec(select(func.count()).select_from(model)).one()
         if count:
             abort(
@@ -137,6 +137,7 @@ def import_all(engine: Engine, src: Path) -> None:
                 # older snapshots have neither: the defaults (animation on, live graph off)
                 show_brew_animation=_bool(r["show_brew_animation"]) if r.get("show_brew_animation") else True,
                 show_live_graph=_bool(r.get("show_live_graph")),
+                cafe_handle=_str(r.get("cafe_handle")),
             ))
         session.commit()
         print(f"  users:    {len(rows)}")
@@ -286,6 +287,38 @@ def import_all(engine: Engine, src: Path) -> None:
             session.add(BrewCurve(brew_id=_int(r["brew_id"]), samples=r["samples"]))
         session.commit()
         print(f"  curves:   {len(rows)}")
+
+        # Café cups and their photos (absent in older snapshots)
+        rows = read_csv(src / "cafe_cups.csv", required=False)
+        for r in rows:
+            session.add(CafeCup(
+                id=_int(r["id"]),
+                user_id=_int(r["user_id"]),
+                cafe=r["cafe"],
+                area=_str(r.get("area")),
+                drink_kind=r["drink_kind"],
+                drink=_str(r.get("drink")),
+                rating=_int(r["rating"]),
+                notes=_str(r.get("notes")),
+                roaster=_str(r.get("roaster")),
+                coffee=_str(r.get("coffee")),
+                process=_str(r.get("process")),
+                price=_float(r.get("price")),
+                again=_bool(r["again"]) if r.get("again") else None,
+                handle=_str(r.get("handle")),
+                shared=_bool(r.get("shared")),
+                had_at=_datetime(r["had_at"]) or datetime.now(timezone.utc),
+                image_version=_int(r.get("image_version")),
+                accent_color=_str(r.get("accent_color")),
+                mesh_colors=_str(r.get("mesh_colors")),
+            ))
+        session.commit()
+        rows_images = read_csv(src / "cafe_cup_images.csv", required=False)
+        for r in rows_images:
+            session.add(CafeCupImage(cup_id=_int(r["cup_id"]), content_type=r["content_type"],
+                                     data=base64.b64decode(r["data_base64"])))
+        session.commit()
+        print(f"  café cups: {len(rows)} ({len(rows_images)} photos)")
 
         # 9. Planned brews (absent in pre-multi-user snapshots)
         rows = read_csv(src / "planned_brews.csv", required=False)

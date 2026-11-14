@@ -265,6 +265,8 @@ def owned(app):
                          "curve": '{"t": [0, 1], "g": [0, 10], "f": [0, 10]}'})  # brew 1, with a graph
     post(app, "/plan", COMBO)
     app.client.post("/beans/1/image", files={"image": ("b.jpg", JPEG, "image/jpeg")}, data={"accent": "#123456"})
+    app.client.post("/cafes", files={"photo": ("c.jpg", JPEG, "image/jpeg")},
+                    data={"cafe": "Subko", "drink_kind": "pour_over", "rating": "4"})   # café cup 1, not in the feed
     uid = add_user(app)
     app.sign_in(uid)
     post(app, "/beans", {"name": "Mine"})                    # bean 2
@@ -290,6 +292,11 @@ GET_ATTACKS = [
     ("/", {"bag_id": 1}),
     ("/lines/1/versions", {}),
     ("/four-six", {"bag_id": 1, "brewer_id": 2, "grinder_id": 3}),
+    ("/cafes/1", {}),
+    ("/cafes/1/photo", {}),
+    ("/cafes/1/edit", {}),
+    ("/cafes/1/share-image", {}),
+    ("/browse", {"from_cafe": 1}),
 ]
 
 RECIPE = {"dose_g": 15, "water_ml": 250, "temp_c": 93, "grind_size": "13"}
@@ -332,6 +339,9 @@ POST_ATTACKS = [
     ("/recipes", {**RECIPE, "bean_id": 2, "brewer_id": 2, "grinder_id": 1}),
     ("/recipes", {**RECIPE, "bean_id": 2, "brewer_id": 2, "grinder_id": 3, "previous_recipe_id": 1, "dose_g": 16}),
     ("/recipes", {**RECIPE, "bean_id": 2, "brewer_id": 2, "grinder_id": 3, "bag_id": 1, "line_name": "x"}),
+    ("/cafes/1/edit", {"cafe": "Hacked", "drink_kind": "espresso", "rating": "1"}),
+    ("/cafes/1/feed", {"shared": "1"}),
+    ("/cafes/1/delete", {}),
 ]
 
 

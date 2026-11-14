@@ -65,6 +65,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_plan_suggestion(conn)
         _migrate_gear_archive(conn)
         _migrate_line_next_change(conn)
+        _migrate_cafe_handle(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -124,6 +125,13 @@ def _migrate_gear_archive(conn) -> None:
     for table in ("brewer", "grinder"):
         if "archived" not in _columns(conn, table):
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
+
+
+def _migrate_cafe_handle(conn) -> None:
+    """The @handle for café cup share cards, remembered on the account (the café cup
+    tables themselves are new, so create_all makes them)."""
+    if "cafe_handle" not in _columns(conn, "user"):
+        conn.execute(text('ALTER TABLE "user" ADD COLUMN cafe_handle VARCHAR'))
 
 
 def _migrate_line_next_change(conn) -> None:
