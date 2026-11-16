@@ -1096,14 +1096,16 @@ def cafes_visited(session: Session, user_id: int) -> List[Tuple[str, Optional[st
 
 def save_cafe_cup(session: Session, user: models.User, cup: Optional[models.CafeCup], **fields) -> models.CafeCup:
     """Create (cup None) or update a café cup. The handle is remembered on the account."""
+    remembered = fields.get("handle")
+    fields = {**fields, "handle": fields.get("handle") or None}  # an empty handle is none, not ""
     if cup is None:
         cup = models.CafeCup(user_id=user.id, **fields)  # type: ignore[arg-type]
         session.add(cup)
     else:
         for name, value in fields.items():
             setattr(cup, name, value)
-    if fields.get("handle") is not None:
-        user.cafe_handle = fields["handle"] or None
+    if remembered is not None:
+        user.cafe_handle = remembered or None
         session.add(user)
     session.commit()
     session.refresh(cup)

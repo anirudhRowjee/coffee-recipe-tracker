@@ -27,8 +27,12 @@ l = sqlite3.connect(f"file:{live}?mode=ro", uri=True)
 problems = []
 
 # every row that existed before the deploy is still there, unchanged
-for table in ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", "plannedbrew", "delta"]:
+for table in ["user", "bean", "beanbag", "brewer", "grinder", "recipe", "brew", "plannedbrew", "delta", "cafecup"]:
     cols = [r[1] for r in b.execute(f'PRAGMA table_info("{table}")')]
+    if not cols:  # not in this database yet
+        continue
+    if table == "cafecup":  # an empty handle is tidied to none (db._migrate_cafe_handle)
+        cols = ["NULLIF(handle, '')" if c == "handle" else c for c in cols]
     if table == "plannedbrew":  # a plan's planned change moves onto its recipe (db._migrate_line_next_change)
         cols = [c for c in cols if c not in ("suggested_param", "suggested_delta", "suggested_rationale")]
     q = f'SELECT {", ".join(cols)} FROM "{table}" ORDER BY id'

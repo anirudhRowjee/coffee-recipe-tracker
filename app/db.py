@@ -132,6 +132,9 @@ def _migrate_cafe_handle(conn) -> None:
     tables themselves are new, so create_all makes them)."""
     if "cafe_handle" not in _columns(conn, "user"):
         conn.execute(text('ALTER TABLE "user" ADD COLUMN cafe_handle VARCHAR'))
+    # cups saved before 2026-11-16 kept an empty handle as "", which a backup restores as none
+    if "handle" in _columns(conn, "cafecup"):
+        conn.execute(text("UPDATE cafecup SET handle = NULL WHERE handle = ''"))
 
 
 def _migrate_line_next_change(conn) -> None:

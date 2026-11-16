@@ -143,3 +143,13 @@ def test_deleting_an_account_deletes_its_cafe_cups(app):
         from app import crud
         crud.delete_user(s, friend)
     assert app.scalar("select count(*) from cafecup") == 0 and app.scalar("select count(*) from cafecupimage") == 0
+
+
+def test_an_empty_handle_is_stored_as_none_so_a_backup_restores_it_exactly(app):
+    cup_id = log(app, handle="")
+    assert cup(app, cup_id)["handle"] is None
+    with app.engine.begin() as conn:  # a cup saved before the fix
+        conn.exec_driver_sql("UPDATE cafecup SET handle = '' WHERE id = ?", (cup_id,))
+    from app import db
+    db.run_migrations(app.engine)
+    assert cup(app, cup_id)["handle"] is None
