@@ -43,8 +43,11 @@
             <div{% if trial and trial.param == 'temp_c' %} class="brew-tried"{% endif %}><dt>Temperature</dt><dd>{{ '%g'|format(latest.temp_c) }}<small>°C</small></dd><dd class="brew-use">kettle set to</dd></div>
         </dl>
         {% if prep %}<p class="brew-prep-note">{{ prep }}</p>{% endif %}
-        {# read each step aloud as it starts; remembered on this device, shown where the browser can speak #}
-        <button type="button" class="chip brew-voice" id="brew-voice" aria-pressed="false" hidden>🔈 Read the steps aloud</button>
+        {# read each step aloud a few seconds ahead; remembered on this device, shown where the browser can speak #}
+        <div class="brew-voice-row">
+            <button type="button" class="chip brew-voice" id="brew-voice" aria-pressed="false" hidden>🔈 Read the steps aloud</button>
+            <label class="brew-voice-pick" id="brew-voice-pick-row" hidden>Voice <select id="brew-voice-pick" aria-label="Which voice"></select></label>
+        </div>
     </div>
 
     {# Shown by the script below; without JavaScript the page is just the recipe #}
@@ -151,6 +154,7 @@
 {% endif %}
 
 <script src="{{ static('brew_animation.js') }}"></script>
+<script src="{{ static('brew_phases.js') }}"></script>
 <script src="{{ static('brew_graphs.js') }}"></script>
 <script src="{{ static('scale.js') }}"></script>
 <script>
@@ -260,41 +264,103 @@
         }
         window.brewBeep = beep;
 
-        // Spoken steps: each step read out as it starts, after its beep. Per device (a phone
-        // and the iPad may want different), so localStorage; off until switched on.
+        // Spoken steps, said calmly and ahead of time: "Next, pour to 96 grams" about four
+        // seconds before each step (in place of the ticks), then just the beep as it starts,
+        // so there's time to pick up the kettle and never two sounds at once. The nicest
+        // English voice the device has, a little slow; the person can pick another. All per
+        // device (a phone and the iPad may want different), so localStorage; off until on.
         var canSpeak = !!(window.speechSynthesis && window.SpeechSynthesisUtterance);
-        var voiceOn = false, voiceBtn = $('brew-voice'), speechReady = false;
-        try { voiceOn = canSpeak && window.localStorage.getItem('brew-voice') === '1'; } catch (e) {}
+        var voiceOn = false, voiceBtn = $('brew-voice'), speechReady = false, voiceName = '';
+        var pickRow = $('brew-voice-pick-row'), pick = $('brew-voice-pick');
+        var LEAD = 4, announced = {};  // seconds of warning; steps already spoken ahead
+        try { voiceOn = canSpeak && window.localStorage.getItem('brew-voice') === '1'; voiceName = window.localStorage.getItem('brew-voice-name') || ''; } catch (e) {}
+        var NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|ralph|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley/i;
+        function englishVoices() {
+            var all = [];
+            try { all = window.speechSynthesis.getVoices() || []; } catch (e) {}
+            return all.filter(function (v) { return /^en/i.test(v.lang) && !NOVELTY.test(v.name); });
+        }
+        function score(v) {
+            var n = v.name, s = 0;
+            if (/premium/i.test(n)) s += 6;
+            if (/enhanced|natural|neural/i.test(n)) s += 5;
+            if (/samantha|ava|allison|serena|daniel|karen|moira|tessa|rishi|veena|google uk english female|google us english/i.test(n)) s += 2;
+            if (navigator.language && v.lang.replace('_', '-').toLowerCase() === navigator.language.toLowerCase()) s += 1;
+            if (v.localService) s += 1;
+            return s;
+        }
+        function chosenVoice() {
+            var voices = englishVoices();
+            if (!voices.length) return null;
+            var named = voices.filter(function (v) { return v.name === voiceName; })[0];
+            return named || voices.slice().sort(function (a, b) { return score(b) - score(a); })[0];
+        }
         function speak(text) {
             if (!voiceOn || !text) return;
             try {
+                var u = new window.SpeechSynthesisUtterance(text), v = chosenVoice();
+                if (v) { u.voice = v; u.lang = v.lang; }
+                u.rate = 0.92;    // unhurried
+                u.pitch = 1;
+                u.volume = 0.9;
                 window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(new window.SpeechSynthesisUtterance(text));
+                window.speechSynthesis.speak(u);
             } catch (e) { /* no voice is fine */ }
         }
-        // the step as you'd say it: "Pour, taste, to 96 grams"
+        // the step as you'd say it at the counter: "Pour to 96 grams", "Close the switch",
+        // "Done" (the 4:6 builder's "taste" / "strength" labels and shouting caps left out)
         function spoken(li) {
-            return stepText(li).replace(/\s*·\s*/g, ', ')
+            var text = stepText(li)
+                .replace(/,\s*(taste|strength)\b/gi, '')
+                .replace(/\b[A-Z]{2,}\b/g, function (w) { return w.toLowerCase(); })
+                .replace(/\s*·\s*/g, ' ')
                 .replace(/(\d+):(\d\d)/g, function (m, mm, ss) {
                     var min = parseInt(mm, 10), sec = parseInt(ss, 10);
                     if (!min && !sec) return 'the start';
                     return (min ? min + (min === 1 ? ' minute' : ' minutes') : '') + (sec ? (min ? ' ' : '') + sec + ' seconds' : '');
                 })
-                .replace(/(\d)\s*g\b/g, '$1 grams').replace(/(\d)\s*ml\b/gi, '$1 millilitres').replace(/\s*°\s*C\b/g, ' degrees');
+                .replace(/(\d)\s*g\b/g, '$1 grams').replace(/(\d)\s*ml\b/gi, '$1 millilitres').replace(/\s*°\s*C\b/g, ' degrees')
+                .replace(/\s+/g, ' ').trim();
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+        function ahead(text) {
+            if (/^done\b/i.test(text)) return 'Almost done';
+            return 'Next, ' + text.charAt(0).toLowerCase() + text.slice(1);
+        }
+        function fillVoices() {
+            var voices = englishVoices();
+            pickRow.hidden = !voiceOn || voices.length < 2;
+            if (pick.options.length === voices.length) return;
+            var best = chosenVoice();
+            pick.innerHTML = '';
+            voices.slice().sort(function (a, b) { return score(b) - score(a) || a.name.localeCompare(b.name); }).forEach(function (v) {
+                var o = document.createElement('option');
+                o.value = v.name;
+                o.textContent = v.name.replace(/\s*\(.*\)$/, '') + ' · ' + v.lang;
+                if (best && v.name === best.name) o.selected = true;
+                pick.appendChild(o);
+            });
         }
         function showVoice() {
             voiceBtn.setAttribute('aria-pressed', voiceOn ? 'true' : 'false');
             voiceBtn.className = 'chip brew-voice' + (voiceOn ? ' on' : '');
+            fillVoices();
         }
         if (voiceBtn && canSpeak) {
             voiceBtn.hidden = false;
             showVoice();
+            if (window.speechSynthesis.addEventListener) window.speechSynthesis.addEventListener('voiceschanged', fillVoices);
             voiceBtn.addEventListener('click', function () {
                 voiceOn = !voiceOn;
                 try { window.localStorage.setItem('brew-voice', voiceOn ? '1' : '0'); } catch (e) {}
                 showVoice();
-                speak('Steps will be read aloud');  // in the tap, which also lets later speech through on iOS
+                speak("I'll say each step a few seconds before it");  // in the tap, which also lets later speech through on iOS
                 speechReady = true;
+            });
+            pick.addEventListener('change', function () {
+                voiceName = pick.value;
+                try { window.localStorage.setItem('brew-voice-name', voiceName); } catch (e) {}
+                speak('Next, pour to 96 grams');  // a sample, in the tap
             });
         }
         // Browsers only allow sound after a tap, so wake it on any tap (Start, or Scale:
@@ -438,13 +504,24 @@
             }
             if (running && current > lastEvent) {
                 if (events[current].t > 0) beep();
-                // then the step read out, once the beep (or the start's "go") has sounded
+                // a step not already said ahead (the first one, or one hard on the last's heels)
+                // is said now, once its beep (or the start's "go") has sounded
                 var said = steps[events[current].i];
-                setTimeout(function () { speak(spoken(said)); }, events[current].t > 0 ? 450 : 650);
+                if (voiceOn && !announced[events[current].t]) {
+                    announced[events[current].t] = true;
+                    setTimeout(function () { speak(spoken(said)); }, events[current].t > 0 ? 450 : 650);
+                }
             }
             if (running) lastEvent = current;  // so the first step counts as new once the clock starts
-            // a soft tick each of the three seconds before a step, to pick up the kettle
-            if (running && upcoming && upcoming.t > 0 && upcoming.t - s >= 1 && upcoming.t - s <= 3 && warned !== upcoming.t + ':' + (upcoming.t - s)) {
+            // With the voice on: the next step said about four seconds ahead, if the current
+            // one has had a moment to itself (otherwise it's said as it starts)
+            if (voiceOn && running && upcoming && upcoming.t > 0 && !announced[upcoming.t] && upcoming.t - s <= LEAD &&
+                (current < 0 || s - events[current].t >= 2)) {
+                announced[upcoming.t] = true;
+                speak(ahead(spoken(steps[upcoming.i])));
+            }
+            // Without it: a soft tick each of the three seconds before a step, to pick up the kettle
+            if (!voiceOn && running && upcoming && upcoming.t > 0 && upcoming.t - s >= 1 && upcoming.t - s <= 3 && warned !== upcoming.t + ':' + (upcoming.t - s)) {
                 warned = upcoming.t + ':' + (upcoming.t - s);
                 beep('soon');
             }
@@ -584,7 +661,7 @@
                 timer.className = 'brew-timer brew-counting';
                 render();
                 clock.textContent = 'Pour';
-                speak('Pour when ready');
+                speak('Ready when you are. Start pouring');
                 return;
             }
             countdown = { end: Date.now() + COUNTDOWN * 1000, shown: null, interval: setInterval(countdownTick, 100) };
@@ -599,9 +676,10 @@
             timer.className = 'brew-timer';
         }
         // the scale saw the brew start (its button, or its auto-start): no countdown
-        window.brewTimerStartNow = function () {
+        window.brewTimerStartNow = function (secondsAgo) {
             if (startedAt !== null) return;
             if (countdown) endCountdown();
+            if (secondsAgo && stoppedAt === 0) stoppedAt = Math.round(secondsAgo);  // started pouring that long ago
             start();
         };
 
@@ -627,6 +705,7 @@
             stoppedAt = 0;
             lastEvent = -1;
             warned = '';
+            announced = {};
             if ($('brew-summary')) $('brew-summary').hidden = true;
             startBtn.textContent = 'Start';
             startBtn.className = '';

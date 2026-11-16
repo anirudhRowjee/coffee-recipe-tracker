@@ -1254,6 +1254,12 @@ textarea[hidden] {
 .bg-key-main { background: var(--accent, #6b3d2e); }
 .bg-key-compare { background: #b9a58f; }
 .brew-graph .bg-compare { fill: none; stroke: #b9a58f; stroke-width: 2; stroke-linejoin: round; }
+/* what was happening (static/brew_phases.js): pours shaded, valve flicks dashed, the brewer off greyed */
+.brew-graph .bg-pour { fill: var(--accent, #6b3d2e); fill-opacity: 0.13; }
+.brew-graph .bg-off { fill: #e6ded3; }
+.brew-graph .bg-valve { stroke: #5b7493; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.brew-graph .bg-mark { font: 600 11px -apple-system, system-ui, sans-serif; fill: #8c6a4f; }
+.brew-graph .bg-mark-valve { fill: #5b7493; }
 .graph-compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; }
 .graph-compare label { font-size: 0.95rem; }
 .graph-compare select { width: auto; min-width: 0; max-width: 100%; flex: 1 1 12rem; }
@@ -1998,7 +2004,10 @@ nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; bo
 .rec-clear { display: inline-flex; margin: 0 0 0 4px; }
 
 /* brew mode: read the steps aloud (a switch, before you start) */
-.brew-voice { margin-top: 10px; min-height: 44px; }
+.brew-voice { margin-top: 0; min-height: 44px; }
+.brew-voice-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.brew-voice-pick { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.9rem; color: #8c6a4f; min-width: 0; }
+.brew-voice-pick select { width: auto; max-width: 220px; min-width: 0; font-size: 0.9rem; }
 .brew-voice[hidden] { display: none; }
 
 /* step editor: what the times mean (one quiet line), and labels over the columns (same grid as .step-row) */

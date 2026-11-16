@@ -24,6 +24,8 @@
     var COMMANDS = { tare: 0x01, start: 0x04, stop: 0x05, reset: 0x06, tareAndStart: 0x07 };
     var EVENT_STOPPED = 0x00, EVENT_STARTED = 0x01;
     var CLOSE_G = 2;  // within this of the target counts as there
+    var HOLD_MS = 800;  // …for this long: a valve flick's spike is shorter
+    var aboveSince = null, aboveFor = null;
     // Lifting the brewer off before Stop drops the reading by its whole weight (often
     // below zero). Nothing else in a brew makes the weight fall: water stays on the
     // scale. So a reading held this far below the brew's highest for a second means the
@@ -97,9 +99,9 @@
     }
     // The scale started the brew, so the app starts now: no countdown (it may already be
     // counting one down: you poured early), and nothing sent back to the scale.
-    function startNow() {
+    function startNow(secondsAgo) {
         scaleRanThisRun = false;
-        if (window.brewTimerStartNow) window.brewTimerStartNow();
+        if (window.brewTimerStartNow) window.brewTimerStartNow(secondsAgo);
     }
     // The countdown reached "go": Bookoo's recommended start, tare and start together
     // (it also starts a ready automatic-mode brew).
@@ -109,10 +111,10 @@
     // The clock starts the moment the reading climbs POUR_G above its lowest since then (the
     // tare brings it to about 0) on two readings in a row, so a knock on the counter doesn't
     // count. The scale's timer is started to match. Cancel (any label but Cancel) stops waiting.
-    var POUR_G = 3, armed = null;  // {low, hits}
+    var POUR_G = 3, POUR_HOLD_MS = 1000, armed = null;  // {low, since}
     window.brewScaleArm = function () {
         if (grams === null) return false;
-        armed = { low: Infinity, hits: 0 };
+        armed = { low: Infinity, since: null };
         clearLift();
         send('tare');
         return true;
@@ -121,32 +123,41 @@
         if (!armed) return;
         if (startBtn.textContent !== 'Cancel') { armed = null; return; }
         if (grams < armed.low) armed.low = grams;
-        armed.hits = grams - armed.low >= POUR_G ? armed.hits + 1 : 0;
-        if (armed.hits < 2) return;
+        // a pour keeps the weight up; flicking the Switch's valve or knocking the brewer
+        // spikes it for under a second and drops back, so the rise must hold for a second
+        if (grams - armed.low < POUR_G) { armed.since = null; return; }
+        if (armed.since === null) armed.since = Date.now();
+        if (Date.now() - armed.since < POUR_HOLD_MS) return;
+        var began = (Date.now() - armed.since) / 1000;
         armed = null;
         if (window.brewBeep) window.brewBeep('go');
-        startNow();
+        startNow(began);  // the clock counts from when the pour began, not a second later
         send('start');
     }
 
-    var recent = [], top = null, dropAt = null, lifted = null;  // lifted: the weight kept
+    var recent = [], steadyRecent = [], top = null, dropAt = null, lifted = null;  // lifted: the weight kept
     function median(list) {
         var v = list.map(function (r) { return r[1]; }).sort(function (a, b) { return a - b; });
         return v[Math.floor((v.length - 1) / 2)];  // the lower middle: a short spike never wins
     }
-    function clearLift() { recent = []; top = null; dropAt = null; lifted = null; say(''); }
+    function clearLift() { recent = []; steadyRecent = []; top = null; dropAt = null; lifted = null; say(''); }
     // true while the brewer is off the scale (see LIFT_G)
     function liftedNow(g) {
         if (!running()) return lifted !== null;
         var now = Date.now();
         recent.push([now, g]);
+        steadyRecent.push([now, g]);
         while (recent.length && now - recent[0][0] > 1000) recent.shift();
+        while (steadyRecent.length && now - steadyRecent[0][0] > 2000) steadyRecent.shift();
         var level = median(recent);  // a spoon pressing on the bed for under half a second doesn't count
+        // the brew's highest, from a two-second median: pressing the Switch's valve lever can
+        // push the reading up 40 g or more for a moment, and the drop back from that isn't a lift
+        var steady = median(steadyRecent);
         if (lifted !== null) {
             if (level < lifted - LIFT_G) return true;
-            lifted = null; top = level; say('');  // it's back
+            lifted = null; top = steady; say('');  // it's back
         }
-        if (top === null || level > top) top = level;
+        if (top === null || steady > top) top = steady;
         if (level >= top - LIFT_G) { dropAt = null; return false; }
         if (dropAt === null) dropAt = now;
         if (now - dropAt < LIFT_MS) return false;
@@ -256,7 +267,11 @@
         // one starts, since the method's times are part of the recipe. Only while the
         // timer runs: before Start the scale may still be weighing beans or the brewer.
         // (An attribute, not a class: the timer script resets classes four times a second.)
-        if (li && running() && w >= t - CLOSE_G && !li.hasAttribute('data-reached')) {
+        // held for most of a second, so a valve flick or a knock on the brewer (a spike that
+        // comes straight back) never ticks a step off early
+        if (li && running() && w >= t - CLOSE_G) { if (aboveSince === null || aboveFor !== li) { aboveSince = Date.now(); aboveFor = li; } }
+        else { aboveSince = null; }
+        if (li && running() && aboveSince !== null && Date.now() - aboveSince >= HOLD_MS && !li.hasAttribute('data-reached')) {
             // when, on the brew's clock, for the summary after Stop
             li.setAttribute('data-reached', String(window.brewElapsed ? window.brewElapsed() : Math.round(brewSeconds())));
             if (window.brewBeep) window.brewBeep('reached');  // not the new-step beep

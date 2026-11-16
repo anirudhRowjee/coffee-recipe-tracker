@@ -7,6 +7,15 @@
     var host = document.getElementById('share-card');
     if (!host) return;
     var card = JSON.parse(host.getAttribute('data-card'));
+    // the curve with valve flicks smoothed out and the brewer-off end dropped (static/brew_phases.js)
+    if (card.curve && window.BrewPhases) {
+        var read = window.BrewPhases.classify(card.curve.t.map(function (t, i) { return [t, card.curve.g[i], card.curve.f[i]]; })).samples;
+        if (read.length > 1) {
+            card.curve.t = read.map(function (s) { return s[0]; });
+            card.curve.g = read.map(function (s) { return s[1]; });
+            card.curve.f = read.map(function (s) { return s[2]; });
+        }
+    }
 
     var W = 1080, H = card.story ? 1920 : 1350;
     var BORDER = 32, PAD = 56;  // the bag's colours around the card; space inside it

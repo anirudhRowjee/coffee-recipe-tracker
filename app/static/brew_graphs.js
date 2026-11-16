@@ -7,14 +7,18 @@
 (function () {
     var NS = 'http://www.w3.org/2000/svg';
     var M = { left: 46, right: 14, top: 12, bottom: 26 };
-    var INK = '#3b1f0e', MUTED = '#8c6a4f', COMPARE = '#b9a58f', PAPER = '#faf6f0';
+    var INK = '#3b1f0e', MUTED = '#8c6a4f', COMPARE = '#b9a58f', PAPER = '#faf6f0', VALVE = '#5b7493';
     // the charts' look, also written into the SVG when it's saved as an image
     var CSS = '.bg-grid{stroke:#efe5d8;stroke-width:1}.bg-base{stroke:#d8c6b0;stroke-width:1}' +
         '.bg-label{font:12px -apple-system,system-ui,sans-serif;fill:' + MUTED + ';font-variant-numeric:tabular-nums}' +
         '.bg-target{fill:none;stroke:' + MUTED + ';stroke-width:1.5;stroke-dasharray:5 4}' +
         '.bg-line{fill:none;stroke:ACCENT;stroke-width:2;stroke-linejoin:round}' +
         '.bg-compare{fill:none;stroke:' + COMPARE + ';stroke-width:2;stroke-linejoin:round}' +
-        '.bg-cross{stroke:' + MUTED + ';stroke-width:1}.bg-dot{fill:ACCENT;stroke:#fff;stroke-width:2}';
+        '.bg-cross{stroke:' + MUTED + ';stroke-width:1}.bg-dot{fill:ACCENT;stroke:#fff;stroke-width:2}' +
+        // what was happening (static/brew_phases.js): pours shaded, valve flicks dashed, the brewer off greyed
+        '.bg-pour{fill:ACCENT;fill-opacity:.13}.bg-off{fill:#e6ded3}' +
+        '.bg-valve{stroke:' + VALVE + ';stroke-width:1.5;stroke-dasharray:3 3}' +
+        '.bg-mark{font:600 11px -apple-system,system-ui,sans-serif;fill:' + MUTED + '}.bg-mark-valve{fill:' + VALVE + '}';
 
     function el(name, attrs, parent) {
         var node = document.createElementNS(NS, name);
@@ -43,7 +47,7 @@
     }
 
     // one chart: series is [[samples, k, className], …], drawn in order (the main one last)
-    function chart(host, W, height, series, unit, end, targets) {
+    function chart(host, W, height, series, unit, end, targets, phases, labelled) {
         host.innerHTML = '';
         var values = [];
         series.forEach(function (s) { s[0].forEach(function (p) { values.push(p[s[1]]); }); });
@@ -64,6 +68,21 @@
         });
         timeTicks(end, W).forEach(function (t) {
             el('text', { x: x(t), y: height - 8, 'class': 'bg-label', 'text-anchor': t === 0 ? 'start' : 'middle' }, svg).textContent = fmt(t);
+        });
+        // what was happening, behind the lines: pours shaded, valve flicks as dashed lines
+        (phases || []).forEach(function (p) {
+            var x0 = x(Math.max(0, p.from)), x1 = x(Math.min(end, p.to));
+            if (p.kind === 'valve') {
+                var vx = ((x0 + x1) / 2).toFixed(1);
+                el('line', { x1: vx, x2: vx, y1: M.top, y2: M.top + plotH, 'class': 'bg-valve' }, svg);
+                // at the foot of the chart, so it never runs into a pour's label at the top
+                if (labelled) el('text', { x: +vx + 3, y: M.top + plotH - 4, 'class': 'bg-mark bg-mark-valve' }, svg).textContent = 'valve';
+                return;
+            }
+            el('rect', { x: x0.toFixed(1), y: M.top, width: Math.max(1, x1 - x0).toFixed(1), height: plotH, 'class': p.kind === 'off' ? 'bg-off' : 'bg-pour' }, svg);
+            if (labelled && x1 - x0 > (p.kind === 'off' ? 22 : 30)) {
+                el('text', { x: (x0 + 3).toFixed(1), y: M.top + 10, 'class': 'bg-mark' }, svg).textContent = p.kind === 'off' ? 'off' : 'pour';
+            }
         });
         if (targets && targets.length) {
             var d = '';
@@ -91,30 +110,53 @@
         return samples[lo];
     }
 
-    function summary(samples) {
-        var flows = samples.map(function (s) { return s[2]; });
-        var pouring = samples.filter(function (s) { return s[2] > 0.5; });
-        var avg = pouring.length ? pouring.reduce(function (a, s) { return a + s[2]; }, 0) / pouring.length : 0;
-        return fmt(samples[samples.length - 1][0]) + ' · ' + Math.round(samples[samples.length - 1][1]) + ' g in the cup · peak flow ' +
-            maxOf(flows).toFixed(1) + ' g/s · ' + avg.toFixed(1) + ' g/s while pouring';
+    // in words, from the cleaned readings: what's in the cup, the pours and their flow (never
+    // a valve flick's spike), and how often the valve was flicked
+    function summary(samples, phases) {
+        var pours = phases.filter(function (p) { return p.kind === 'pour'; });
+        var during = samples.filter(function (s) {
+            return pours.some(function (p) { return s[0] >= p.from && s[0] <= p.to; });
+        });
+        var flows = (during.length ? during : samples).map(function (s) { return s[2]; });
+        var avg = during.length ? during.reduce(function (a, s) { return a + s[2]; }, 0) / during.length : 0;
+        var valves = phases.filter(function (p) { return p.kind === 'valve'; }).length;
+        var last = samples[samples.length - 1];
+        return fmt(last[0]) + ' · ' + Math.round(last[1]) + ' g in the cup · ' +
+            (pours.length ? pours.length + ' pour' + (pours.length === 1 ? '' : 's') + ', ' : '') +
+            'peak flow ' + maxOf(flows).toFixed(1) + ' g/s · ' + avg.toFixed(1) + ' g/s while pouring' +
+            (valves ? ' · valve ' + valves + '×' : '');
+    }
+    function phaseAt(phases, t) {
+        for (var i = 0; i < phases.length; i++) {
+            var p = phases[i], pad = p.kind === 'valve' ? 0.6 : 0;
+            if (t >= p.from - pad && t <= p.to + pad) return p.kind === 'pour' ? 'pouring' : p.kind === 'valve' ? 'valve' : 'brewer off';
+        }
+        return '';
+    }
+    function clean(samples) {  // spikes smoothed out, and what was happening when
+        return window.BrewPhases ? window.BrewPhases.classify(samples) : { samples: samples, phases: [] };
     }
 
     // Draws into root's [data-graph=weight|flow], .bg-summary, .bg-legend and .bg-readout.
     // opts (brew mode's live graph): heights [weight, flow], and end, the time axis's length.
     function draw(root, samples, targets, compare, opts) {
         opts = opts || {};
+        var read = clean(samples), phases = read.phases, rawEnd = samples[samples.length - 1][0];
+        samples = read.samples.length > 1 ? read.samples : samples;
+        if (compare) compare = { samples: clean(compare.samples).samples, label: compare.label };
         var weightHost = root.querySelector('[data-graph=weight]'), flowHost = root.querySelector('[data-graph=flow]');
         var W = Math.max(280, weightHost.clientWidth || 640);  // drawn at its real width, so labels stay 12px on a phone
         var other = compare ? compare.samples : null;
-        var end = Math.max(samples[samples.length - 1][0], other ? other[other.length - 1][0] : 0, opts.end || 0, 10);
+        // to the end of the readings, so the brewer-off part still shows (greyed)
+        var end = Math.max(rawEnd, other ? other[other.length - 1][0] : 0, opts.end || 0, 10);
         var heights = opts.heights || [210, 150];
         var weightSeries = (other ? [[other, 1, 'bg-compare']] : []).concat([[samples, 1, 'bg-line']]);
         var flowSeries = (other ? [[other, 2, 'bg-compare']] : []).concat([[samples, 2, 'bg-line']]);
-        var weight = chart(weightHost, W, heights[0], weightSeries, 'g', end, targets);
-        var flow = chart(flowHost, W, heights[1], flowSeries, 'g/s', end, null);
+        var weight = chart(weightHost, W, heights[0], weightSeries, 'g', end, targets, phases, true);
+        var flow = chart(flowHost, W, heights[1], flowSeries, 'g/s', end, null, phases, false);
         var charts = [[weight, 1], [flow, 2]];
 
-        root.querySelector('.bg-summary').textContent = summary(samples);
+        root.querySelector('.bg-summary').textContent = summary(samples, phases);
         var legend = root.querySelector('.bg-legend');
         if (legend) {
             legend.hidden = !other;
@@ -131,7 +173,10 @@
             }
         }
         var readout = root.querySelector('.bg-readout');
-        var hint = 'Hover or touch the graphs for the reading at any moment.';
+        var key = [phases.some(function (p) { return p.kind === 'pour'; }) ? 'Shaded: pouring' : '',
+                   phases.some(function (p) { return p.kind === 'valve'; }) ? 'dashed blue: valve flicked (smoothed out)' : '',
+                   phases.some(function (p) { return p.kind === 'off'; }) ? 'grey: brewer off the scale' : ''].filter(Boolean).join(' · ');
+        var hint = (key ? key + '. ' : '') + 'Hover or touch the graphs for the reading at any moment.';
         readout.textContent = hint;
 
         function at(evt) {
@@ -144,7 +189,8 @@
                 c.dot.setAttribute('cx', cx); c.dot.setAttribute('cy', c.y(s[pair[1]]));
                 c.cross.setAttribute('visibility', 'visible'); c.dot.setAttribute('visibility', 'visible');
             });
-            var text = fmt(s[0]) + ' · ' + num(s[1]) + ' g · ' + num(s[2]) + ' g/s';
+            var doing = phaseAt(phases, s[0]);
+            var text = fmt(s[0]) + ' · ' + num(s[1]) + ' g · ' + num(s[2]) + ' g/s' + (doing ? ' · ' + doing : '');
             if (other && t <= other[other.length - 1][0] + 1) {
                 var o = nearest(other, s[0]);
                 text += '  (other: ' + num(o[1]) + ' g · ' + num(o[2]) + ' g/s)';
