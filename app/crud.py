@@ -267,7 +267,96 @@ def get_remaining_quantity(session: Session, bag: models.BeanBag) -> float:
         .join(models.Brew, models.Brew.recipe_id == models.Recipe.id)  # type: ignore[arg-type]
         .where(models.Brew.bag_id == bag.id)
     ).first()
-    return bag.initial_quantity_g - (used or 0.0)
+    frozen_out = session.exec(
+        select(func.sum(models.BeanBag.initial_quantity_g)).where(models.BeanBag.parent_bag_id == bag.id)
+    ).first() if bag.id else None
+    return bag.initial_quantity_g - (used or 0.0) - (frozen_out or 0.0)
+
+
+# --- frozen portions ------------------------------------------------------------------
+# A bag split into vacuum-sealed portions: each portion is a bag of its own (parent_bag_id
+# says where it came from, so the parent's grams left drop by its size) with a short code
+# to write on it or print on a label, looked up by anyone at /b/<code>.
+
+PORTION_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"  # no 0/O, 1/I/L: written by hand, read by eye
+PORTION_CODE_LEN = 5
+
+
+def normalise_code(text: Optional[str]) -> str:
+    """A code as typed: any case, with spaces or dashes."""
+    return re.sub(r"[\s\-_./]", "", (text or "").upper())
+
+
+def _new_code(session: Session) -> str:
+    import secrets
+    while True:
+        code = "".join(secrets.choice(PORTION_ALPHABET) for _ in range(PORTION_CODE_LEN))
+        if not session.exec(select(models.BeanBag.id).where(models.BeanBag.code == code)).first():
+            return code
+
+
+def freeze_portions(session: Session, bag: models.BeanBag, grams: float, count: int,
+                    today: Optional[date] = None) -> List[models.BeanBag]:
+    """Split `count` portions of `grams` off a bag, frozen today, each with its own code."""
+    if bag.is_completed or bag.parent_bag_id:
+        raise ValueError("Only an open bag can be split into portions.")
+    if not (5 <= grams <= 1000) or not (1 <= count <= 50):
+        raise ValueError("A portion is 5 to 1000 g, and up to 50 at a time.")
+    if grams * count > get_remaining_quantity(session, bag) + 1e-6:
+        raise ValueError(f"That's {grams * count:g} g, more than is left in the bag.")
+    today = today or datetime.now(IST).date()
+    portions = []
+    for _ in range(count):
+        portion = models.BeanBag(bean_id=bag.bean_id, roast_date=bag.roast_date, purchase_date=bag.purchase_date,
+                                 initial_quantity_g=grams, low_threshold_g=0, is_frozen=True, frozen_date=today,
+                                 parent_bag_id=bag.id, code=_new_code(session))
+        session.add(portion)
+        session.flush()
+        portions.append(portion)
+    session.commit()
+    return portions
+
+
+def portions_in_freezer(session: Session, bean_id: int) -> List[models.BeanBag]:
+    return [b for b in get_bags_for_bean(session, bean_id) if b.code and b.is_frozen and not b.is_completed]
+
+
+def take_out_portion(session: Session, bag: models.BeanBag, today: Optional[date] = None) -> None:
+    bag.is_frozen = False
+    bag.thaw_date = today or datetime.now(IST).date()
+    session.commit()
+
+
+def give_away_portion(session: Session, bag: models.BeanBag, today: Optional[date] = None) -> None:
+    """Out of your stock (a finished bag), dated; its code page keeps working for the friend."""
+    bag.given_date = today or datetime.now(IST).date()
+    bag.is_completed = True
+    session.commit()
+
+
+def bag_by_code(session: Session, code: str) -> Optional[models.BeanBag]:
+    if len(code) != PORTION_CODE_LEN or any(c not in PORTION_ALPHABET for c in code):
+        return None
+    return session.exec(select(models.BeanBag).where(models.BeanBag.code == code)).first()
+
+
+def best_line(session: Session, bean_id: int) -> Optional[models.RecipeLine]:
+    """A coffee's best named recipe: the highest average rating over all its cups (more
+    rated cups breaking a tie), else the one used most recently."""
+    lines = get_lines_for_bean(session, bean_id)
+    best, best_key = None, None
+    for line in lines:
+        ratings = session.exec(
+            select(models.Brew.rating)
+            .join(models.Recipe, models.Recipe.id == models.Brew.recipe_id)  # type: ignore[arg-type]
+            .where(models.Recipe.line_id == line.id)
+            .where(models.Brew.rating != None)  # noqa: E711
+        ).all()
+        if ratings:
+            key = (sum(ratings) / len(ratings), len(ratings))
+            if best_key is None or key > best_key:
+                best, best_key = line, key
+    return best or (lines[0] if lines else None)
 
 
 def get_lines_for_combo(session: Session, bean_id: int, brewer_id: int, grinder_id: int) -> List[models.RecipeLine]:
@@ -851,6 +940,8 @@ def complete_bag(session: Session, bag_id: int) -> Optional[models.BeanBag]:
 
 
 def delete_bag(session: Session, bag_id: int) -> None:
+    for portion in session.exec(select(models.BeanBag).where(models.BeanBag.parent_bag_id == bag_id)).all():
+        portion.parent_bag_id = None  # portions split off it stay, as bags of their own
     for brew in session.exec(select(models.Brew).where(models.Brew.bag_id == bag_id)).all():
         _delete_brew(session, brew)
     _delete_plans_for_bag(session, bag_id)

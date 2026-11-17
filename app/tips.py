@@ -22,6 +22,7 @@ TIPS = {
     "tidy": "Turns a written method into timed steps, so brew mode can time and beep each one. Your old text stays as the previous version.",
     "share": "Makes a picture or text of this recipe for friends. Your tasting notes, ratings and bags stay private.",
     "frozen": "Frozen bags stay out of the picker until you thaw them.",
+    "portions": "Portions split off a bag and frozen, each with a code. Anyone with the code can look it up at /b. Tap one to take it out (Brew uses it next) or to say you gave it away.",
     "low_stock": "The bag shows as low when fewer grams than this are left.",
     "graph": "Weight and flow from the scale, over your previous cup of this recipe, so you can see what changed.",
     "savings": "Each cup you log counts as one café cup (₹300) you didn't buy.",

@@ -61,12 +61,13 @@ def export_all(engine: Engine, out: Path) -> None:
             w = csv.writer(f)
             w.writerow(["id", "bean_id", "bean_name", "roast_date", "purchase_date",
                         "initial_quantity_g", "remaining_g", "low_threshold_g", "is_frozen", "frozen_date",
-                        "thaw_date", "is_completed", "notes"])
+                        "thaw_date", "is_completed", "notes", "code", "parent_bag_id", "given_date"])
             for bag in session.exec(select(BeanBag).order_by(BeanBag.id)).all():
                 remaining = crud.get_remaining_quantity(session, bag)
                 w.writerow([bag.id, bag.bean_id, bag.bean.name if bag.bean else "", bag.roast_date, bag.purchase_date,
                             bag.initial_quantity_g, round(remaining, 1), bag.low_threshold_g,
-                            bag.is_frozen, bag.frozen_date, bag.thaw_date, bag.is_completed, bag.notes])
+                            bag.is_frozen, bag.frozen_date, bag.thaw_date, bag.is_completed, bag.notes,
+                            bag.code, bag.parent_bag_id, bag.given_date])
 
         # Brewers
         with open(out / "brewers.csv", "w", newline="") as f:

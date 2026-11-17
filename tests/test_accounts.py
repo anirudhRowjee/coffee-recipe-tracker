@@ -297,6 +297,7 @@ GET_ATTACKS = [
     ("/cafes/1/edit", {}),
     ("/cafes/1/share-image", {}),
     ("/browse", {"from_cafe": 1}),
+    ("/beans/1/labels", {}),
 ]
 
 RECIPE = {"dose_g": 15, "water_ml": 250, "temp_c": 93, "grind_size": "13"}
@@ -309,6 +310,9 @@ POST_ATTACKS = [
     ("/bags/1/edit", {"initial_quantity_g": 1}),
     ("/bags/1/complete", {}),
     ("/bags/1/delete", {}),
+    ("/bags/1/freeze", {"grams": "60", "count": "1"}),
+    ("/bags/1/take-out", {}),
+    ("/bags/1/give-away", {}),
     ("/brewers/1/edit", {"name": "Hacked"}),
     ("/brewers/1/delete", {}),
     ("/grinders/1/edit", {"name": "Hacked"}),
@@ -379,7 +383,9 @@ def test_owners_keep_working_normally(owned):
     assert owned.scalar("select name from bean where id = 1") == "Renamed"
 
 
-PUBLIC_ROUTES = {"/select-user", "/login", "/logout"}
+# /b is a frozen portion's code page, open to anyone with a code (the one place outside
+# Caddy's password); tests/test_portions.py checks what it shows and what it holds back
+PUBLIC_ROUTES = {"/select-user", "/login", "/logout", "/b", "/b/{code}"}
 
 
 def test_every_route_turns_away_anyone_not_signed_in(app):
@@ -427,3 +433,26 @@ def test_gate_rewrite_replaces_only_that_sites_logins():
 def test_gate_rewrite_refuses_an_unexpected_caddyfile():
     with pytest.raises(ValueError):
         gate.with_single_login(":80 {\n  file_server\n}\n", "coffee", "$2a$14$newhash")
+
+
+# --- opening /b in Caddy -------------------------------------------------------------
+
+spec_b = importlib.util.spec_from_file_location("open_portion_pages", ROOT / "scripts" / "remote" / "open_portion_pages.py")
+open_b = importlib.util.module_from_spec(spec_b)
+spec_b.loader.exec_module(open_b)  # type: ignore[union-attr]
+
+
+def test_opening_b_leaves_everything_else_behind_the_password():
+    out = open_b.with_portion_pages(CADDYFILE)
+    assert "@portion path /b /b/*" in out and out.count("basicauth") == 1
+    site = out[out.index("coffee.rowjee.com {"):]
+    assert site.index("handle @portion") < site.index("handle {") < site.index("basicauth")
+    assert "oldhashtwo" in out and "file_server" in out  # the logins and the rest of the file kept
+    assert open_b.with_portion_pages(out) == out  # running it again changes nothing
+    # and the gate password script still finds its logins
+    assert "coffee $2a$14$newhash" in gate.with_single_login(out, "coffee", "$2a$14$newhash")
+
+
+def test_opening_b_refuses_an_unexpected_caddyfile():
+    with pytest.raises(ValueError):
+        open_b.with_portion_pages(":80 {\n  file_server\n}\n")

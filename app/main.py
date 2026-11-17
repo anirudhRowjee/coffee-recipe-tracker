@@ -2,6 +2,7 @@ import functools
 import hashlib
 import json
 import random
+import re
 import secrets
 import time
 from datetime import date as date_type, datetime, timezone
@@ -15,7 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional, Tuple
+from urllib.parse import quote
 
 from . import auth, brew, crud, db, export, four_six, models, starters, theme, tips, words
 
@@ -769,7 +771,10 @@ def browse(request: Request, bean: Optional[int] = None, from_cafe: Optional[int
             for r in line_rows:
                 r["label"] = f'{r["line"].name} · {r["brewer"].name}' if names.count(r["line"].name) > 1 else r["line"].name
             brews = crud.get_brews_for_bean(session, sb.id)[:20]  # type: ignore[arg-type]
+            best = crud.best_line(session, sb.id)  # type: ignore[arg-type]
+            best_latest = crud.get_latest_recipe(session, best.id) if best else None  # type: ignore[arg-type]
             detail = {"lines": line_rows, "brews": brews, "bag_to_use": crud.pick_bag(session, sb.id),  # type: ignore[arg-type]
+                      "best_dose": best_latest.dose_g if best_latest else None,
                       "curve_ids": crud.brews_with_curves(session, [b.id for b in brews])}  # type: ignore[misc]
         # "Bought the beans?" / "Add these beans": Add coffee opens filled in from a café cup
         # (yours, or a friend's shared one); nothing links the two afterwards
@@ -960,6 +965,172 @@ def complete_bag(request: Request, bag_id: int):
         bag_bean = _owned(session, user, models.BeanBag, bag_id).bean_id
         crud.complete_bag(session, bag_id)
     return RedirectResponse(url=f"/browse?bean={bag_bean}", status_code=303)
+
+
+# --- frozen portions ------------------------------------------------------------------
+
+@app.post("/bags/{bag_id}/freeze")
+def freeze_bag(request: Request, bag_id: int, grams: float = Form(...), count: int = Form(...)):
+    """Split portions off a bag, then show their codes and labels."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        try:
+            portions = crud.freeze_portions(session, bag, grams, count)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        codes = ",".join(p.code for p in portions)  # type: ignore[misc]
+        return RedirectResponse(url=f"/beans/{bag.bean_id}/labels?new={codes}", status_code=303)
+
+
+@app.post("/bags/{bag_id}/take-out")
+def take_out_bag(request: Request, bag_id: int, next: Optional[str] = Form(None)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        crud.take_out_portion(session, bag)
+        return RedirectResponse(url=_back_to(next, f"/browse?bean={bag.bean_id}"), status_code=303)
+
+
+@app.post("/bags/{bag_id}/give-away")
+def give_away_bag(request: Request, bag_id: int, next: Optional[str] = Form(None)):
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bag = _owned(session, user, models.BeanBag, bag_id)
+        crud.give_away_portion(session, bag)
+        return RedirectResponse(url=_back_to(next, f"/browse?bean={bag.bean_id}"), status_code=303)
+
+
+def _public_base(request: Request) -> str:
+    """The site's address as people reach it (behind Caddy, which speaks https)."""
+    host = request.headers.get("host") or "localhost"
+    scheme = request.headers.get("x-forwarded-proto") or ("http" if host.startswith(("localhost", "127.")) else "https")
+    return f"{scheme}://{host}"
+
+
+def _portion_facts(session: Session, bag: models.BeanBag) -> dict:
+    """What a portion's label and code page say: the whitelist (coffee, dates, weight and
+    the best recipe), never notes, ratings, other bags or whose it is."""
+    bean = bag.bean
+    line = crud.best_line(session, bag.bean_id)
+    latest = crud.get_latest_recipe(session, line.id) if line else None  # type: ignore[arg-type]
+    cups = round(bag.initial_quantity_g / latest.dose_g) if latest and latest.dose_g else None
+    status = ("Given away" if bag.given_date else "Finished" if bag.is_completed else
+              "Frozen" if bag.is_frozen else f"Out of the freezer since {bag.thaw_date:%-d %b}" if bag.thaw_date else "Out of the freezer")
+    return {
+        "code": bag.code, "name": bean.name if bean else "Coffee",
+        "about": " · ".join(x for x in (bean.origin if bean else None, f"{bean.roast_level} roast" if bean and bean.roast_level else None) if x),
+        "flavour": (bean.flavor_notes or "") if bean else "",
+        "roasted": f"{bag.roast_date:%-d %b %Y}" if bag.roast_date else "",
+        "roasted_short": f"{bag.roast_date:%-d %b}" if bag.roast_date else "",
+        "frozen": f"{bag.frozen_date:%-d %b %Y}" if bag.frozen_date else "",
+        "frozen_short": f"{bag.frozen_date:%-d %b}" if bag.frozen_date else "",
+        "grams": words.num(bag.initial_quantity_g), "cups": cups, "status": status, "is_frozen": bag.is_frozen,
+        "recipe": export.card_data(line, latest) if line and latest and latest.bean and latest.brewer and latest.grinder else None,
+        "recipe_short": (f"{words.num(latest.dose_g)} g · {words.num(latest.water_ml)} ml · {words.num(latest.temp_c)} °C"
+                         + (f" · {latest.brewer.name}" if latest.brewer else "")) if latest else "",
+    }
+
+
+@app.get("/beans/{bean_id}/labels", response_class=HTMLResponse)
+def portion_labels(request: Request, bean_id: int, new: Optional[str] = None):
+    """A coffee's frozen portions: their codes to write on the bags, and labels as a PDF."""
+    with Session(db.engine) as session:
+        user = _require_user(request, session)
+        bean = _owned(session, user, models.Bean, bean_id)
+        fresh = [c for c in (new or "").split(",") if c]
+        portions = crud.portions_in_freezer(session, bean_id)
+        if fresh:
+            portions = [p for p in portions if p.code in fresh] or portions
+        base = _public_base(request)
+        labels = [{**_portion_facts(session, p), "url": f"{base}/b/{p.code}"} for p in portions]
+        for label in labels:
+            label.pop("recipe", None)
+        return templates.TemplateResponse("portion_labels.html", {
+            "request": request, "current_user": user, "bean": bean, "labels": labels, "fresh": bool(fresh),
+            "short_url": base.split("://", 1)[1] + "/b", "filename": re.sub(r"[^a-z0-9]+", "-", bean.name.lower()).strip("-") + "-labels.pdf",
+        })
+
+
+# The code page is the one part of the site outside Caddy's password (Caddyfile: /b and
+# /b/* only). It's for people, not bots: known bots and automated clients are turned away,
+# and each address gets a human's number of lookups (more for codes that exist than for
+# guesses), with a cap on guesses from everyone together, so codes can't be harvested.
+# Kept in memory: prod runs one process, and a restart only resets the counts.
+_BOT_UA = re.compile(
+    r"bot|crawl|spider|slurp|scrap|curl|wget|python|httpx|aiohttp|requests|go-http|java/|okhttp|libwww|perl|ruby|"
+    r"node-fetch|axios|undici|headless|phantom|selenium|playwright|puppeteer|lighthouse|gpt|claude|anthropic|openai|"
+    r"perplexity|bytespider|ccbot|cohere|diffbot|facebookexternalhit|semrush|ahrefs|petal|amazonbot|applebot|"
+    r"googleother|bingpreview|meta-external|imagesift|monitor|uptime|check|feed|preview", re.IGNORECASE)
+_LIMITS = {"look": (30, 60), "look_hour": (150, 3600), "miss": (15, 3600)}  # (events, seconds) per address
+_MISS_ALL = (300, 3600)  # guesses from every address together
+_HITS: Dict[str, List[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    # uvicorn listens on 127.0.0.1 behind Caddy, which sets X-Forwarded-For to the real address
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+
+def _over(key: str, limit: Tuple[int, int], now: float, record: bool = True) -> bool:
+    events, window = limit
+    hits = [t for t in _HITS.get(key, []) if now - t < window]
+    over = len(hits) >= events
+    if record and not over:
+        hits.append(now)
+    _HITS[key] = hits
+    return over
+
+
+def _public_page(request: Request, name: str, context: dict, status: int = 200) -> HTMLResponse:
+    response = templates.TemplateResponse(name, {"request": request, **context}, status_code=status)
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _turn_away(request: Request, session: Session) -> Optional[HTMLResponse]:
+    """A bot, or someone over a human's number of lookups: the page they get instead."""
+    if _get_current_user(request, session):
+        return None  # signed in: it's one of us
+    ua = request.headers.get("user-agent", "")
+    if not ua or _BOT_UA.search(ua):
+        return _public_page(request, "portion_public.html", {"blocked": "bot"}, status=403)
+    ip, now = _client_ip(request), time.time()
+    if _over(f"look:{ip}", _LIMITS["look"], now) or _over(f"look_hour:{ip}", _LIMITS["look_hour"], now):
+        return _public_page(request, "portion_public.html", {"blocked": "slow"}, status=429)
+    return None
+
+
+@app.get("/b", response_class=HTMLResponse)
+def portion_lookup(request: Request, code: Optional[str] = None):
+    """Got a bag of coffee? Type the code on its label."""
+    with Session(db.engine) as session:
+        turned = _turn_away(request, session)
+        if turned:
+            return turned
+        if code is not None and crud.normalise_code(code):
+            return RedirectResponse(url=f"/b/{quote(crud.normalise_code(code))}", status_code=303)
+        return _public_page(request, "portion_public.html", {"ask": True})
+
+
+@app.get("/b/{code}", response_class=HTMLResponse)
+def portion_page(request: Request, code: str):
+    with Session(db.engine) as session:
+        turned = _turn_away(request, session)
+        if turned:
+            return turned
+        bag = crud.bag_by_code(session, crud.normalise_code(code))
+        user = _get_current_user(request, session)
+        if not bag:
+            if not user:
+                ip, now = _client_ip(request), time.time()
+                if _over(f"miss:{ip}", _LIMITS["miss"], now) or _over("miss:all", _MISS_ALL, now):
+                    return _public_page(request, "portion_public.html", {"blocked": "slow"}, status=429)
+            return _public_page(request, "portion_public.html", {"ask": True, "missing": crud.normalise_code(code)[:12]}, status=404)
+        mine = bool(user and not user.must_change_password and _owner_id(session, bag) == user.id)
+        return _public_page(request, "portion_public.html", {"facts": _portion_facts(session, bag), "bag": bag, "mine": mine})
 
 
 @app.post("/bags/{bag_id}/delete")

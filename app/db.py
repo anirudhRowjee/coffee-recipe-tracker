@@ -66,6 +66,7 @@ def run_migrations(target: Optional[Engine] = None):
         _migrate_gear_archive(conn)
         _migrate_line_next_change(conn)
         _migrate_cafe_handle(conn)
+        _migrate_frozen_portions(conn)
 
 
 def _columns(conn, table: str) -> set:
@@ -125,6 +126,15 @@ def _migrate_gear_archive(conn) -> None:
     for table in ("brewer", "grinder"):
         if "archived" not in _columns(conn, table):
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN archived BOOLEAN NOT NULL DEFAULT 0"))
+
+
+def _migrate_frozen_portions(conn) -> None:
+    """Frozen portions (2026-11-17): a bag split off another, with a label code."""
+    columns = _columns(conn, "beanbag")
+    for name, kind in (("code", "VARCHAR"), ("parent_bag_id", "INTEGER REFERENCES beanbag(id)"), ("given_date", "DATE")):
+        if name not in columns:
+            conn.execute(text(f"ALTER TABLE beanbag ADD COLUMN {name} {kind}"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_beanbag_code ON beanbag (code)"))
 
 
 def _migrate_cafe_handle(conn) -> None:

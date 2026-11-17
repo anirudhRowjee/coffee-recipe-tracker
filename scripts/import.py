@@ -213,6 +213,9 @@ def import_all(engine: Engine, src: Path) -> None:
                 thaw_date=_date(r.get("thaw_date")),
                 is_completed=_bool(r.get("is_completed")),
                 notes=_str(r["notes"]),
+                code=_str(r.get("code")),
+                parent_bag_id=_int(r.get("parent_bag_id")),
+                given_date=_date(r.get("given_date")),
             ))
         session.commit()
         print(f"  bags:     {len(rows)}")

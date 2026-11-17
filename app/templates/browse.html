@@ -55,13 +55,23 @@
 
     <h3>Bags</h3>
     <div class="chips">
-        {% for bag, remaining in selected.bags %}
+        {% for bag, remaining in selected.bags if not (bag.code and bag.is_frozen and not bag.is_completed) %}
         <button type="button" class="chip{% if bag.is_completed %} done{% elif remaining <= bag.low_threshold_g %} low{% endif %}" data-sheet="bag-sheet-{{ bag.id }}">
             {% if bag.is_completed %}✓ {% elif bag.is_frozen %}❄ {% endif %}{{ remaining|int if not bag.is_completed else bag.initial_quantity_g|int }} g{% if not bag.is_completed %} of {{ bag.initial_quantity_g|int }}{% endif %}{% if bag.roast_date %} · roasted {{ bag.roast_date.strftime('%b %d') }}{% endif %}
         </button>
         {% endfor %}
         <button type="button" class="chip ghost" data-sheet="new-bag-sheet">+ New bag</button>
     </div>
+    {% set frozen_portions = selected.bags|selectattr('0.code')|selectattr('0.is_frozen')|rejectattr('0.is_completed')|list %}
+    {% if frozen_portions %}
+    <h3 class="freezer-head">❄ In the freezer {{ tip('portions') }}</h3>
+    <div class="chips">
+        {% for bag, remaining in frozen_portions %}
+        <button type="button" class="chip frz" data-sheet="bag-sheet-{{ bag.id }}">❄ <span class="code">{{ bag.code }}</span> {{ bag.initial_quantity_g|num }} g</button>
+        {% endfor %}
+        <a class="chip ghost" href="/beans/{{ bean.id }}/labels">⬇ Labels</a>
+    </div>
+    {% endif %}
 
     <h3>Recipes {{ tip('recipes') }}</h3>
     {% if lines %}
@@ -139,7 +149,22 @@
 {% for bag, remaining in selected.bags %}
 <dialog class="sheet" id="bag-sheet-{{ bag.id }}" aria-label="Bag">
     <div class="sheet-grab"></div>
+    {% if bag.code %}
+    <div class="sheet-head"><h3>{{ '❄ ' if bag.is_frozen }}<span class="code">{{ bag.code }}</span> · {{ bag.initial_quantity_g|num }} g</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <p class="muted">{% if bag.given_date %}Given away {{ bag.given_date.strftime('%b %d') }}{% elif bag.is_frozen %}Frozen {{ bag.frozen_date.strftime('%b %d') if bag.frozen_date }}{% else %}Out of the freezer{% if bag.thaw_date %} since {{ bag.thaw_date.strftime('%b %d') }}{% endif %} · {{ remaining|num }} g left{% endif %} · <a href="/b/{{ bag.code }}">its code page</a></p>
+    {% if not bag.is_completed %}
+    <div class="portion-actions">
+        {% if bag.is_frozen %}<form method="post" action="/bags/{{ bag.id }}/take-out"><button type="submit">Take it out</button></form>{% endif %}
+        <form method="post" action="/bags/{{ bag.id }}/give-away"><button type="submit" class="btn-secondary">Gave it away</button></form>
+    </div>
+    {% endif %}
+    <details class="history-block"><summary class="history-summary">Edit or delete</summary>
+    {% else %}
     <div class="sheet-head"><h3>Bag · {{ remaining|int }} g left</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    {% if not bag.is_completed and remaining >= 5 %}
+    <button type="button" class="btn-freeze" data-sheet="freeze-sheet-{{ bag.id }}">❄ Freeze in portions</button>
+    {% endif %}
+    {% endif %}
     <form method="post" action="/bags/{{ bag.id }}/edit" class="stacked-form">
         <label>Bag size (g) <input name="initial_quantity_g" type="number" inputmode="decimal" step="any" min="1" value="{{ bag.initial_quantity_g|int }}" data-label="Bag size" required /></label>
         <label>Roast date <input name="roast_date" type="date" value="{{ bag.roast_date.isoformat() if bag.roast_date else '' }}" /></label>
@@ -158,7 +183,28 @@
             <button type="submit" class="btn-danger">Delete bag</button>
         </form>
     </div>
+    {% if bag.code %}</details>{% endif %}
 </dialog>
+{% if not bag.code and not bag.is_completed and remaining >= 5 %}
+<dialog class="sheet" id="freeze-sheet-{{ bag.id }}" aria-label="Freeze in portions">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head"><h3>Freeze in portions</h3><button type="button" class="sheet-close" data-sheet-close>Close</button></div>
+    <p class="muted">{{ bean.name }} · {{ remaining|num }} g left. Each portion gets a code to write on its bag or print on a label.</p>
+    <form method="post" action="/bags/{{ bag.id }}/freeze" class="stacked-form freeze-form" data-left="{{ remaining }}" data-dose="{{ best_dose or '' }}">
+        <p class="eyebrow">Each portion</p>
+        <div class="chips freeze-sizes">
+            {% for g in (30, 60, 90) %}<button type="button" class="chip" data-grams="{{ g }}" aria-pressed="false">{{ g }} g</button>{% endfor %}
+            <button type="button" class="chip" data-grams="other" aria-pressed="false">Other</button>
+        </div>
+        <label class="freeze-other" hidden>Grams in each <input name="grams" type="number" inputmode="decimal" step="any" min="5" max="1000" value="60" data-label="Grams in each" data-unit=" g" required /></label>
+        <p class="eyebrow">How many</p>
+        <div class="stepper"><button type="button" class="stepper-btn" data-step="-1" aria-label="One fewer">−</button><input name="count" type="number" inputmode="numeric" min="1" max="50" value="1" data-label="How many" required /><button type="button" class="stepper-btn" data-step="1" aria-label="One more">+</button></div>
+        <div class="freeze-bar" aria-hidden="true"></div>
+        <p class="freeze-sum muted" role="status"></p>
+        <button type="submit" class="freeze-go">Freeze</button>
+    </form>
+</dialog>
+{% endif %}
 {% endfor %}
 
 {% if lines and bag_to_use and brewers and grinders %}
@@ -220,4 +266,5 @@ document.addEventListener('input', function (e) {
 });
 </script>
 <script src="{{ static('bean_art.js') }}"></script>
+<script src="{{ static('freeze.js') }}"></script>
 {% endblock %}

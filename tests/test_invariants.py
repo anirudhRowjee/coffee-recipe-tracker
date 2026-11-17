@@ -54,6 +54,9 @@ def busy(app_on):
     post(a, f"/brews/{a.scalar('select max(id) from brew')}/edit", {"notes": "x\nCooled: sweet", "rating": "4"})
     post(a, "/cafes", {"cafe": "Subko", "drink_kind": "pour_over", "rating": "4", "coffee": "Kenya Kiambu",
                        "price": "350", "shared": "1"})                                                   # café cup 1, in the feed
+    post(a, "/bags/2/freeze", {"grams": "60", "count": "3"})                                            # portions: bags 3, 4, 5
+    post(a, "/bags/3/take-out", {})
+    post(a, "/bags/4/give-away", {})
     return a
 
 
@@ -138,12 +141,13 @@ def _bag_problems(app):
         problems = []
         for bag in s.exec(select(models.BeanBag)).all():
             used = sum(b.recipe.dose_g for b in bag.brews)
-            if abs(crud.get_remaining_quantity(s, bag) - (bag.initial_quantity_g - used)) > 1e-6:
+            frozen_out = sum(p.initial_quantity_g for p in s.exec(select(models.BeanBag).where(models.BeanBag.parent_bag_id == bag.id)))
+            if abs(crud.get_remaining_quantity(s, bag) - (bag.initial_quantity_g - used - frozen_out)) > 1e-6:
                 problems.append(bag.id)
         return problems
 
 
-def test_a_bag_holds_what_was_bought_minus_every_cup(busy, app_on, reference_db):
+def test_a_bag_holds_what_was_bought_minus_every_cup_and_portion(busy, app_on, reference_db):
     assert _bag_problems(busy) == []
     assert _bag_problems(app_on(reference_db, user_id=None)) == []
 
@@ -247,7 +251,7 @@ PAGES = [
     "/four-six?bag_id=1&brewer_id=1&grinder_id=1", "/brews/2/edit", "/brews/2/edit?cooled=1",
     "/recipes/latest?bag_id=1&brewer_id=1&grinder_id=1",
     "/cafes", "/cafes?view=friends", "/cafes/new", "/cafes/new?cafe=Subko", "/cafes/1", "/cafes/1/edit",
-    "/cafes/1/share-image", "/browse?from_cafe=1",
+    "/cafes/1/share-image", "/browse?from_cafe=1", "/beans/2/labels", "/browse?bean=2",
 ]
 
 

@@ -1,0 +1,101 @@
+{# The code page for a frozen portion (/b and /b/<code>): the one page outside Caddy's
+   password, for whoever has the bag. Self-contained on purpose: its styles are inline and
+   it loads nothing else from the site (static files, the favicon), since everything but
+   /b still asks for the site password. Shows only main._portion_facts' whitelist. #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow, noarchive" />
+<link rel="icon" href="data:," />
+<title>{% if facts %}{{ facts.name }} · {{ facts.code }}{% else %}Got a bag of coffee?{% endif %}</title>
+<style>
+  :root { --bg: #f7f1e8; --card: #fffdf9; --tile: #f3ebdf; --line: #e3d2bd; --ink: #2c1810; --soft: #7d5f48; --brown: #6b3d2e; --ice: #2f6f96; --ice-soft: #e3f0f7; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c; --brown: #d9a27f; --ice: #8cc4e6; --ice-soft: #1f3341; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 22px 16px 48px; }
+  h1 { font: 400 1.9rem/1.15 Georgia, "Palatino Linotype", serif; margin: 2px 0 4px; }
+  .muted { color: var(--soft); }
+  .code { font-family: ui-monospace, Menlo, monospace; font-weight: 800; letter-spacing: .12em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 14px; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 14px 0; }
+  .facts span { display: block; font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; color: var(--soft); }
+  .thaw { background: var(--ice-soft); border: 1px solid var(--ice); border-radius: 14px; padding: 12px 14px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+  .tiles div { background: var(--tile); border-radius: 12px; padding: 8px 4px; text-align: center; min-width: 0; }
+  .tiles span { display: block; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--soft); }
+  .tiles b { font-size: 1.15rem; overflow-wrap: anywhere; }
+  ol.steps { list-style: none; padding: 0; margin: 10px 0 0; }
+  ol.steps li { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+  ol.steps li b { font-variant-numeric: tabular-nums; }
+  .eyebrow { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin: 18px 0 4px; }
+  form.ask { display: grid; gap: 12px; max-width: 360px; margin: 18px auto 0; }
+  input[name=code] { font: 800 1.8rem ui-monospace, Menlo, monospace; letter-spacing: .3em; text-align: center; text-transform: uppercase; padding: 12px; border: 2px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); width: 100%; min-height: 60px; }
+  button, .btn { font: 700 1.05rem -apple-system, sans-serif; min-height: 48px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--brown); color: #fff; width: 100%; cursor: pointer; display: block; text-align: center; text-decoration: none; }
+  button.sec { background: var(--tile); color: var(--ink); }
+  .owner { display: grid; gap: 10px; margin: 14px 0 4px; }
+  .center { text-align: center; }
+  .note { font-size: .82rem; color: var(--soft); text-align: center; margin-top: 26px; }
+  @media (min-width: 900px) { .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 22px; align-items: start; } .two > .card:first-child { margin-top: 0; } }
+</style>
+</head>
+<body>
+<main>
+{% if blocked == 'bot' %}
+  <h1 class="center" style="margin-top:40px">This page is for people</h1>
+  <p class="center muted">Open it in a phone or computer browser.</p>
+{% elif blocked == 'slow' %}
+  <h1 class="center" style="margin-top:40px">Too many lookups</h1>
+  <p class="center muted">Wait a little and try again.</p>
+{% elif ask %}
+  <h1 class="center" style="margin-top:36px">Got a bag of coffee?</h1>
+  <p class="center muted">Type the code on its label.</p>
+  {% if missing %}<p class="center" role="alert">No bag has the code <span class="code">{{ missing }}</span>. Check the letters and try again.</p>{% endif %}
+  <form class="ask" method="get" action="/b">
+    <input name="code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="The code" placeholder="K7M2P" required />
+    <button type="submit">Look it up</button>
+  </form>
+  <p class="note">Codes use no O, I or L, so nothing gets misread.</p>
+{% else %}
+  <p class="muted" style="margin:0"><span class="code">{{ facts.code }}</span> · {% if mine %}your portion{% else %}a frozen portion{% endif %}</p>
+  <h1>{{ facts.name }}</h1>
+  {% if facts.about or facts.flavour %}<p class="muted" style="margin:0">{{ [facts.about, facts.flavour]|select|join(' · ') }}</p>{% endif %}
+  <div class="two">
+    <section class="card">
+      <div class="facts" style="margin-top:0">
+        {% if facts.roasted %}<div><span>Roasted</span>{{ facts.roasted }}</div>{% endif %}
+        {% if facts.frozen %}<div><span>Frozen</span>{{ facts.frozen }}</div>{% endif %}
+        <div><span>Weight</span>{{ facts.grams }} g{% if facts.cups %}, about {{ facts.cups }} cup{{ 's' if facts.cups != 1 }}{% endif %}</div>
+        <div><span>Now</span>{{ '❄ ' if facts.is_frozen }}{{ facts.status }}</div>
+      </div>
+      <div class="thaw">Thaw it sealed, at room temperature, for about 30 minutes before opening, so no moisture settles on the beans. Then keep it airtight and use it within two weeks. Don't refreeze it.</div>
+      {% if mine and not bag.is_completed %}
+      <div class="owner">
+        {% if bag.is_frozen %}
+        <form method="post" action="/bags/{{ bag.id }}/take-out"><input type="hidden" name="next" value="/b/{{ facts.code }}" /><button type="submit">Take it out</button></form>
+        {% endif %}
+        <form method="post" action="/bags/{{ bag.id }}/give-away"><input type="hidden" name="next" value="/b/{{ facts.code }}" /><button type="submit" class="sec">Gave it away</button></form>
+      </div>
+      {% endif %}
+    </section>
+    {% if facts.recipe %}{% set r = facts.recipe %}
+    <section class="card">
+      <div class="eyebrow" style="margin-top:0">Best recipe for it</div>
+      <b>{{ r.title }}</b> <span class="muted">· {{ r.gear }}</span>
+      <div class="tiles">
+        {% for label, value in r.params if label in ('Dose', 'Water', 'Temp', 'Ratio') %}<div><span>{{ 'Coffee' if label == 'Dose' else label }}</span><b>{{ value }}</b></div>{% endfor %}
+      </div>
+      {% for label, value in r.params if label == 'Grind' %}<p class="muted" style="margin:0">Grind: {{ value }} on a {{ r.gear.split(' · ')[1] }}</p>{% endfor %}
+      {% if r.steps %}
+      <ol class="steps">{% for s in r.steps %}<li><b>{{ s.time }}</b><span>{{ s.text }}</span></li>{% endfor %}</ol>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+  <p class="note">Shared from a home coffee tracker. <a href="/b" style="color:inherit">Look up another code</a></p>
+{% endif %}
+</main>
+</body>
+</html>

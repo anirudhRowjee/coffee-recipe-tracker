@@ -68,6 +68,11 @@ class BeanBag(SQLModel, table=True):
     thaw_date: Optional[date] = None
     is_completed: bool = False
     notes: Optional[str] = None
+    # a frozen portion split off another bag: its label code (unique, 5 characters), the bag
+    # it came from (whose grams left drop by this portion's size), and when it was given away
+    code: Optional[str] = Field(default=None, index=True, unique=True)
+    parent_bag_id: Optional[int] = Field(default=None, foreign_key="beanbag.id")
+    given_date: Optional[date] = None
 
     bean: Optional[Bean] = Relationship(back_populates="bags")
     brews: List["Brew"] = Relationship(back_populates="bag")

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{# A coffee's frozen portions (/beans/<id>/labels, and straight after "Freeze in portions"
+   with ?new=): each code big, to write on the bag, and the labels as an A4 PDF (10 to a
+   sheet, cut lines, for vinyl sticker sheets) drawn in the browser by static/labels_pdf.js. #}
+{% block content %}
+<section class="card portions-page" style="{{ bean|bean_theme }}">
+    <p class="muted back-to-list"><a href="/browse?bean={{ bean.id }}">‹ {{ bean.name }}</a></p>
+    {% if labels %}
+    <div class="portions-layout">
+        <div>
+            <h2 class="recipe-bean-name">{% if fresh %}{{ labels|length }} portion{{ 's' if labels|length != 1 }} frozen ❄{% else %}In the freezer ❄{% endif %}</h2>
+            <p class="muted">Write each code on its bag, or print the labels. Anyone can look a code up at <b>{{ short_url }}</b>.</p>
+            <div class="bigcodes">
+                {% for l in labels %}
+                <div class="bigcode"><span class="code">{{ l.code }}</span><small>{{ l.grams }} g · frozen {{ l.frozen_short }}</small></div>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <p class="eyebrow">Labels</p>
+            <p class="muted">An A4 sheet with 10 labels and lines to cut along: the QR code, the code, the coffee, its dates, the weight and your best recipe's numbers.</p>
+            <button type="button" id="labels-pdf" data-labels="{{ labels|tojson|forceescape }}" data-filename="{{ filename }}" data-short-url="{{ short_url }}">⬇ Labels as PDF</button>
+            <p class="muted" id="labels-pdf-note" role="status" hidden></p>
+            <a class="btn-secondary btn-block" href="/browse?bean={{ bean.id }}">Done</a>
+        </div>
+    </div>
+    {% else %}
+    <h2 class="recipe-bean-name">Nothing in the freezer</h2>
+    <p class="muted">Open a bag on the coffee's page and choose "Freeze in portions".</p>
+    {% endif %}
+</section>
+<script src="{{ static('qr.js') }}"></script>
+<script src="{{ static('labels_pdf.js') }}"></script>
+{% endblock %}

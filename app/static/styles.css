@@ -2119,3 +2119,24 @@ nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; bo
 .paste-recipe button { margin: 8px 0; }
 .paste-recipe .paste-label { display: block; margin-top: 8px; }
 .paste-status { background: #fff4dc; border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; }
+
+/* Frozen portions: the freezer on a coffee's page, Freeze in portions, the labels page */
+.code { font-family: ui-monospace, Menlo, monospace; font-weight: 800; letter-spacing: 0.1em; }
+.chip.frz { border-color: #3f7fa6; background: #e3f0f7; color: #1d3f55; }
+.chip.ghost[href] { text-decoration: none; display: inline-flex; align-items: center; }
+.btn-freeze { margin: 4px 0 12px; background: #3f7fa6; }
+.portion-actions { display: grid; gap: 8px; margin: 8px 0 12px; }
+.portion-actions form { margin: 0; }
+.portion-actions button { width: 100%; }
+.freeze-bar { display: flex; gap: 3px; height: 34px; margin: 12px 0 4px; }
+.freeze-bar i { min-width: 6px; border-radius: 6px; background: #e3f0f7; border: 1px solid #3f7fa6; display: grid; place-items: center; font-style: normal; font-size: 0.7rem; font-weight: 700; color: #1d3f55; overflow: hidden; white-space: nowrap; }
+.freeze-bar i.keep { background: #f2e2d2; border-color: #b4632f; color: #6b3d2e; }
+.freeze-sum { min-height: 1.4em; }
+.freeze-other input { font-size: 1.2rem; }
+.portions-layout { display: grid; gap: 18px; }
+.bigcodes { display: grid; gap: 8px; margin: 12px 0; }
+.bigcode { text-align: center; padding: 12px; border: 2px dashed #3f7fa6; border-radius: 14px; background: #e3f0f7; }
+.bigcode .code { display: block; font-size: 1.9rem; color: #1d3f55; }
+.bigcode small { color: #5a6f7d; }
+#labels-pdf { margin-top: 6px; }
+@media (min-width: 1024px) { .portions-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .bigcodes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
