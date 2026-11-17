@@ -2110,3 +2110,12 @@ nav.action-list { align-items: stretch; gap: 0; margin-bottom: 0; padding: 0; bo
 .radio-seg input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .radio-seg label:has(input:checked) { background: #fffcf7; color: #2c1810; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 .cafe-share #cafe-share-note { margin: -4px 0 6px; }
+
+/* Paste a recipe (partials/paste_recipe.html) */
+.paste-recipe { border: 1px dashed var(--accent, #b08968); border-radius: 12px; padding: 10px 12px; margin: 4px 0 12px; }
+.paste-recipe summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.paste-recipe textarea { display: block; width: 100%; font-size: 15px; }
+.paste-recipe .paste-prompt { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: #faf6f0; color: #5a4a3a; }
+.paste-recipe button { margin: 8px 0; }
+.paste-recipe .paste-label { display: block; margin-top: 8px; }
+.paste-status { background: #fff4dc; border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; }

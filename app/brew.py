@@ -449,3 +449,82 @@ def suggest_steps(text: Optional[str]) -> Suggestion:
         rows.append(SuggestedRow(time=0, action=prep.pop(), check=True))
     rows.sort(key=lambda row: row.time)
     return Suggestion(prep=", ".join(prep), rows=rows)
+
+
+# A recipe pasted from somewhere else (usually a chatbot's answer): the four numbers and
+# the method, read so the new-recipe form can be filled in for the person to check.
+@dataclass
+class PastedRecipe:
+    dose_g: Optional[float] = None
+    water_ml: Optional[float] = None
+    temp_c: Optional[float] = None
+    grind_size: Optional[str] = None
+    method: str = ""
+    checks: List[int] = field(default_factory=list)  # method rows that are guesses
+
+    @property
+    def missing(self) -> List[str]:
+        names = (("Coffee", self.dose_g), ("Water", self.water_ml), ("Temp", self.temp_c),
+                 ("Grind", self.grind_size), ("Method", self.method))
+        return [name for name, value in names if not value]
+
+
+_MARKDOWN = re.compile(r"\*\*|__|`|^#+\s*|^>\s*")
+_LABEL = r"^(?:the\s+)?{}\b[^:=]*?[:=]\s*(.+)$"
+_TEMP_LINE = re.compile(_LABEL.format(r"(?:water\s+)?temp(?:erature)?"), re.IGNORECASE)
+_DOSE_LINE = re.compile(_LABEL.format(r"(?:coffee|dose|beans?|ground\s+coffee)"), re.IGNORECASE)
+_WATER_LINE = re.compile(_LABEL.format(r"(?:total\s+)?water"), re.IGNORECASE)
+_GRIND_LINE = re.compile(_LABEL.format(r"grind(?:\s+size|\s+setting)?"), re.IGNORECASE)
+_RATIO_LINE = re.compile(r"^ratio\b[^:=]*[:=]\s*1\s*:\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+_METHOD_HEADING = re.compile(r"^(?:method|steps|instructions|recipe|brew(?:ing)?\s+steps)\s*:?\s*$", re.IGNORECASE)
+_NUMBER = re.compile(r"(\d+(?:\.\d+)?)")
+
+
+def _first_number(text: str) -> Optional[float]:
+    match = _NUMBER.search(text)
+    return float(match.group(1)) if match else None
+
+
+def read_pasted(text: Optional[str]) -> PastedRecipe:
+    """Read a pasted recipe. Nothing is guessed silently: what isn't found stays empty,
+    and method rows that had to be guessed are flagged like Tidy into steps' are."""
+    found = PastedRecipe()
+    ratio: Optional[float] = None
+    method_lines: List[str] = []
+    after_heading: Optional[List[str]] = None
+    for raw in (text or "").splitlines():
+        line = _BULLET.sub("", _MARKDOWN.sub("", raw.strip()).strip()).strip()
+        if not line:
+            continue
+        temp, dose = _TEMP_LINE.match(line), _DOSE_LINE.match(line)
+        water, grind, ratio_line = _WATER_LINE.match(line), _GRIND_LINE.match(line), _RATIO_LINE.match(line)
+        if temp and found.temp_c is None and _first_number(temp.group(1)) is not None:
+            value = _first_number(temp.group(1))
+            fahrenheit = re.search(r"°?\s*F\b", temp.group(1)) and not re.search(r"°?\s*C\b", temp.group(1))
+            found.temp_c = round((value - 32) * 5 / 9) if fahrenheit or value > 110 else value
+        elif dose and found.dose_g is None and _first_number(dose.group(1)) is not None:
+            found.dose_g = _first_number(dose.group(1))
+        elif water and found.water_ml is None and _first_number(water.group(1)) is not None:
+            found.water_ml = _first_number(water.group(1))
+        elif grind and found.grind_size is None:
+            found.grind_size = grind.group(1).strip().rstrip(".")[:60]
+        elif ratio_line:
+            ratio = float(ratio_line.group(1))
+        elif _METHOD_HEADING.match(line):
+            after_heading = []
+        elif after_heading is not None:
+            after_heading.append(line)
+        else:
+            method_lines.append(line)
+    if found.water_ml is None and found.dose_g and ratio:
+        found.water_ml = round(found.dose_g * ratio)
+    lines = after_heading if after_heading else method_lines
+    # a chatbot's answer has chatter around the steps: when there are proper step lines, keep only those
+    standard = [line for line in lines if _STEP_LINE.match(line) or _PREP_LINE.match(line)]
+    if any(_STEP_LINE.match(line) for line in standard) and is_standard("\n".join(standard)):
+        found.method = "\n".join(standard)
+    elif lines:
+        suggestion = suggest_steps("\n".join(lines))
+        if suggestion.rows:
+            found.method, found.checks = suggestion.text, suggestion.checks
+    return found

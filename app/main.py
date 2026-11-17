@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, Query, Request, HTTPException, UploadFi
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -637,6 +637,22 @@ def index(request: Request, bag_id: Optional[str] = None, brewer_id: Optional[st
                 context["saved"] = {"recipe": recipe, "version": crud.version_number(session, recipe),
                                     "change": delta.change_label if delta else "", "why": delta.rationale if delta else ""}
         return templates.TemplateResponse("index.html", context)
+
+
+@app.post("/recipes/paste")
+def paste_recipe(request: Request, text: str = Form("")):
+    """Read a pasted recipe (a chatbot's answer, say) into the new-recipe form's fields.
+    Saves nothing: the page fills the form in and the person checks it before saving."""
+    with Session(db.engine) as session:
+        _require_user(request, session)
+        found = brew.read_pasted(text[:20000])
+        method_html = templates.get_template("partials/recipe_text_field.html").render(
+            field_value=found.method, field_checks=",".join(map(str, found.checks)))
+        return JSONResponse({
+            "dose_g": found.dose_g, "water_ml": found.water_ml, "temp_c": found.temp_c,
+            "grind_size": found.grind_size, "method_html": method_html,
+            "missing": found.missing, "guesses": len(found.checks),
+        })
 
 
 @app.get("/recipes/latest", response_class=HTMLResponse)

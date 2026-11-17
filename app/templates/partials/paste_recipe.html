@@ -1,0 +1,28 @@
+{# "Paste a recipe": put a chatbot's answer (or any written recipe) into the form below.
+   static/paste_recipe.js sends the text to /recipes/paste, which reads it and saves nothing,
+   then fills this form's fields for the person to check. Hidden without JavaScript.
+   Goes inside a new-recipe form whose method field is wrapped in [data-method-field]. #}
+{% set p_bean = bag.bean if bag else None %}
+{% set p_grinder = grinder.name if grinder else 'grinder' %}
+<details class="paste-recipe" data-paste-recipe hidden>
+    <summary>📋 Paste a recipe from a chatbot</summary>
+    <p class="muted">Ask any chatbot with the prompt below, then paste its whole answer here. The fields below fill in for you to check; nothing is saved until you tap Save.</p>
+    <textarea class="paste-prompt" readonly rows="6" aria-label="The prompt to give a chatbot">Write a coffee recipe for {{ p_bean.name if p_bean else 'my coffee' }}{% if p_bean and (p_bean.roast_level or p_bean.origin) %} ({{ [p_bean.origin, (p_bean.roast_level ~ ' roast') if p_bean.roast_level else None]|select|join(', ') }}){% endif %}{% if p_bean and p_bean.flavor_notes %}, tasting of {{ p_bean.flavor_notes }}{% endif %}, on a {{ brewer.name if brewer else 'pour-over brewer' }} with a {{ p_grinder }}.
+Reply with these four lines first:
+Coffee: N g
+Water: N ml
+Temperature: N °C
+Grind: the setting on my {{ p_grinder }}
+Then a line "Method:" and the steps, one per line, exactly like this:
+0:00 — Bloom (to 50g)
+Rules for the steps:
+- Optional lines starting "Prep:" go before the steps.
+- Each time is when that step begins, counted from the start of the brew, in increasing order.
+- End each pour with (to N g): the total weight on the scale after that pour.
+- One short action per step. No bullets, numbering or bold.</textarea>
+    <button type="button" class="btn-secondary" data-copy-prompt>Copy the prompt</button>
+    <label class="paste-label">Paste the answer here
+        <textarea class="paste-text" rows="6" placeholder="Coffee: 15 g&#10;Water: 250 ml&#10;…"></textarea></label>
+    <button type="button" data-paste-fill>Fill in the recipe</button>
+</details>
+<p class="paste-status" role="status" hidden></p>
