@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Frozen portions mock-ups</title>
+<style>
+  :root { --bg: #f3ece3; --card: #fffdf9; --tile: #faf6f0; --line: #e0c9b0; --ink: #2c1810; --soft: #8c6a4f; --brown: #6b3d2e; --chip: #fffcf7; --gold: #d4a24c; --accent: #b4632f; --accent-soft: #f2e2d2; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c; --brown: #d9a27f; --chip: #2e2620; --gold: #e0b45a; --accent: #e08b52; --accent-soft: #4a3526; }
+  }
+  :root[data-theme="dark"] { --bg: #1d1712; --card: #26201a; --tile: #2e2620; --line: #4a3b2f; --ink: #f5ece2; --soft: #c2a68c; --brown: #d9a27f; --chip: #2e2620; --gold: #e0b45a; --accent: #e08b52; --accent-soft: #4a3526; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 0 0 6px; }
+  h2 { font-size: 1.25rem; margin: 38px 0 4px; }
+  p.lead, p.why { color: var(--soft); margin: 0 0 14px; max-width: 72ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .state { flex: 0 1 330px; min-width: 0; }
+  .state h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--soft); margin: 0 0 6px; }
+  .phone { width: 100%; max-width: 330px; background: var(--card); border: 1px solid var(--line); border-radius: 28px; padding: 14px 14px 0; overflow: hidden; }
+  .phone .tabs { display: flex; justify-content: space-around; border-top: 1px solid var(--line); margin: 12px -14px 0; padding: 8px 0 10px; font-size: 0.72rem; color: var(--soft); }
+  .phone .tabs b { color: var(--brown); }
+  .serif { font-family: Georgia, "Palatino Linotype", serif; }
+  .muted { color: var(--soft); }
+  .eyebrow { font-size: 0.7rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--soft); margin: 12px 0 6px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 4px 0 12px; }
+  .seg span { flex: 1; text-align: center; padding: 9px 0; font-weight: 600; font-size: 0.9rem; }
+  .seg .on { background: var(--brown); color: #fff; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); font-size: 0.85rem; }
+  .chip.on { background: var(--brown); border-color: var(--brown); color: #fff; }
+  .field { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--chip); min-height: 42px; }
+  .field.ph { color: var(--soft); }
+  .btn { display: block; text-align: center; padding: 12px; border-radius: 12px; background: var(--brown); color: #fff; font-weight: 700; margin: 12px 0 0; }
+  .btn.sec { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .stars { color: var(--gold); font-size: 1.9rem; letter-spacing: 4px; }
+  .stars.sm { display: block; font-size: 0.95rem; letter-spacing: 1px; }
+  .photo { position: relative; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); aspect-ratio: 4 / 3; display: grid; place-items: center; }
+  .photo svg { width: 45%; opacity: 0.95; }
+  .photo .add { position: absolute; right: 10px; bottom: 10px; background: rgba(255,255,255,0.92); color: #2c1810; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+  .photo.empty { background: var(--tile); border: 2px dashed var(--line); aspect-ratio: 16 / 9; color: var(--soft); font-weight: 600; text-align: center; }
+  .list-card { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--tile); margin-bottom: 8px; }
+  .thumb { width: 64px; height: 64px; border-radius: 10px; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); }
+  .thumb.b { background: radial-gradient(circle at 60% 40%, #f1e3c8, #b98b5e 70%, #6b4428); }
+  .thumb.c { background: radial-gradient(circle at 40% 60%, #3a2418, #1d120c); }
+  .list-card b { display: block; }
+  .list-card small { color: var(--soft); }
+  .fold { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-weight: 600; }
+  .fold small { font-weight: 400; color: var(--soft); }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+  .toggle { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .sw { width: 42px; height: 24px; border-radius: 999px; background: var(--line); position: relative; flex: none; }
+  .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+  .sw.on { background: var(--brown); }
+  .sw.on::after { left: 21px; }
+  .handle { display: flex; align-items: center; gap: 6px; }
+  .handle .at { font-weight: 700; color: var(--soft); }
+
+  /* the share card itself, at mock size */
+  .card-out { width: 300px; aspect-ratio: 4 / 5; border-radius: 6px; overflow: hidden; background: #6b3d2e; padding: 9px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .card-out.story { aspect-ratio: 9 / 16; width: 240px; }
+  .card-in { height: 100%; background: #faf6f0; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; color: #2c1810; }
+  .card-in .ph { flex: 1 1 55%; background: radial-gradient(circle at 30% 30%, #d9b48c, #8a5a3a 70%, #4a2c1c); display: grid; place-items: center; }
+  .card-in .ph svg { width: 40%; }
+  .card-in .txt { padding: 11px 13px 9px; display: flex; flex-direction: column; gap: 3px; }
+  .card-in .cafe { font-family: Georgia, serif; font-size: 1.15rem; line-height: 1.15; }
+  .card-in .where { font-size: 0.68rem; color: #7a5a44; }
+  .card-in .drink { font-size: 0.78rem; font-weight: 700; color: #3b1f0e; margin-top: 3px; }
+  .card-in .note { font-family: Georgia, serif; font-style: italic; font-size: 0.75rem; background: #f3ebdf; border-left: 3px solid #b4632f; padding: 4px 7px; margin-top: 4px; }
+  .card-in .foot { display: flex; justify-content: space-between; font-size: 0.6rem; color: #7a5a44; margin-top: 5px; padding-top: 5px; border-top: 1px solid #e3d5c3; }
+  .card-in .foot b { color: #2c1810; }
+  .card-in .s { color: #d4a24c; font-size: 0.9rem; letter-spacing: 1px; }
+  .card-in .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .card-in .tags span { font-size: 0.6rem; padding: 2px 6px; border-radius: 999px; background: #f0e4d4; }
+
+  .ipad { max-width: 920px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 720px) { .ipad { grid-template-columns: minmax(0,1fr); } }
+  .decide { margin-top: 36px; padding: 16px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); max-width: 78ch; }
+  .decide h2 { margin-top: 0; }
+  .decide li { margin-bottom: 8px; }
+  table.data { border-collapse: collapse; width: 100%; max-width: 760px; font-size: 0.92rem; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  table.data th, table.data td { text-align: left; padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  table.data th { background: var(--tile); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--soft); border-top: 0; }
+  .scroll { overflow-x: auto; }
+  .feed { border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: var(--tile); margin-bottom: 10px; }
+  .feed-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 0.88rem; line-height: 1.2; }
+  .av { width: 30px; height: 30px; border-radius: 50%; background: var(--brown); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+  .feed-body { padding: 8px 2px 0; }
+  .seg span { font-size: 0.82rem; }
+  /* frozen portions */
+  .ice { --ice: #3f7fa6; --ice-soft: #e3f0f7; }
+  @media (prefers-color-scheme: dark) { .ice { --ice: #8cc4e6; --ice-soft: #1f3341; } }
+  .code { font-family: ui-monospace, Menlo, monospace; font-weight: 800; letter-spacing: 0.12em; }
+  .chip.frz { border-color: var(--ice); background: var(--ice-soft); color: var(--ink); }
+  .chip.gone { opacity: .55; text-decoration: line-through; }
+  .stepper { display: grid; grid-template-columns: 48px minmax(0,1fr) 48px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stepper span { display: grid; place-items: center; padding: 10px 0; font-weight: 700; font-size: 1.1rem; }
+  .stepper span:first-child, .stepper span:last-child { background: var(--tile); color: var(--brown); }
+  .split { display: flex; gap: 3px; height: 34px; margin: 10px 0 4px; }
+  .split i { flex: 1; border-radius: 6px; background: var(--ice-soft); border: 1px solid var(--ice); display: grid; place-items: center; font-style: normal; font-size: .62rem; font-weight: 700; color: var(--ice); }
+  .split i.keep { flex: 2.6; background: var(--accent-soft); border-color: var(--accent); color: var(--brown); }
+  .sum { font-size: .85rem; color: var(--soft); }
+  .label { width: 100%; max-width: 300px; border: 2px dashed var(--line); border-radius: 10px; padding: 10px; display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; background: #fff; color: #2c1810; margin-bottom: 8px; }
+  .label .qr { width: 74px; height: 74px; }
+  .label .code { font-size: 1.35rem; display: block; line-height: 1.1; }
+  .label small { display: block; font-size: .7rem; color: #6b5444; line-height: 1.35; }
+  .label b { font-size: .82rem; }
+  .sheet { border-top: 1px solid var(--line); margin: 10px -14px 0; padding: 12px 14px 4px; border-radius: 22px 22px 0 0; box-shadow: 0 -8px 20px rgba(0,0,0,.08); background: var(--card); }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
+  .nudge { border: 1px solid var(--ice); background: var(--ice-soft); border-radius: 14px; padding: 10px 12px; margin: 10px 0; font-size: .9rem; }
+  .nudge .btn { margin-top: 8px; padding: 10px; }
+  .rt { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin: 6px 0; }
+  .rt div { background: var(--tile); border-radius: 10px; padding: 6px; text-align: center; }
+  .rt span { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  .rt b { font-size: 1rem; }
+  .steps { font-family: ui-monospace, Menlo, monospace; font-size: .74rem; background: var(--tile); border-radius: 10px; padding: 8px 10px; white-space: pre-wrap; margin: 6px 0 0; }
+  .rec { border: 1px solid var(--line); border-radius: 14px; padding: 10px; margin-top: 10px; }
+  .facts { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 10px; font-size: .85rem; margin: 8px 0; }
+  .facts span { color: var(--soft); display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+  .flow b { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: .85rem; }
+  .flow i { color: var(--soft); font-style: normal; }
+  .codebox { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 6px; margin: 10px 0; }
+  .codebox span { border: 2px solid var(--line); border-radius: 10px; text-align: center; padding: 10px 0; font-size: 1.4rem; background: var(--chip); }
+  .nogate { font-size: .72rem; color: var(--soft); text-align: center; margin: 8px 0 0; }
+  .vlabel { width: 330px; max-width: 100%; aspect-ratio: 63.5 / 38.1; background: #f7f5f0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.18); display: grid; grid-template-columns: 38% minmax(0,1fr); gap: 8px; padding: 9px 11px; color: #2c1810; margin-bottom: 8px; }
+  .vqr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  .vqr svg { width: 100%; max-width: 104px; aspect-ratio: 1; }
+  .vqr .code { font-size: .95rem; color: #555; }
+  .vlines { display: flex; flex-direction: column; justify-content: space-around; }
+  .vlines div { display: flex; align-items: flex-end; gap: 6px; border-bottom: 1.5px solid #9a9a9a; padding-bottom: 2px; min-height: 30px; }
+  .vlines span { font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: #8a8a8a; flex: none; }
+  .vlines i { font-style: normal; }
+  .hand { font-family: "Marker Felt", "Comic Sans MS", "Segoe Print", cursive; color: #1f4fa0; font-size: 1.25rem; line-height: 1; }
+  .sheetpaper { width: 100%; max-width: 280px; aspect-ratio: 210 / 297; background: #fff; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,.2); padding: 5% 3%; }
+  .sheetgrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); grid-template-rows: repeat(7, minmax(0,1fr)); gap: 2.5% 2%; height: 100%; }
+  .sheetgrid div { border: 1px solid #ddd; border-radius: 4px; display: grid; grid-template-columns: 40% minmax(0,1fr); gap: 3px; padding: 3px; }
+  .sheetgrid svg { width: 100%; aspect-ratio: 1; align-self: center; }
+  .sheetgrid span { display: flex; flex-direction: column; justify-content: center; }
+  .sheetgrid b { display: block; border-bottom: 1px solid #ccc; height: 28%; margin-top: 3%; }
+  .a4 { width: 100%; max-width: 420px; aspect-ratio: 210 / 297; background: #fff; border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,.25); padding: 3.5%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); grid-template-rows: repeat(5, minmax(0,1fr)); color: #2c1810; }
+  .lab { border: 1px dashed #c9c9c9; padding: 4% 5% 3%; display: grid; grid-template-columns: 38% minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto; gap: 2px 7px; font-size: .56rem; line-height: 1.3; overflow: hidden; }
+  .lab .qr { grid-row: 1 / 3; width: 100%; max-height: 100%; aspect-ratio: 1; align-self: center; }
+  .lab .nm { font-family: Georgia, serif; font-size: .82rem; line-height: 1.1; font-weight: 700; }
+  .lab .code { grid-column: 1; text-align: center; font-size: .78rem; }
+  .lab .url { grid-column: 2; align-self: end; color: #777; font-size: .5rem; }
+  .lab .dt b { font-weight: 700; }
+  .lab .rcp { margin-top: 2px; padding-top: 2px; border-top: 1px solid #e5ddd2; }
+  .lab.blank { border-color: #eee; }
+  .hand-label { width: 300px; max-width: 100%; background: #f7f5f0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.18); padding: 14px 16px; color: #1f4fa0; font-family: "Marker Felt", "Comic Sans MS", "Segoe Print", cursive; font-size: 1.3rem; line-height: 1.35; }
+  .bigcode { font-size: 1.6rem; text-align: center; padding: 10px; border: 2px dashed var(--ice); border-radius: 12px; background: var(--ice-soft); margin: 6px 0; }
+  .bigcode small { display: block; font-family: -apple-system, sans-serif; font-weight: 400; letter-spacing: 0; font-size: .78rem; color: var(--soft); }
+  .ipadL { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: grid; grid-template-columns: 52px minmax(0,1fr) minmax(0,1fr); gap: 20px; aspect-ratio: 1180 / 820; overflow: hidden; }
+  .ipadL:not(:has(.rail)) { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .rail { display: flex; flex-direction: column; gap: 22px; align-items: center; border-right: 1px solid var(--line); padding-top: 6px; color: var(--soft); font-size: 1.1rem; }
+  .rail b { color: var(--brown); }
+  .col { min-width: 0; }
+  .panel { border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.18); align-self: start; }
+  @media (max-width: 760px) { .ipadL { grid-template-columns: minmax(0,1fr) !important; aspect-ratio: auto; } .rail { display: none; } }
+  .a4.small .lab { font-size: .34rem; gap: 1px 4px; }
+  .a4.small .lab .nm { font-size: .5rem; }
+  .a4.small .lab .code { font-size: .48rem; }
+  .a4.small .lab .url { font-size: .3rem; }
+</style>
+</head>
+<body class="ice">
+<main>
+  <h1>Frozen portions, simplified</h1>
+  <p class="lead">Split a bag into portions. Each portion gets a short code at once. Write the code on the bag, or print a PDF of labels at Printo with everything on them. Anyone can look a code up on one page. Taking one out is one tap.</p>
+
+  <div class="flow"><b>❄ Freeze in portions</b><i>→</i><b>Codes, and a PDF of labels</b><i>→</i><b>Take it out</b> <i>or</i> <b>Gave it away</b></div>
+
+  <h2>1 · Freeze, then label</h2>
+  <p class="why">Two screens. A portion is an ordinary bag with a code, so brewing, grams left and history don't change. No label sheet to buy in advance, nothing to scan or pair: the code exists the moment you tap Freeze.</p>
+  <div class="row">
+    <div class="state"><h3>The bag's sheet → Freeze in portions</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.2rem">Freeze in portions</div>
+        <p class="muted" style="margin:0 0 4px;font-size:.85rem">Attikan Estate · bag of 8 Nov · 238 g left</p>
+        <div class="eyebrow">Each portion</div>
+        <div class="chips"><span class="chip">30 g</span><span class="chip on">60 g</span><span class="chip">90 g</span><span class="chip">Other</span></div>
+        <div class="eyebrow">How many</div>
+        <div class="stepper"><span>−</span><span>3</span><span>+</span></div>
+        <div class="split"><i class="keep" style="flex:1">58 g out</i><i>60 g</i><i>60 g</i><i>60 g</i></div>
+        <p class="sum">3 × 60 g frozen today · 58 g stays out (about 4 cups)</p>
+        <div class="btn">Freeze 3 portions</div>
+      </div></div>
+
+    <div class="state"><h3>Done: the codes</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.2rem">3 portions frozen ❄</div>
+        <p class="muted" style="margin:0 0 6px;font-size:.85rem">Write each code on its bag, or print the labels.</p>
+        <div class="bigcode code">K7M2P<small>coffee.rowjee.com/b/K7M2P</small></div>
+        <div class="bigcode code">R4XQ9<small>coffee.rowjee.com/b/R4XQ9</small></div>
+        <div class="bigcode code">T2HW7<small>coffee.rowjee.com/b/T2HW7</small></div>
+        <div class="btn">⬇ Labels as PDF</div>
+        <div class="btn sec">Done</div>
+      </div></div>
+
+    <div class="state"><h3>Worst case: by hand</h3>
+      <div class="hand-label">K7M2P<br><span style="font-size:1rem">coffee.rowjee.com/b</span></div>
+      <p class="muted" style="font-size:.8rem;max-width:300px">The code alone is enough: the page at /b asks for it. Everything else is found from it.</p>
+    </div>
+  </div>
+
+  <h2>2 · The PDF: an A4 sheet for Printo</h2>
+  <p class="why">Ten labels per A4 sheet (2 × 5, about 99 × 57 mm each), with dashed lines to cut along with scissors, so any vinyl sheet works and nothing has to line up. Each label has the QR code, the code, the coffee, its dates and weight, and the best recipe's numbers. Three portions print three labels; the rest of the sheet is left blank. Every coffee's page has "⬇ Labels as PDF" for its portions still in the freezer, to print more than one batch on a sheet, or reprint.</p>
+  <div class="row">
+    <div class="state" style="flex-basis:430px"><h3>The PDF, page 1</h3>
+      <div class="a4">
+        <div class="lab"><svg class="qr" data-qr="20"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">K7M2P</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab"><svg class="qr" data-qr="21"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">R4XQ9</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab"><svg class="qr" data-qr="22"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">T2HW7</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div>
+      </div>
+    </div>
+    <div class="state"><h3>One label, enlarged</h3>
+      <div class="a4" style="aspect-ratio:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto;max-width:330px;padding:0;font-size:1.6em">
+        <div class="lab" style="font-size:.85rem;aspect-ratio:99/57;border-style:solid"><svg class="qr" data-qr="9"></svg><div class="nm">Attikan Estate<div class="dt" style="font-family:-apple-system,sans-serif;font-weight:400;font-size:.72rem;margin-top:3px">India · Medium · Chocolate, caramel</div></div><div class="dt">Roasted <b>8 Nov</b> · Frozen <b>17 Nov</b><br><b>60 g</b> · about 4 cups<div class="rcp">Best: 15 g · 250 ml · 92 °C · Switch<br>Scan for the steps</div></div><span class="code" style="font-size:1.25rem">K7M2P</span><span class="url" style="font-size:.66rem">coffee.rowjee.com/b</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>3 · In the freezer, and taking one out</h2>
+  <p class="why">Portions are ice-blue chips on the coffee's page. Tap one: <b>Take it out</b> (it becomes the bag Brew uses next) or <b>Gave it away</b> (one tap; it leaves your freezer, and its code page keeps working for your friend). Or scan its QR when you're signed in: the same two buttons are at the top of its page.</p>
+  <div class="row">
+    <div class="state"><h3>Coffee page</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.3rem">Attikan Estate</div>
+        <div class="eyebrow">Open</div>
+        <div class="chips"><span class="chip">250 g · roasted 8 Nov · 58 g left</span></div>
+        <div class="eyebrow">❄ In the freezer</div>
+        <div class="chips"><span class="chip frz">❄ <span class="code">K7M2P</span> 60 g</span><span class="chip frz">❄ <span class="code">R4XQ9</span> 60 g</span><span class="chip frz">❄ <span class="code">T2HW7</span> 60 g</span></div>
+        <p class="muted" style="font-size:.8rem;margin:8px 0 0">⬇ Labels as PDF</p>
+        <div class="sheet">
+          <div class="grab"></div>
+          <b>❄ <span class="code">K7M2P</span> · 60 g</b><p class="muted" style="margin:2px 0 8px;font-size:.85rem">Frozen 17 Nov</p>
+          <div class="btn" style="margin-top:0">Take it out</div>
+          <div class="btn sec">Gave it away</div>
+        </div>
+      </div></div>
+
+    <div class="state"><h3>Scanned, signed in</h3>
+      <div class="phone">
+        <p class="muted" style="margin:0;font-size:.75rem"><span class="code">K7M2P</span> · your portion, ❄ frozen 17 Nov</p>
+        <div class="serif" style="font-size:1.35rem">Attikan Estate</div>
+        <div class="btn">Take it out</div>
+        <div class="btn sec">Gave it away</div>
+        <p class="muted" style="font-size:.8rem;margin:12px 0 4px">Below: what everyone else sees.</p>
+        <div class="tabs"><b>☕ Brew</b><span>▦ Coffees</span><span>♨ Cafés</span><span>⚙ Settings</span></div>
+      </div></div>
+  </div>
+
+  <h2>4 · The code page, for anyone</h2>
+  <p class="why"><b>coffee.rowjee.com/b</b> asks for a code; the QR opens /b/K7M2P straight away. It shows the coffee, its dates, how to thaw it and your best recipes, and nothing private.</p>
+  <div class="row">
+    <div class="state"><h3>/b</h3>
+      <div class="phone">
+        <div class="serif" style="font-size:1.4rem;text-align:center;margin-top:20px">Got a bag of coffee?</div>
+        <p class="muted" style="text-align:center;font-size:.9rem">Type the code on its label.</p>
+        <div class="codebox code"><span>K</span><span>7</span><span>M</span><span>2</span><span>P</span></div>
+        <div class="btn">Look it up</div>
+        <div style="height:140px"></div>
+      </div></div>
+
+    <div class="state"><h3>/b/K7M2P</h3>
+      <div class="phone">
+        <p class="muted" style="margin:0;font-size:.75rem"><span class="code">K7M2P</span></p>
+        <div class="serif" style="font-size:1.35rem">Attikan Estate</div>
+        <p class="muted" style="margin:0">India · Medium roast · Chocolate, caramel</p>
+        <div class="facts"><div><span>Roasted</span>8 Nov</div><div><span>Frozen</span>17 Nov</div><div><span>Weight</span>60 g, about 4 cups</div><div><span>Status</span>❄ Frozen</div></div>
+        <div class="nudge" style="margin:6px 0">Thaw it sealed at room temperature, about 30 minutes, before opening. Then keep it airtight and use it within two weeks. Don't refreeze.</div>
+        <div class="eyebrow">Best recipe</div>
+        <div class="rec"><b>Switch hybrid</b> <span class="muted" style="font-size:.8rem">· Hario Switch</span>
+          <div class="rt"><div><span>Coffee</span><b>15 g</b></div><div><span>Grind</span><b>20</b></div><div><span>Water</span><b>250</b></div><div><span>Temp</span><b>92°</b></div></div>
+          <p class="muted" style="margin:0;font-size:.72rem">Grind 20 clicks on a Comandante.</p>
+          <div class="steps">0:00 — Bloom (to 50g)
+0:45 — Pour (to 150g)
+1:30 — Pour (to 250g)
+2:00 — Close valve, swirl
+2:45 — Open valve, drawdown</div></div>
+      </div></div>
+  </div>
+
+  <h2>5 · On the iPad, landscape</h2>
+  <p class="why">The same screens in two columns, as elsewhere on the iPad: the side rail on the left, the coffee on one side and what you're doing on the other. Sheets open as a centred panel instead of from the bottom.</p>
+
+  <div class="state" style="flex-basis:100%;max-width:960px"><h3>Coffee page, freezing in portions</h3>
+    <div class="ipadL">
+      <div class="rail"><b>☕</b><span>▦</span><span>♨</span><span>⚙</span></div>
+      <div class="col">
+        <div class="muted">‹ Coffees</div>
+        <div class="serif" style="font-size:1.5rem">Attikan Estate</div>
+        <p class="muted" style="margin:0">India · Medium roast · Chocolate, caramel</p>
+        <div class="eyebrow">Open</div>
+        <div class="chips"><span class="chip on">250 g · roasted 8 Nov · 238 g left</span></div>
+        <div class="eyebrow">❄ In the freezer</div>
+        <p class="muted" style="margin:0;font-size:.85rem">Nothing yet.</p>
+        <div class="eyebrow">Recipes</div>
+        <div class="list-card" style="grid-template-columns:minmax(0,1fr)"><div><b>Switch hybrid</b><small>15 g · 250 ml · 92 °C · ★ 4.6 from 7 cups</small></div></div>
+      </div>
+      <div class="col panel">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div class="serif" style="font-size:1.25rem">Freeze in portions</div><span class="muted">✕</span></div>
+        <p class="muted" style="margin:0 0 4px;font-size:.85rem">Bag of 8 Nov · 238 g left</p>
+        <div class="eyebrow">Each portion</div>
+        <div class="chips"><span class="chip">30 g</span><span class="chip on">60 g</span><span class="chip">90 g</span><span class="chip">Other</span></div>
+        <div class="eyebrow">How many</div>
+        <div class="stepper"><span>−</span><span>3</span><span>+</span></div>
+        <div class="split"><i class="keep" style="flex:1">58 g out</i><i>60 g</i><i>60 g</i><i>60 g</i></div>
+        <p class="sum">3 × 60 g frozen today · 58 g stays out (about 4 cups)</p>
+        <div class="btn">Freeze 3 portions</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="state" style="flex-basis:100%;max-width:960px;margin-top:22px"><h3>Done: codes beside the label sheet</h3>
+    <div class="ipadL">
+      <div class="rail"><b>☕</b><span>▦</span><span>♨</span><span>⚙</span></div>
+      <div class="col">
+        <div class="serif" style="font-size:1.4rem">3 portions frozen ❄</div>
+        <p class="muted" style="margin:0 0 6px;font-size:.85rem">Write each code on its bag, or print the labels.</p>
+        <div class="bigcode code">K7M2P<small>coffee.rowjee.com/b/K7M2P</small></div>
+        <div class="bigcode code">R4XQ9<small>coffee.rowjee.com/b/R4XQ9</small></div>
+        <div class="bigcode code">T2HW7<small>coffee.rowjee.com/b/T2HW7</small></div>
+      </div>
+      <div class="col">
+        <div class="eyebrow" style="margin-top:0">The PDF</div>
+        <div class="a4 small" style="max-width:250px;margin:0 auto"><div class="lab"><svg class="qr" data-qr="40"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">K7M2P</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab"><svg class="qr" data-qr="41"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">R4XQ9</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab"><svg class="qr" data-qr="42"></svg><div class="nm">Attikan Estate</div><div class="dt">Roasted <b>8 Nov</b><br>Frozen <b>17 Nov</b><br><b>60 g</b> · 4 cups<div class="rcp">15 g · 250 ml · 92 °C</div></div><span class="code">T2HW7</span><span class="url">coffee.rowjee.com/b</span></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div><div class="lab blank"></div></div>
+        <div class="btn">⬇ Labels as PDF</div>
+        <div class="btn sec">Done</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="state" style="flex-basis:100%;max-width:960px;margin-top:22px"><h3>The code page, /b/K7M2P (no tab bar: it's for anyone)</h3>
+    <div class="ipadL" style="grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)">
+      <div class="col">
+        <p class="muted" style="margin:0;font-size:.75rem"><span class="code">K7M2P</span></p>
+        <div class="serif" style="font-size:1.6rem">Attikan Estate</div>
+        <p class="muted" style="margin:0">India · Medium roast · Chocolate, caramel</p>
+        <div class="facts"><div><span>Roasted</span>8 Nov</div><div><span>Frozen</span>17 Nov</div><div><span>Weight</span>60 g, about 4 cups</div><div><span>Status</span>❄ Frozen</div></div>
+        <div class="nudge">Thaw it sealed at room temperature, about 30 minutes, before opening. Then keep it airtight and use it within two weeks. Don't refreeze.</div>
+        <p class="muted" style="font-size:.8rem">Signed in and it's yours? <b>Take it out</b> and <b>Gave it away</b> sit here.</p>
+      </div>
+      <div class="col">
+        <div class="eyebrow" style="margin-top:0">Best recipe</div>
+        <div class="rec" style="margin-top:0"><b>Switch hybrid</b> <span class="muted" style="font-size:.8rem">· Hario Switch</span>
+          <div class="rt"><div><span>Coffee</span><b>15 g</b></div><div><span>Grind</span><b>20</b></div><div><span>Water</span><b>250</b></div><div><span>Temp</span><b>92°</b></div></div>
+          <p class="muted" style="margin:0;font-size:.72rem">Grind 20 clicks on a Comandante.</p>
+          <div class="steps">0:00 — Bloom (to 50g)
+0:45 — Pour (to 150g)
+1:30 — Pour (to 250g)
+2:00 — Close valve, swirl
+2:45 — Open valve, drawdown</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>What was cut</h2>
+  <div class="scroll"><table class="data">
+    <tr><th>Before</th><th>Now</th></tr>
+    <tr><td>Pre-printed blank labels, then scanning each onto a portion</td><td>The code is made when you freeze; print or write it after</td></tr>
+    <tr><td>Off-the-shelf label sheets that must line up</td><td>A PDF with cut lines, for any vinyl sheet (Printo)</td></tr>
+    <tr><td>"Gave it away" with a name and a note</td><td>One tap, no name or note</td></tr>
+    <tr><td>Up to three recipes; "Add to my coffees" for friends</td><td>The best recipe only; adding to your coffees later, if wanted</td></tr>
+    <tr><td>A nudge on Brew when the bag runs low</td><td>Later, if wanted</td></tr>
+    <tr><td>A new labels table</td><td>Three new columns on bags: <code>code</code>, <code>parent_bag_id</code> and <code>given_date</code></td></tr>
+  </table></div>
+
+  <div class="decide">
+    <h2>To decide</h2>
+    <ol>
+      <li><b>The code page needs a hole in the site password.</b> For someone with no login to open /b, Caddy has to let <code>/b</code> and <code>/b/*</code> through, and nothing else. The page shows only the coffee, dates and best recipe; codes can't be listed, and wrong guesses are slowed down. <i>Recommended.</i> The alternative keeps it behind the shared friends' login.</li>
+      <li><b>Your name on the page and label:</b> none (as drawn), or "From Anirudh"?</li>
+    </ol>
+  </div>
+</main>
+<script>
+// decorative QR-like squares for the mock-up only
+document.querySelectorAll('svg[data-qr]').forEach(function (svg) {
+  var seed = +svg.getAttribute('data-qr') * 9301, n = 21, s = '';
+  function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+  function finder(x, y) { return '<rect x="' + x + '" y="' + y + '" width="7" height="7" fill="#2c1810"/><rect x="' + (x + 1) + '" y="' + (y + 1) + '" width="5" height="5" fill="#fff"/><rect x="' + (x + 2) + '" y="' + (y + 2) + '" width="3" height="3" fill="#2c1810"/>'; }
+  for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+    var inF = (x < 8 && y < 8) || (x > 12 && y < 8) || (x < 8 && y > 12);
+    if (!inF && rnd() > 0.52) s += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="#2c1810"/>';
+  }
+  svg.setAttribute('viewBox', '0 0 21 21');
+  svg.innerHTML = '<rect width="21" height="21" fill="#fff"/>' + s + finder(0, 0) + finder(14, 0) + finder(0, 14);
+});
+</script>
+</body>
+</html>
